@@ -124,13 +124,44 @@ export CERTBOT_EMAIL=you@example.com
 cd /home/ssy/web && ./scripts/renew-letsencrypt.sh >> /var/log/inkharbor-certbot.log 2>&1
 ```
 
+仓库里也已经直接生成了可安装文件：
+
+- `deploy/systemd/inkharbor-cert-renew.service`
+- `deploy/systemd/inkharbor-cert-renew.timer`
+- `deploy/cron/inkharbor-cert-renew.cron`
+
+安装 `systemd timer` 的最短路径：
+
+```bash
+sudo cp deploy/systemd/inkharbor-cert-renew.service /etc/systemd/system/
+sudo cp deploy/systemd/inkharbor-cert-renew.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now inkharbor-cert-renew.timer
+```
+
+如果你更偏向 `cron`，可以直接：
+
+```bash
+crontab deploy/cron/inkharbor-cert-renew.cron
+```
+
 这两条脚本默认会把 Let’s Encrypt 数据写到仓库下的 `./letsencrypt`，把 ACME challenge webroot 写到 `./certbot/www`，不会覆盖当前 `./certs` 里的本地自签名证书。
+
+当前仓库根目录也已经提供了 `.env`，Compose 默认会按 Let’s Encrypt 目录约定读取：
+
+- `BLOG_TLS_CERTS_DIR=./letsencrypt`
+- `BLOG_TLS_CERT_PATH=/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem`
+- `BLOG_TLS_KEY_PATH=/etc/nginx/certs/live/wanderlust0736.top/privkey.pem`
 
 ### Nginx 健康检查与排障
 
 - 新增了 `https://127.0.0.1/nginx-healthz` 健康检查接口，返回当前主域名、证书路径和自动重载配置。
 - `blog-web` 已配置 Compose `healthcheck`，会直接探测这个接口。
 - 证书监听脚本现在会输出带时间戳的启动日志、证书指纹变化日志，以及 `nginx reload` 成功或失败日志，方便直接用 `docker logs inkharbor-web` 排查。
+
+### Let’s Encrypt 实战演练清单
+
+完整步骤已经单独整理在 `deploy/letsencrypt-drill.md`，适合首次切换、dry-run 续期检查和任务安装后复核时逐项执行。
 
 ### 域名上线说明
 
