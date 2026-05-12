@@ -33,7 +33,7 @@ services:
       context: .
       dockerfile: nginx/Dockerfile
       args:
-        FRONTEND_BUILD_MAX_OLD_SPACE_SIZE: ${FRONTEND_BUILD_MAX_OLD_SPACE_SIZE:-384}
+        FRONTEND_BUILD_MAX_OLD_SPACE_SIZE: ${FRONTEND_BUILD_MAX_OLD_SPACE_SIZE:-256}
     container_name: wanderlust-web
     environment:
       PRIMARY_DOMAIN: ${BLOG_PRIMARY_DOMAIN:-wanderlust0736.top}

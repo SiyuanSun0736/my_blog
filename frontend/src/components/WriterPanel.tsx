@@ -1,4 +1,4 @@
-import { Card, CardBody, CardHeader } from "@heroui/react";
+import { Card, CardBody, CardHeader } from "./ui";
 import { Link } from "react-router-dom";
 
 interface WriterPanelProps {

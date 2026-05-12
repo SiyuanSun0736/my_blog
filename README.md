@@ -65,7 +65,7 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 
 - MongoDB 默认把 WiredTiger cache 压到 Mongo 7 允许的最低值 `0.25GB`
 - Go API 默认设置 `GOMEMLIMIT=120MiB` 与 `GOGC=75`
-- 前端 Docker build 默认把 Node heap 限制到 `384MB`
+- 前端 Docker build 默认把 Node heap 限制到 `256MB`
 - 首次部署和日常更新都默认按串行 build 处理，避免 `up --build` 并行构建把内存顶满
 - 可直接执行 `./scripts/update-low-memory.sh` 按同一套串行方式更新服务
 

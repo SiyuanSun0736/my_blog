@@ -1,4 +1,4 @@
-import { Chip } from "@heroui/react";
+import { Chip } from "./ui";
 import { Outlet, Link, useLocation } from "react-router-dom";
 
 export function Shell() {

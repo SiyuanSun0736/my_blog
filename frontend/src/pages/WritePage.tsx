@@ -1,4 +1,4 @@
-import { Button, Card, CardBody, CardHeader, Input } from "@heroui/react";
+import { Button, Card, CardBody, CardHeader, Input } from "../components/ui";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPost, verifyWriteAccess } from "../lib/api";

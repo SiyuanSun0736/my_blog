@@ -1,4 +1,4 @@
-import { Avatar, Card, CardBody, Chip, Divider, Spinner } from "@heroui/react";
+import { Avatar, Card, CardBody, Chip, Divider, Spinner } from "../components/ui";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";

@@ -4,9 +4,6 @@ declare const _default: {
         extend: {};
     };
     darkMode: "class";
-    plugins: {
-        handler: import("tailwindcss/types/config").PluginCreator;
-        config?: Partial<import("tailwindcss/types/config").Config>;
-    }[];
+    plugins: any[];
 };
 export default _default;

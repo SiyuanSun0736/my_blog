@@ -1,4 +1,4 @@
-import { Card, CardBody, CardHeader, Chip } from "@heroui/react";
+import { Card, CardBody, CardHeader, Chip } from "./ui";
 import { Link } from "react-router-dom";
 import type { PostSummary } from "../types";
 

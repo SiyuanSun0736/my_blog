@@ -15,11 +15,11 @@
 
 - MongoDB 使用 `MONGODB_WIREDTIGER_CACHE_GB=0.25`，把 WiredTiger 缓存压到 Mongo 7 允许的最低值 `256MB`
 - Go API 使用 `BLOG_API_GOMEMLIMIT=120MiB` 和 `BLOG_API_GOGC=75`，降低运行时内存峰值
-- 前端构建使用 `FRONTEND_BUILD_MAX_OLD_SPACE_SIZE=384`，限制 Node build heap
+- 前端构建使用 `FRONTEND_BUILD_MAX_OLD_SPACE_SIZE=256`，限制 Node build heap
 - Vite 关闭压缩体积统计，减少构建时额外内存开销
 - 更新脚本改为串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 同时构建把内存顶满
 
-这些默认值已经写进根目录 `.env`，如果后续发现页面构建还是紧张，可以继续把 `FRONTEND_BUILD_MAX_OLD_SPACE_SIZE` 往下调到 `320`；如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
+这些默认值已经写进根目录 `.env`。当前前端构建已经在 `256MB` Node heap 下完成验证；如果后续页面体积再次上升，可以先回到 `320` 做对比，再根据实际构建日志微调。如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
 
 ## 前置条件
 

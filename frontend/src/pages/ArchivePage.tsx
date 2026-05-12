@@ -1,4 +1,4 @@
-import { Button, Card, CardBody, CardHeader, Chip, Spinner } from "@heroui/react";
+import { Button, Card, CardBody, CardHeader, Chip, Spinner } from "../components/ui";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { WriterPanel } from "../components/WriterPanel";
