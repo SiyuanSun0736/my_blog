@@ -27,6 +27,8 @@ if [ ! -f "$letsencrypt_dir/live/$primary_domain/fullchain.pem" ] || [ ! -f "$le
     exit 1
   fi
 
+  sh "$ROOT_DIR/scripts/check-letsencrypt-dns.sh"
+
   echo "No existing Let's Encrypt certificate found. Requesting initial certificate for $primary_domain and $www_domain." >&2
   docker compose stop blog-web >/dev/null 2>&1 || true
   docker compose --profile certbot run --rm --service-ports certbot certonly \
