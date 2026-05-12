@@ -59,6 +59,13 @@ Compose 模式下会同时启动 MongoDB，外部暴露 Nginx 的 `80` 与 `443`
 
 MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器重建后文章数据仍会保留。
 
+如果你的 VPS 只有 `1GB` 内存，当前仓库也已经提供默认低内存优化：
+
+- MongoDB 默认把 WiredTiger cache 压到 Mongo 7 允许的最低值 `0.25GB`
+- Go API 默认设置 `GOMEMLIMIT=120MiB` 与 `GOGC=75`
+- 前端 Docker build 默认把 Node heap 限制到 `384MB`
+- 可直接执行 `./scripts/update-low-memory.sh` 按串行方式更新服务
+
 当前镜像不再内置自签名证书，而是要求在启动时挂载外部证书文件。`www.wanderlust0736.top` 会被 Nginx 统一 301 跳转到 `wanderlust0736.top`。
 
 如果你要把 `/write` 暴露到公网，必须先配置 `BLOG_WRITE_TOKEN`。后端只会对 `GET /api/write-access` 和 `POST /api/posts` 放行带正确 Bearer token 的请求；未配置时，这两个端点会直接返回 `503`。

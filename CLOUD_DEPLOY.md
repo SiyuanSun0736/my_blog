@@ -6,7 +6,20 @@
 
 - 当前这台服务器只用于开发验证，不作为正式生产环境。
 - 当前开发部署主机公网 IP：`47.79.86.69`
+- 当前 VPS 只有 `1GB` 内存，部署和更新默认按低内存模式处理。
 - 当前仓库在这台机器上的更新，默认按“先备份数据库，再更新代码，再重建网页和 API，最后验证”的顺序执行。
+
+## 1GB VPS 优化
+
+当前仓库已经针对 `1GB` 内存的 VPS 做了几项默认优化：
+
+- MongoDB 使用 `MONGODB_WIREDTIGER_CACHE_GB=0.25`，把 WiredTiger 缓存压到 Mongo 7 允许的最低值 `256MB`
+- Go API 使用 `BLOG_API_GOMEMLIMIT=120MiB` 和 `BLOG_API_GOGC=75`，降低运行时内存峰值
+- 前端构建使用 `FRONTEND_BUILD_MAX_OLD_SPACE_SIZE=384`，限制 Node build heap
+- Vite 关闭压缩体积统计，减少构建时额外内存开销
+- 更新脚本改为串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 同时构建把内存顶满
+
+这些默认值已经写进根目录 `.env`，如果后续发现页面构建还是紧张，可以继续把 `FRONTEND_BUILD_MAX_OLD_SPACE_SIZE` 往下调到 `320`；如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
 
 ## 前置条件
 
@@ -69,12 +82,27 @@ curl -k -I https://127.0.0.1 -H 'Host: www.wanderlust0736.top'
 
 当前项目已经把 MongoDB 数据放进命名卷 `mongodb-data`，所以日常 `git pull` 更新时，不需要先删库，也不需要重建 Mongo 容器。默认推荐下面这套顺序：
 
+当前这台 `1GB` VPS 更推荐直接使用仓库里的低内存更新脚本：
+
+```bash
+cd /你的仓库目录
+
+chmod +x scripts/update-low-memory.sh
+./scripts/update-low-memory.sh
+```
+
+这条脚本内部已经固定做了：备份数据库、`git pull --ff-only`、串行 build `blog-api`、串行 build `blog-web`、重启容器、验证文章接口。
+
+如果你想手动执行，再用下面这套命令：
+
 ```bash
 cd /你的仓库目录
 
 ./scripts/backup-mongodb.sh
 git pull --ff-only
-docker compose up -d --build blog-api blog-web
+docker compose build blog-api
+docker compose build blog-web
+docker compose up -d mongodb blog-api blog-web
 docker compose ps
 curl -sk https://127.0.0.1/api/posts -H 'Host: wanderlust0736.top'
 docker logs wanderlust-api --since 10m
@@ -85,7 +113,8 @@ docker logs wanderlust-web --since 10m
 
 - 先备份当前数据库，给回滚留出口
 - 拉取最新代码，避免 merge commit 混进服务器更新流程
-- 只重建 `blog-api` 和 `blog-web`，保留当前 MongoDB 数据卷
+- 串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 在构建时同时占用过多内存
+- 重启 `mongodb`、`blog-api` 和 `blog-web`，但保留当前 MongoDB 数据卷
 - 用 `docker compose ps`、文章列表接口和最近日志确认网页与 API 都已切到新版本
 
 ### 日常更新原则
@@ -137,6 +166,8 @@ cd /你的仓库目录
 
 ./scripts/backup-mongodb.sh
 git pull --ff-only
+docker compose build blog-api
+docker compose build blog-web
 docker compose up -d --build mongodb blog-api blog-web
 docker compose ps
 ```

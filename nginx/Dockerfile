@@ -1,9 +1,12 @@
 FROM node:20-alpine AS frontend-builder
 
+ARG FRONTEND_BUILD_MAX_OLD_SPACE_SIZE=384
+ENV NODE_OPTIONS=--max-old-space-size=${FRONTEND_BUILD_MAX_OLD_SPACE_SIZE}
+
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm ci --no-audit --no-fund
 
 COPY frontend/ ./
 RUN npm run build

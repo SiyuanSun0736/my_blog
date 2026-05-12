@@ -3,6 +3,7 @@ services:
     image: mongo:7
     container_name: wanderlust-mongodb
     restart: unless-stopped
+    command: ["mongod", "--bind_ip_all", "--wiredTigerCacheSizeGB", "${MONGODB_WIREDTIGER_CACHE_GB:-0.25}"]
     volumes:
       - mongodb-data:/data/db
     healthcheck:
@@ -23,12 +24,16 @@ services:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DATABASE: wanderlust
       BLOG_WRITE_TOKEN: ${BLOG_WRITE_TOKEN:-}
+      GOMEMLIMIT: ${BLOG_API_GOMEMLIMIT:-120MiB}
+      GOGC: ${BLOG_API_GOGC:-75}
     restart: unless-stopped
 
   blog-web:
     build:
       context: .
       dockerfile: nginx/Dockerfile
+      args:
+        FRONTEND_BUILD_MAX_OLD_SPACE_SIZE: ${FRONTEND_BUILD_MAX_OLD_SPACE_SIZE:-384}
     container_name: wanderlust-web
     environment:
       PRIMARY_DOMAIN: ${BLOG_PRIMARY_DOMAIN:-wanderlust0736.top}
