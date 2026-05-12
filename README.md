@@ -1,0 +1,147 @@
+# Ink Harbor
+
+这是一个基于 Gin、MongoDB、Nginx 和 HeroUI 的现代博客示例项目。
+
+## 结构
+
+- `backend/`: Go + Gin 博客 API，使用 MongoDB 持久化文章并内置种子数据
+- `frontend/`: Vite + React + HeroUI 前端，包含首页和文章详情页
+- `nginx/`: Nginx 反向代理配置与前端静态资源镜像构建
+
+## 功能
+
+- 首页文章列表与关键词过滤
+- 文章详情页
+- MongoDB 持久化与首次启动自动灌入示例文章
+- Gin 提供 `/api/posts` 与 `/api/posts/:slug`
+- Nginx 提供 HTTPS 入口，并将 HTTP 自动跳转到 HTTPS
+- Nginx 统一代理 `/api` 并服务前端静态文件
+- Docker Compose 一键启动
+
+## 本地开发
+
+### 后端
+
+```bash
+cd backend
+go mod tidy
+export MONGODB_URI=mongodb://localhost:27017
+export MONGODB_DATABASE=inkharbor
+go run .
+```
+
+服务默认运行在 `http://localhost:8080`。
+
+本地开发前请先确保 MongoDB 已启动；如果使用默认地址，可省略上述环境变量。
+
+### 前端
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+前端默认运行在 `http://localhost:5173`，并通过 Vite 代理访问后端 `/api`。
+
+## Docker 部署
+
+```bash
+docker compose up --build
+```
+
+启动后主站访问地址为 `https://wanderlust0736.top`。
+
+Compose 模式下会同时启动 MongoDB，外部暴露 Nginx 的 `80` 与 `443` 端口，其中 `80` 会自动跳转到 HTTPS，API 通过 `https://wanderlust0736.top/api` 访问。
+
+当前镜像不再内置自签名证书，而是要求在启动时挂载外部证书文件。`www.wanderlust0736.top` 会被 Nginx 统一 301 跳转到 `wanderlust0736.top`。
+
+### 证书挂载
+
+默认会把仓库根目录下的 `./certs` 挂载到容器里的 `/etc/nginx/certs`，并读取下面两个文件：
+
+- `fullchain.pem`
+- `privkey.pem`
+
+如果你使用 Let's Encrypt，不要只挂 `live/wanderlust0736.top` 这一层，因为其中的 `fullchain.pem` 和 `privkey.pem` 通常是符号链接。更稳妥的方式是把整棵 `/etc/letsencrypt` 挂进容器，再把读取路径指到 `live/wanderlust0736.top`：
+
+```bash
+export BLOG_TLS_CERTS_DIR=/etc/letsencrypt
+export BLOG_TLS_CERT_PATH=/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem
+export BLOG_TLS_KEY_PATH=/etc/nginx/certs/live/wanderlust0736.top/privkey.pem
+docker compose up --build -d
+```
+
+如果你使用云证书但文件名不是 `fullchain.pem` 和 `privkey.pem`，可以继续挂载目录，同时指定容器内实际读取的文件名：
+
+```bash
+export BLOG_TLS_CERTS_DIR=./certs
+export BLOG_TLS_CERT_PATH=/etc/nginx/certs/server.crt
+export BLOG_TLS_KEY_PATH=/etc/nginx/certs/server.key
+docker compose up --build -d
+```
+
+如果挂载目录里缺少证书文件，Nginx 容器会在启动前直接报错退出，避免带着错误配置继续运行。
+
+### Let’s Encrypt 自动续期后重载
+
+当前 `blog-web` 默认启用了证书文件轮询。只要宿主机上的 Let’s Encrypt 续期任务把证书更新到挂载目录里，容器会在下一个轮询周期内自动执行 `nginx -s reload`，不需要手动重启容器。
+
+- 默认开关：`BLOG_TLS_AUTO_RELOAD=1`
+- 默认轮询间隔：`BLOG_TLS_RELOAD_INTERVAL_SECONDS=60`
+
+如果你希望调短或关闭：
+
+```bash
+export BLOG_TLS_AUTO_RELOAD=1
+export BLOG_TLS_RELOAD_INTERVAL_SECONDS=30
+docker compose up --build -d
+```
+
+### Certbot 部署脚本
+
+仓库里已经补了两条可直接执行的脚本：
+
+- `./scripts/deploy-letsencrypt.sh`：首次申请证书并启动整套 Compose 服务
+- `./scripts/renew-letsencrypt.sh`：执行一次续期检查，续期成功后由 `blog-web` 自动检测证书变化并热重载 Nginx
+
+首次部署示例：
+
+```bash
+export CERTBOT_EMAIL=you@example.com
+./scripts/deploy-letsencrypt.sh
+```
+
+手动续期示例：
+
+```bash
+./scripts/renew-letsencrypt.sh
+```
+
+如果你要把续期接到 cron，可以直接用：
+
+```bash
+cd /home/ssy/web && ./scripts/renew-letsencrypt.sh >> /var/log/inkharbor-certbot.log 2>&1
+```
+
+这两条脚本默认会把 Let’s Encrypt 数据写到仓库下的 `./letsencrypt`，把 ACME challenge webroot 写到 `./certbot/www`，不会覆盖当前 `./certs` 里的本地自签名证书。
+
+### Nginx 健康检查与排障
+
+- 新增了 `https://127.0.0.1/nginx-healthz` 健康检查接口，返回当前主域名、证书路径和自动重载配置。
+- `blog-web` 已配置 Compose `healthcheck`，会直接探测这个接口。
+- 证书监听脚本现在会输出带时间戳的启动日志、证书指纹变化日志，以及 `nginx reload` 成功或失败日志，方便直接用 `docker logs inkharbor-web` 排查。
+
+### 域名上线说明
+
+- 域名 `wanderlust0736.top` 还需要在 DNS 解析里把 `A` 记录指向你的服务器公网 IP。
+- 如果要同时支持 `www.wanderlust0736.top`，再加一条 `CNAME` 或 `A` 记录。
+- 当前仓库里的 Nginx 会把 `www.wanderlust0736.top` 永久重定向到 `wanderlust0736.top`。
+- 如果你希望 `https://www.wanderlust0736.top` 也能顺利跳转，证书里需要同时包含主域名和 `www` 子域名。
+- 如果需要在本机继续通过 `https://localhost` 联调，必须使用包含 `localhost` 的本地证书；正式云证书通常只覆盖真实域名。
+
+## 后续可扩展方向
+
+- 增加后台管理与文章编辑
+- 使用 Markdown 或富文本渲染正文
+- 增加评论、归档、RSS 与搜索能力

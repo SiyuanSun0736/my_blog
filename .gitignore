@@ -1,0 +1,9 @@
+frontend/node_modules/
+frontend/dist/
+backend/bin/
+backend/.cache/
+certs/*
+!certs/README.md
+letsencrypt/
+certbot/
+*.log

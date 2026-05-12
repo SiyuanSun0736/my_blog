@@ -1,0 +1,9 @@
+.git/
+.gitignore
+frontend/node_modules/
+frontend/dist/
+backend/bin/
+certs/
+letsencrypt/
+certbot/
+*.log
