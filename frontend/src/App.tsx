@@ -1,19 +1,31 @@
+import { Suspense, lazy } from "react";
 import { Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
-import { HomePage } from "./pages/HomePage";
-import { ArchivePage } from "./pages/ArchivePage";
-import { PostPage } from "./pages/PostPage";
-import { WritePage } from "./pages/WritePage";
+
+const HomePage = lazy(() => import("./pages/HomePage").then((module) => ({ default: module.HomePage })));
+const ArchivePage = lazy(() =>
+  import("./pages/ArchivePage").then((module) => ({ default: module.ArchivePage })),
+);
+const PostPage = lazy(() => import("./pages/PostPage").then((module) => ({ default: module.PostPage })));
+const WritePage = lazy(() => import("./pages/WritePage").then((module) => ({ default: module.WritePage })));
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<Shell />}>
-        <Route index element={<HomePage />} />
-        <Route path="/archive" element={<ArchivePage />} />
-        <Route path="/posts/:slug" element={<PostPage />} />
-        <Route path="/write" element={<WritePage />} />
-      </Route>
-    </Routes>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[50vh] items-center justify-center text-sm text-[var(--muted)]">
+          页面加载中...
+        </div>
+      }
+    >
+      <Routes>
+        <Route element={<Shell />}>
+          <Route index element={<HomePage />} />
+          <Route path="/archive" element={<ArchivePage />} />
+          <Route path="/posts/:slug" element={<PostPage />} />
+          <Route path="/write" element={<WritePage />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }

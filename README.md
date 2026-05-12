@@ -50,12 +50,14 @@ npm run dev
 ## Docker 部署
 
 ```bash
-docker compose up --build
+docker compose build blog-api
+docker compose build blog-web
+docker compose up -d mongodb blog-api blog-web
 ```
 
 启动后主站访问地址为 `https://wanderlust0736.top`。
 
-Compose 模式下会同时启动 MongoDB，外部暴露 Nginx 的 `80` 与 `443` 端口，其中 `80` 会自动跳转到 HTTPS，API 通过 `https://wanderlust0736.top/api` 访问。
+Compose 模式下会启动 MongoDB、API 和 Nginx，外部暴露 Nginx 的 `80` 与 `443` 端口，其中 `80` 会自动跳转到 HTTPS，API 通过 `https://wanderlust0736.top/api` 访问。
 
 MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器重建后文章数据仍会保留。
 
@@ -64,7 +66,8 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 - MongoDB 默认把 WiredTiger cache 压到 Mongo 7 允许的最低值 `0.25GB`
 - Go API 默认设置 `GOMEMLIMIT=120MiB` 与 `GOGC=75`
 - 前端 Docker build 默认把 Node heap 限制到 `384MB`
-- 可直接执行 `./scripts/update-low-memory.sh` 按串行方式更新服务
+- 首次部署和日常更新都默认按串行 build 处理，避免 `up --build` 并行构建把内存顶满
+- 可直接执行 `./scripts/update-low-memory.sh` 按同一套串行方式更新服务
 
 当前镜像不再内置自签名证书，而是要求在启动时挂载外部证书文件。`www.wanderlust0736.top` 会被 Nginx 统一 301 跳转到 `wanderlust0736.top`。
 
@@ -128,6 +131,14 @@ export BLOG_TLS_KEY_PATH=/etc/nginx/certs/live/wanderlust0736.top/privkey.pem
 docker compose up --build -d
 ```
 
+如果当前机器只有 `1GB` 内存，更稳妥的方式仍然是：
+
+```bash
+docker compose build blog-api
+docker compose build blog-web
+docker compose up -d mongodb blog-api blog-web
+```
+
 如果你使用云证书但文件名不是 `fullchain.pem` 和 `privkey.pem`，可以继续挂载目录，同时指定容器内实际读取的文件名：
 
 ```bash
@@ -136,6 +147,8 @@ export BLOG_TLS_CERT_PATH=/etc/nginx/certs/server.crt
 export BLOG_TLS_KEY_PATH=/etc/nginx/certs/server.key
 docker compose up --build -d
 ```
+
+低内存机器上也建议改成先分别 build `blog-api` 和 `blog-web`，再执行 `docker compose up -d mongodb blog-api blog-web`。
 
 如果挂载目录里缺少证书文件，Nginx 容器会在启动前直接报错退出，避免带着错误配置继续运行。
 
@@ -153,6 +166,8 @@ export BLOG_TLS_AUTO_RELOAD=1
 export BLOG_TLS_RELOAD_INTERVAL_SECONDS=30
 docker compose up --build -d
 ```
+
+如果是在 `1GB` VPS 上操作，仍然优先使用串行 build 再 `up -d` 的方式。
 
 ### Certbot 部署脚本
 
