@@ -1,0 +1,1 @@
+43 4 * * * cd /home/ssy/web && ./scripts/backup-mongodb.sh >> /var/log/wanderlust-mongodb-backup.log 2>&1

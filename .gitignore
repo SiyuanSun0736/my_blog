@@ -6,4 +6,6 @@ certs/*
 !certs/README.md
 letsencrypt/
 certbot/
+backups/*
+!backups/README.md
 *.log

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Wanderlust MongoDB backup every night
+
+[Timer]
+OnCalendar=*-*-* 04:43:00
+RandomizedDelaySec=20m
+Persistent=true
+Unit=wanderlust-mongodb-backup.service
+
+[Install]
+WantedBy=timers.target

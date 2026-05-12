@@ -29,4 +29,4 @@ echo "Running certbot renewal with webroot challenge." >&2
 docker compose --profile certbot run --rm certbot $renew_args
 
 echo "Renewal command finished. If certificates changed, blog-web will reload them automatically within ${BLOG_TLS_RELOAD_INTERVAL_SECONDS:-60} seconds." >&2
-echo "Inspect reload logs with: docker logs inkharbor-web --since 10m" >&2
+echo "Inspect reload logs with: docker logs wanderlust-web --since 10m" >&2

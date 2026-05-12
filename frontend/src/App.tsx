@@ -3,6 +3,7 @@ import { Shell } from "./components/Shell";
 import { HomePage } from "./pages/HomePage";
 import { ArchivePage } from "./pages/ArchivePage";
 import { PostPage } from "./pages/PostPage";
+import { WritePage } from "./pages/WritePage";
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route index element={<HomePage />} />
         <Route path="/archive" element={<ArchivePage />} />
         <Route path="/posts/:slug" element={<PostPage />} />
+        <Route path="/write" element={<WritePage />} />
       </Route>
     </Routes>
   );

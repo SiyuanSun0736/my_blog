@@ -2,10 +2,21 @@ import type { Post, PostSummary } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
-export interface SubscriptionResponse {
-  email: string;
-  created: boolean;
+interface WriteAccessResponse {
   message: string;
+}
+
+export interface CreatePostPayload {
+  slug?: string;
+  title: string;
+  summary?: string;
+  category?: string;
+  tags?: string[];
+  author?: string;
+  publishedAt?: string;
+  featured?: boolean;
+  accent?: string;
+  body: string;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -32,6 +43,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+function writeAccessHeaders(writeToken: string) {
+  return {
+    Authorization: `Bearer ${writeToken}`,
+  };
+}
+
 export function fetchPosts(): Promise<PostSummary[]> {
   return request<PostSummary[]>("/posts");
 }
@@ -40,9 +57,16 @@ export function fetchPost(slug: string): Promise<Post> {
   return request<Post>(`/posts/${slug}`);
 }
 
-export function createSubscription(email: string): Promise<SubscriptionResponse> {
-  return request<SubscriptionResponse>("/subscriptions", {
+export function verifyWriteAccess(writeToken: string): Promise<WriteAccessResponse> {
+  return request<WriteAccessResponse>("/write-access", {
+    headers: writeAccessHeaders(writeToken),
+  });
+}
+
+export function createPost(payload: CreatePostPayload, writeToken: string): Promise<Post> {
+  return request<Post>("/posts", {
     method: "POST",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(payload),
+    headers: writeAccessHeaders(writeToken),
   });
 }

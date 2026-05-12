@@ -1,5 +1,7 @@
 import { Avatar, Card, CardBody, Chip, Divider, Spinner } from "@heroui/react";
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Link, useParams } from "react-router-dom";
 import { fetchPost, fetchPosts } from "../lib/api";
 import type { Post, PostSummary } from "../types";
@@ -193,9 +195,7 @@ export function PostPage() {
             </div>
 
             <div className="story-prose">
-              {post.body.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.body}</ReactMarkdown>
             </div>
 
             <Divider />

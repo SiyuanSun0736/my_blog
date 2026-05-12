@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"inkharbor/backend/internal/blog"
+	"wanderlust/backend/internal/blog"
 )
 
 func main() {
@@ -46,5 +46,5 @@ func mongoDatabase() string {
 		return value
 	}
 
-	return "inkharbor"
+	return "wanderlust"
 }

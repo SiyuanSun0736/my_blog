@@ -1,10 +1,15 @@
 package blog
 
 import (
+	"crypto/subtle"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+const writeTokenEnvName = "BLOG_WRITE_TOKEN"
 
 type Handler struct {
 	service *Service
@@ -17,7 +22,8 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) RegisterRoutes(router gin.IRoutes) {
 	router.GET("/posts", h.listPosts)
 	router.GET("/posts/:slug", h.getPost)
-	router.POST("/subscriptions", h.createSubscription)
+	router.GET("/write-access", h.requireWriteAccess, h.confirmWriteAccess)
+	router.POST("/posts", h.requireWriteAccess, h.createPost)
 }
 
 func (h *Handler) listPosts(c *gin.Context) {
@@ -45,35 +51,51 @@ func (h *Handler) getPost(c *gin.Context) {
 	c.JSON(http.StatusOK, post)
 }
 
-func (h *Handler) createSubscription(c *gin.Context) {
-	var request subscriptionRequest
-
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid subscription payload"})
+func (h *Handler) requireWriteAccess(c *gin.Context) {
+	configuredToken := strings.TrimSpace(os.Getenv(writeTokenEnvName))
+	if configuredToken == "" {
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": "write access is not configured"})
 		return
 	}
 
-	created, email, err := h.service.Subscribe(c.Request.Context(), request.Email)
+	authorization := strings.TrimSpace(c.GetHeader("Authorization"))
+	const bearerPrefix = "Bearer "
+	if !strings.HasPrefix(authorization, bearerPrefix) {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "write access denied"})
+		return
+	}
+
+	providedToken := strings.TrimSpace(strings.TrimPrefix(authorization, bearerPrefix))
+	if subtle.ConstantTimeCompare([]byte(providedToken), []byte(configuredToken)) != 1 {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "write access denied"})
+		return
+	}
+
+	c.Next()
+}
+
+func (h *Handler) confirmWriteAccess(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "write access granted"})
+}
+
+func (h *Handler) createPost(c *gin.Context) {
+	var request CreatePostInput
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid post payload"})
+		return
+	}
+
+	post, err := h.service.CreatePost(c.Request.Context(), request)
 	if err != nil {
-		if err == ErrInvalidSubscriptionEmail {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid email address"})
+		if err == ErrInvalidPost {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "title, body or publishedAt is invalid"})
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to create subscription"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to create post"})
 		return
 	}
 
-	statusCode := http.StatusOK
-	message := "这个邮箱已经在订阅列表中了。"
-	if created {
-		statusCode = http.StatusCreated
-		message = "订阅成功，后续更新会发送到这个邮箱。"
-	}
-
-	c.JSON(statusCode, subscriptionResponse{
-		Email:   email,
-		Created: created,
-		Message: message,
-	})
+	c.JSON(http.StatusCreated, post)
 }

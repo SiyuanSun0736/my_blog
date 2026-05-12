@@ -1,7 +1,7 @@
 import { Button, Card, CardBody, CardHeader, Chip, Input, Spinner } from "@heroui/react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { SubscribePanel } from "../components/SubscribePanel";
+import { WriterPanel } from "../components/WriterPanel";
 import { fetchPosts } from "../lib/api";
 import type { PostSummary } from "../types";
 import { PostCard } from "../components/PostCard";
@@ -407,14 +407,14 @@ export function HomePage() {
         <aside className="space-y-5">
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">About The Blog</p>
-              <h3 className="display-type text-3xl text-[var(--ink)]">关于这个博客</h3>
+              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">About Wanderlust</p>
+              <h3 className="display-type text-3xl text-[var(--ink)]">关于 Wanderlust</h3>
             </CardHeader>
             <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm leading-7 text-[var(--muted)]">
               <p>
                 {authors.length > 0
                   ? `${authors.join(" / ")} 在这里写下做网站时的判断、返工和偶尔的自我怀疑。`
-                  : "这里会展示博客作者与写作方向。"}
+                  : "这里会展示 Wanderlust 的作者与写作方向。"}
               </p>
               <p>如果你习惯先看作者、栏目、归档，再决定要不要往下读，这一栏就是给这种阅读方式准备的。</p>
             </CardBody>
@@ -504,11 +504,7 @@ export function HomePage() {
             </CardBody>
           </Card>
 
-          <SubscribePanel
-            eyebrow="Newsletter"
-            title="订阅更新"
-            description="新文章发布后，这里会把更新投递到你的邮箱。现在已经接到真实的后端订阅接口。"
-          />
+          <WriterPanel />
         </aside>
       </section>
 

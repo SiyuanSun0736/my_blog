@@ -1,5 +1,5 @@
 [Unit]
-Description=Renew Let's Encrypt certificate for Ink Harbor
+Description=Renew Let's Encrypt certificate for Wanderlust
 Wants=network-online.target docker.service
 After=network-online.target docker.service
 

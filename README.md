@@ -1,19 +1,21 @@
-# Ink Harbor
+# Wanderlust
 
 这是一个基于 Gin、MongoDB、Nginx 和 HeroUI 的现代博客示例项目。
 
 ## 结构
 
-- `backend/`: Go + Gin 博客 API，使用 MongoDB 持久化文章并内置种子数据
-- `frontend/`: Vite + React + HeroUI 前端，包含首页和文章详情页
+- `backend/`: Go + Gin 博客 API，使用 MongoDB 持久化文章并提供写作接口
+- `frontend/`: Vite + React + HeroUI 前端，包含首页、文章详情页和写作入口
 - `nginx/`: Nginx 反向代理配置与前端静态资源镜像构建
 
 ## 功能
 
 - 首页文章列表与关键词过滤
 - 文章详情页
-- MongoDB 持久化与首次启动自动灌入示例文章
-- Gin 提供 `/api/posts` 与 `/api/posts/:slug`
+- 写作入口与新文章发布
+- MongoDB 持久化与 Markdown 正文渲染
+- MongoDB 数据卷持久化与归档备份脚本
+- Gin 提供 `/api/posts`、`/api/posts/:slug` 与 `POST /api/posts`
 - Nginx 提供 HTTPS 入口，并将 HTTP 自动跳转到 HTTPS
 - Nginx 统一代理 `/api` 并服务前端静态文件
 - Docker Compose 一键启动
@@ -26,7 +28,8 @@
 cd backend
 go mod tidy
 export MONGODB_URI=mongodb://localhost:27017
-export MONGODB_DATABASE=inkharbor
+export MONGODB_DATABASE=wanderlust
+export BLOG_WRITE_TOKEN=替换成一个长随机字符串
 go run .
 ```
 
@@ -54,7 +57,53 @@ docker compose up --build
 
 Compose 模式下会同时启动 MongoDB，外部暴露 Nginx 的 `80` 与 `443` 端口，其中 `80` 会自动跳转到 HTTPS，API 通过 `https://wanderlust0736.top/api` 访问。
 
+MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器重建后文章数据仍会保留。
+
 当前镜像不再内置自签名证书，而是要求在启动时挂载外部证书文件。`www.wanderlust0736.top` 会被 Nginx 统一 301 跳转到 `wanderlust0736.top`。
+
+如果你要把 `/write` 暴露到公网，必须先配置 `BLOG_WRITE_TOKEN`。后端只会对 `GET /api/write-access` 和 `POST /api/posts` 放行带正确 Bearer token 的请求；未配置时，这两个端点会直接返回 `503`。
+
+### 数据备份与恢复
+
+仓库里已经补了两条与 MongoDB 内容备份相关的脚本：
+
+- `./scripts/backup-mongodb.sh`：把当前 `wanderlust` 数据库导出为 gzip archive
+- `./scripts/restore-mongodb.sh <备份目录或 archive 文件>`：把归档恢复回 MongoDB
+
+手动备份示例：
+
+```bash
+./scripts/backup-mongodb.sh
+```
+
+默认输出目录是 `./backups/mongodb/`，每次会生成形如 `wanderlust-20260512T123456Z/dump.archive.gz` 的备份目录，并附带 `metadata.txt` 与可用时的 `sha256` 校验文件。
+
+恢复示例：
+
+```bash
+./scripts/restore-mongodb.sh ./backups/mongodb/wanderlust-20260512T123456Z
+```
+
+恢复前默认会清空目标数据库；如果你想保留现有内容再尝试恢复，可以先设置：
+
+```bash
+export BLOG_BACKUP_RESTORE_DROP=0
+```
+
+如果你要把备份接到定时任务，仓库里也已经准备好了模板：
+
+- `deploy/systemd/wanderlust-mongodb-backup.service`
+- `deploy/systemd/wanderlust-mongodb-backup.timer`
+- `deploy/cron/wanderlust-mongodb-backup.cron`
+
+安装 `systemd timer` 的最短路径：
+
+```bash
+sudo cp deploy/systemd/wanderlust-mongodb-backup.service /etc/systemd/system/
+sudo cp deploy/systemd/wanderlust-mongodb-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now wanderlust-mongodb-backup.timer
+```
 
 ### 证书挂载
 
@@ -121,28 +170,28 @@ export CERTBOT_EMAIL=you@example.com
 如果你要把续期接到 cron，可以直接用：
 
 ```bash
-cd /home/ssy/web && ./scripts/renew-letsencrypt.sh >> /var/log/inkharbor-certbot.log 2>&1
+cd /home/ssy/web && ./scripts/renew-letsencrypt.sh >> /var/log/wanderlust-certbot.log 2>&1
 ```
 
 仓库里也已经直接生成了可安装文件：
 
-- `deploy/systemd/inkharbor-cert-renew.service`
-- `deploy/systemd/inkharbor-cert-renew.timer`
-- `deploy/cron/inkharbor-cert-renew.cron`
+- `deploy/systemd/wanderlust-cert-renew.service`
+- `deploy/systemd/wanderlust-cert-renew.timer`
+- `deploy/cron/wanderlust-cert-renew.cron`
 
 安装 `systemd timer` 的最短路径：
 
 ```bash
-sudo cp deploy/systemd/inkharbor-cert-renew.service /etc/systemd/system/
-sudo cp deploy/systemd/inkharbor-cert-renew.timer /etc/systemd/system/
+sudo cp deploy/systemd/wanderlust-cert-renew.service /etc/systemd/system/
+sudo cp deploy/systemd/wanderlust-cert-renew.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now inkharbor-cert-renew.timer
+sudo systemctl enable --now wanderlust-cert-renew.timer
 ```
 
 如果你更偏向 `cron`，可以直接：
 
 ```bash
-crontab deploy/cron/inkharbor-cert-renew.cron
+crontab deploy/cron/wanderlust-cert-renew.cron
 ```
 
 这两条脚本默认会把 Let’s Encrypt 数据写到仓库下的 `./letsencrypt`，把 ACME challenge webroot 写到 `./certbot/www`，不会覆盖当前 `./certs` 里的本地自签名证书。
@@ -152,12 +201,13 @@ crontab deploy/cron/inkharbor-cert-renew.cron
 - `BLOG_TLS_CERTS_DIR=./letsencrypt`
 - `BLOG_TLS_CERT_PATH=/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem`
 - `BLOG_TLS_KEY_PATH=/etc/nginx/certs/live/wanderlust0736.top/privkey.pem`
+- `BLOG_WRITE_TOKEN=`：默认留空，准备公开写作入口时再填入随机令牌
 
 ### Nginx 健康检查与排障
 
 - 新增了 `https://127.0.0.1/nginx-healthz` 健康检查接口，返回当前主域名、证书路径和自动重载配置。
 - `blog-web` 已配置 Compose `healthcheck`，会直接探测这个接口。
-- 证书监听脚本现在会输出带时间戳的启动日志、证书指纹变化日志，以及 `nginx reload` 成功或失败日志，方便直接用 `docker logs inkharbor-web` 排查。
+- 证书监听脚本现在会输出带时间戳的启动日志、证书指纹变化日志，以及 `nginx reload` 成功或失败日志，方便直接用 `docker logs wanderlust-web` 排查。
 
 ### Let’s Encrypt 实战演练清单
 
@@ -173,6 +223,5 @@ crontab deploy/cron/inkharbor-cert-renew.cron
 
 ## 后续可扩展方向
 
-- 增加后台管理与文章编辑
-- 使用 Markdown 或富文本渲染正文
+- 增加后台管理与文章编辑权限控制
 - 增加评论、归档、RSS 与搜索能力

@@ -13,5 +13,5 @@ export interface PostSummary {
 }
 
 export interface Post extends PostSummary {
-  body: string[];
+  body: string;
 }

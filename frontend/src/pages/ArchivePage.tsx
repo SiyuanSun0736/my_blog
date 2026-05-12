@@ -1,7 +1,7 @@
 import { Button, Card, CardBody, CardHeader, Chip, Spinner } from "@heroui/react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { SubscribePanel } from "../components/SubscribePanel";
+import { WriterPanel } from "../components/WriterPanel";
 import { fetchPosts } from "../lib/api";
 import type { PostSummary } from "../types";
 
@@ -226,10 +226,11 @@ export function ArchivePage() {
             </CardBody>
           </Card>
 
-          <SubscribePanel
-            eyebrow="Mailing List"
-            title="订阅归档更新"
-            description="如果你不想只在偶然点进站点时才发现新文章，可以直接留下邮箱，后续更新会走这条订阅入口。"
+          <WriterPanel
+            eyebrow="Archive Writer"
+            title="写新内容"
+            description="归档页右侧不再放订阅表单，改成直接进入写作入口。发新文章后，这里会立刻出现在归档时间线里。"
+            ctaLabel="去写作入口"
           />
         </aside>
       </section>

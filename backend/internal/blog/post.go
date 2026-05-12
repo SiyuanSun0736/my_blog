@@ -12,5 +12,18 @@ type Post struct {
 	ReadMinutes int      `json:"readMinutes" bson:"readMinutes"`
 	Featured    bool     `json:"featured" bson:"featured"`
 	Accent      string   `json:"accent" bson:"accent"`
-	Body        []string `json:"body,omitempty" bson:"body,omitempty"`
+	Body        string   `json:"body,omitempty" bson:"body,omitempty"`
+}
+
+type CreatePostInput struct {
+	Slug        string   `json:"slug"`
+	Title       string   `json:"title"`
+	Summary     string   `json:"summary"`
+	Category    string   `json:"category"`
+	Tags        []string `json:"tags"`
+	Author      string   `json:"author"`
+	PublishedAt string   `json:"publishedAt"`
+	Featured    bool     `json:"featured"`
+	Accent      string   `json:"accent"`
+	Body        string   `json:"body"`
 }

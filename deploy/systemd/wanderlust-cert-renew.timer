@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Wanderlust Let's Encrypt renewal twice daily
+
+[Timer]
+OnCalendar=*-*-* 03,15:17:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=wanderlust-cert-renew.service
+
+[Install]
+WantedBy=timers.target
