@@ -110,13 +110,10 @@ export function ArchivePage() {
             时间线归档
           </Chip>
           <div className="max-w-3xl space-y-4">
-            <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">按年份筛选 / 按月份折叠 / 长期维护</p>
+            <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">按年份筛选 / 按月份折叠</p>
             <h1 className="display-type text-4xl leading-none text-[var(--ink)] sm:text-5xl lg:text-6xl">
-              把实验、复盘和线上记录按时间线放好。
+              历史记录
             </h1>
-            <p className="max-w-2xl text-base leading-8 text-[var(--muted)] sm:text-lg">
-              归档不是装饰，它更像工程博客的检索面板。你可以先按年份缩小范围，再按月份回看一次版本迭代、一次性能追踪，或者一次部署事故之后留下了什么。
-            </p>
           </div>
         </div>
       </section>
@@ -215,7 +212,7 @@ export function ArchivePage() {
             </CardHeader>
             <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm leading-7 text-[var(--muted)]">
               <p>总计 {sortedPosts.length} 篇记录，当前年份下可见 {filteredPosts.length} 篇。</p>
-              <p>时间跨度覆盖 {years.length - 1 > 0 ? years.length - 1 : 1} 个年份，适合从最近一次实验或线上变更一路往前翻。</p>
+              <p>时间跨度覆盖 {years.length - 1 > 0 ? years.length - 1 : 1} 个年份</p>
               <Link
                 to="/"
                 className="inline-flex rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
