@@ -157,6 +157,11 @@ func (h *Handler) createPost(c *gin.Context) {
 			return
 		}
 
+		if err == ErrFeaturedLimit {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "featured post limit reached (max 3)"})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to create post"})
 		return
 	}
@@ -177,6 +182,8 @@ func (h *Handler) updatePost(c *gin.Context) {
 		switch err {
 		case ErrInvalidPost:
 			c.JSON(http.StatusBadRequest, gin.H{"message": "title, body or publishedAt is invalid"})
+		case ErrFeaturedLimit:
+			c.JSON(http.StatusBadRequest, gin.H{"message": "featured post limit reached (max 3)"})
 		case ErrPostNotFound:
 			c.JSON(http.StatusNotFound, gin.H{"message": "post not found"})
 		default:
@@ -200,6 +207,11 @@ func (h *Handler) setPostFeatured(c *gin.Context) {
 	if err != nil {
 		if err == ErrDraftCannotFeature {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "draft post cannot be featured"})
+			return
+		}
+
+		if err == ErrFeaturedLimit {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "featured post limit reached (max 3)"})
 			return
 		}
 

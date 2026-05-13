@@ -571,7 +571,8 @@ export function WritePage() {
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const isEditing = selectedSlug !== null;
-  const featuredPost = posts.find((post) => post.featured) ?? null;
+  const featuredPosts = posts.filter((post) => post.featured).slice(0, 3);
+  const featuredLimitReached = featuredPosts.length >= 3;
   const draftCount = posts.filter((post) => post.draft).length;
   const publishedCount = posts.length - draftCount;
   const editorKey = selectedSlug ?? "new";
@@ -579,6 +580,8 @@ export function WritePage() {
   const baselineForm = originalPost ? formStateFromPost(originalPost) : newPostTemplateRef.current;
   const hasUnsavedChanges = formSignature(form) !== formSignature(baselineForm);
   const hasUnpublishedChanges = form.draft && hasUnsavedChanges;
+  const canFeatureCurrentForm = !form.draft && (form.featured || originalPost?.featured === true || !featuredLimitReached);
+  const featuredSlotsRemaining = Math.max(0, 3 - featuredPosts.length);
   const visiblePosts = posts.filter((post) => {
     if (listFilter === "draft") {
       return post.draft;
@@ -1313,7 +1316,8 @@ export function WritePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Chip color="secondary" variant="flat">当前会话已验证</Chip>
                 <Chip color="warning" variant="flat">管理令牌已载入</Chip>
-                {featuredPost ? <Chip variant="bordered">当前精选：{featuredPost.title}</Chip> : null}
+                <Chip variant="bordered">首页精选 {featuredPosts.length}/3</Chip>
+                {featuredPosts.map((post) => <Chip key={post.slug} variant="bordered">{post.title}</Chip>)}
                 {isEditing ? <Chip variant="bordered">编辑模式</Chip> : <Chip variant="bordered">新建模式</Chip>}
                 {hasUnsavedChanges ? <Chip color="warning" variant="flat">未保存变更</Chip> : null}
                 {hasUnpublishedChanges ? <Chip variant="bordered">未发布变更</Chip> : null}
@@ -1440,7 +1444,7 @@ export function WritePage() {
                   <input
                     type="checkbox"
                     checked={form.featured}
-                    disabled={form.draft}
+                    disabled={!canFeatureCurrentForm}
                     onChange={(event) => updateField("featured", event.target.checked)}
                   />
                   首页精选
@@ -1448,7 +1452,9 @@ export function WritePage() {
                 <div className="rounded-[1rem] border border-black/10 bg-white/70 px-4 py-3 text-sm leading-7 text-[var(--muted)]">
                   {form.draft
                     ? "草稿不会出现在公开页面里，且不能被设为首页精选。"
-                    : "取消草稿后，这篇文章会进入公开列表；若勾选首页精选，会自动替换当前精选。"}
+                    : canFeatureCurrentForm
+                      ? `公开页面最多可设置 3 篇首页精选，当前剩余 ${featuredSlotsRemaining} 个名额。`
+                      : "已达到 3 篇首页精选上限；如需替换，先取消一篇当前精选。"}
                 </div>
               </div>
 
@@ -1745,10 +1751,10 @@ export function WritePage() {
                           radius="full"
                           variant={post.featured ? "light" : "bordered"}
                           color="warning"
-                          isDisabled={post.draft || editorLoading || actingSlug === post.slug || submitting || batchAction !== null}
+                          isDisabled={post.draft || editorLoading || actingSlug === post.slug || submitting || batchAction !== null || (!post.featured && featuredLimitReached)}
                           onPress={() => { void handleToggleFeatured(post); }}
                         >
-                          {actingSlug === post.slug ? "处理中..." : post.featured ? "取消置顶" : "设为置顶"}
+                          {actingSlug === post.slug ? "处理中..." : post.featured ? "取消置顶" : featuredLimitReached ? "已达上限" : "设为置顶"}
                         </Button>
                         {!post.draft ? (
                           <Link

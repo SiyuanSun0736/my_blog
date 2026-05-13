@@ -16,13 +16,17 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
-const postsCollectionName = "posts"
+const (
+	postsCollectionName = "posts"
+	maxFeaturedPosts   = 3
+)
 
 var (
 	ErrInvalidPost        = errors.New("invalid post")
 	ErrPostNotFound       = errors.New("post not found")
 	ErrInvalidBatchAction = errors.New("invalid batch action")
 	ErrDraftCannotFeature = errors.New("draft post cannot be featured")
+	ErrFeaturedLimit      = errors.New("featured post limit reached")
 )
 
 type Service struct {
@@ -152,7 +156,7 @@ func (s *Service) CreatePost(ctx context.Context, input CreatePostInput) (Post, 
 	}
 
 	if post.Featured {
-		if err := s.clearFeaturedPosts(ctx, 0); err != nil {
+		if err := s.ensureFeaturedPostCapacity(ctx, 0); err != nil {
 			return Post{}, err
 		}
 	}
@@ -201,7 +205,7 @@ func (s *Service) UpdatePost(ctx context.Context, currentSlug string, input Crea
 	}
 
 	if updatedPost.Featured {
-		if err := s.clearFeaturedPosts(ctx, updatedPost.ID); err != nil {
+		if err := s.ensureFeaturedPostCapacity(ctx, updatedPost.ID); err != nil {
 			return Post{}, err
 		}
 	}
@@ -246,7 +250,7 @@ func (s *Service) SetPostFeatured(ctx context.Context, slug string, featured boo
 	}
 
 	if featured {
-		if err := s.clearFeaturedPosts(ctx, post.ID); err != nil {
+		if err := s.ensureFeaturedPostCapacity(ctx, post.ID); err != nil {
 			return Post{}, err
 		}
 	}
@@ -414,19 +418,22 @@ func (s *Service) reserveSlugForPost(ctx context.Context, rawSlug string, postID
 	}
 }
 
-func (s *Service) clearFeaturedPosts(ctx context.Context, keepID int) error {
+func (s *Service) ensureFeaturedPostCapacity(ctx context.Context, keepID int) error {
 	filter := bson.D{{Key: "featured", Value: true}}
 	if keepID > 0 {
 		filter = append(filter, bson.E{Key: "id", Value: bson.D{{Key: "$ne", Value: keepID}}})
 	}
 
-	_, err := s.collection.UpdateMany(
-		ctx,
-		filter,
-		bson.D{{Key: "$set", Value: bson.D{{Key: "featured", Value: false}}}},
-	)
+	count, err := s.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if count >= maxFeaturedPosts {
+		return ErrFeaturedLimit
+	}
+
+	return nil
 }
 
 func normalizeCreatePostInput(input CreatePostInput) (CreatePostInput, error) {

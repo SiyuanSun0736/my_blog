@@ -172,6 +172,8 @@ a {
   border-bottom: 1px solid rgba(36, 24, 15, 0.12);
   padding: 0.65rem 0.75rem;
   text-align: left;
+  font-size: 0.96rem;
+  line-height: 1.7;
 }
 
 .story-prose img {

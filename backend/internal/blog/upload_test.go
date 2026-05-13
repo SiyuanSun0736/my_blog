@@ -1,5 +1,4 @@
 package blog
-package blog
 
 import "testing"
 

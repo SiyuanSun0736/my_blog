@@ -55,7 +55,9 @@ export function HomePage() {
   );
   const categories = ["全部", ...new Set(sortedPosts.map((post) => post.category))];
   const normalizedKeyword = keyword.trim().toLowerCase();
-  const featuredPost = sortedPosts.find((post) => post.featured) ?? sortedPosts[0];
+  const featuredPosts = sortedPosts.filter((post) => post.featured).slice(0, 3);
+  const featuredPost = featuredPosts[0] ?? sortedPosts[0];
+  const featuredShelfPosts = featuredPosts.length > 0 ? featuredPosts : sortedPosts.slice(0, 3);
   const latestPost = sortedPosts[0];
   const filteredPosts = sortedPosts.filter((post) => {
     const matchesCategory = activeCategory === "全部" || post.category === activeCategory;
@@ -543,11 +545,20 @@ export function HomePage() {
 
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Start Here</p>
-              <h3 className="display-type text-3xl text-[var(--ink)]">先看这些</h3>
+              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">
+                {featuredPosts.length > 0 ? "Featured Picks" : "Start Here"}
+              </p>
+              <h3 className="display-type text-3xl text-[var(--ink)]">
+                {featuredPosts.length > 0 ? "首页精选" : "先看这些"}
+              </h3>
             </CardHeader>
             <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm">
-              {sortedPosts.slice(0, 3).map((post) => (
+              <p className="leading-7 text-[var(--muted)]">
+                {featuredPosts.length > 0
+                  ? `当前展示 ${featuredPosts.length} / 3 篇精选。`
+                  : "还没手动设置精选时，这里先用最近发布补位。"}
+              </p>
+              {featuredShelfPosts.map((post) => (
                 <Link
                   key={post.slug}
                   to={`/posts/${post.slug}`}
