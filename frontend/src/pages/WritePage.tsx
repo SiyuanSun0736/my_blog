@@ -46,11 +46,20 @@ interface AutosaveSnapshot {
   savedAt: string;
 }
 
+interface PreparedUploadImage {
+  file: File;
+  originalBytes: number;
+  compressed: boolean;
+}
+
 const defaultAccent = "linear-gradient(135deg, #0f766e 0%, #f59e0b 100%)";
 const writeTokenStorageKey = "wanderlust:write-token";
 const autosaveStorageKeyPrefix = "wanderlust:admin-autosave:v1";
 const defaultBody = "# 新记录标题\n\n先写问题背景，再补关键指标、命令、日志或代码片段。";
 const maxUploadImageSizeBytes = 8 * 1024 * 1024;
+const autoCompressibleImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const imageCompressionScaleSteps = [1, 0.92, 0.84, 0.76, 0.68, 0.6, 0.52];
+const imageCompressionQualitySteps = [0.9, 0.82, 0.74, 0.66, 0.58, 0.5];
 
 const batchActionLabels: Record<BatchPostsAction, string> = {
   publish: "发布",
@@ -247,6 +256,146 @@ function inferImageAltText(value: string) {
 
 function buildImageMarkdown(source: string, altText: string) {
   return `![${escapeMarkdownAltText(altText)}](${source})`;
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const units = ["KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = -1;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function imageExtensionForMimeType(value: string) {
+  switch (value) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    default:
+      return "img";
+  }
+}
+
+function renameImageFile(fileName: string, mimeType: string) {
+  const baseName = fileName.replace(/\.[^.]+$/, "") || "image";
+  return `${baseName}.${imageExtensionForMimeType(mimeType)}`;
+}
+
+function loadImageElement(objectUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("无法读取图片内容，无法自动压缩。"));
+    image.src = objectUrl;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("图片压缩失败，请稍后重试。"));
+        return;
+      }
+
+      resolve(blob);
+    }, mimeType, quality);
+  });
+}
+
+async function compressImageForUpload(file: File, maxBytes: number) {
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await loadImageElement(objectUrl);
+    if (image.naturalWidth === 0 || image.naturalHeight === 0) {
+      throw new Error("无法读取图片尺寸，无法自动压缩。");
+    }
+
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("当前浏览器不支持图片自动压缩，请先手动压缩后再上传。");
+    }
+
+    const preferredMimeType = file.type === "image/png" || file.type === "image/webp" ? "image/webp" : "image/jpeg";
+    let bestBlob: Blob | null = null;
+
+    for (const scale of imageCompressionScaleSteps) {
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+      canvas.width = width;
+      canvas.height = height;
+      context.clearRect(0, 0, width, height);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      context.drawImage(image, 0, 0, width, height);
+
+      for (const quality of imageCompressionQualitySteps) {
+        const blob = await canvasToBlob(canvas, preferredMimeType, quality);
+        if (!bestBlob || blob.size < bestBlob.size) {
+          bestBlob = blob;
+        }
+
+        if (blob.size <= maxBytes) {
+          const outputType = blob.type || preferredMimeType;
+          return new File([blob], renameImageFile(file.name, outputType), {
+            type: outputType,
+            lastModified: file.lastModified,
+          });
+        }
+      }
+    }
+
+    if (bestBlob && bestBlob.size < file.size) {
+      throw new Error(
+        `图片自动压缩后仍有 ${formatFileSize(bestBlob.size)}，超过 8MB 上传上限。请先裁剪图片，或手动压缩后再试。`,
+      );
+    }
+
+    throw new Error("图片压缩失败，请先手动压缩后再上传。");
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function prepareImageForUpload(file: File, maxBytes: number): Promise<PreparedUploadImage> {
+  if (file.size <= maxBytes) {
+    return {
+      file,
+      originalBytes: file.size,
+      compressed: false,
+    };
+  }
+
+  if (file.type === "image/gif") {
+    throw new Error("GIF 图片超过 8MB，暂不自动压缩。请先手动压缩，或改用静态图。");
+  }
+
+  if (!autoCompressibleImageTypes.has(file.type)) {
+    throw new Error("当前图片格式无法自动压缩，请先转换为 JPG、PNG 或 WebP。");
+  }
+
+  const compressedFile = await compressImageForUpload(file, maxBytes);
+  return {
+    file: compressedFile,
+    originalBytes: file.size,
+    compressed: true,
+  };
 }
 
 function formSignature(form: WriteFormState) {
@@ -621,22 +770,34 @@ export function WritePage() {
       return;
     }
 
-    if (file.size > maxUploadImageSizeBytes) {
-      setImageStatus(null);
-      setError("本地图片超过 8MB。请先压缩，或改用外部图片地址插入。");
-      return;
-    }
-
     try {
       setUploadingImage(true);
-      setImageStatus(null);
       setError(null);
-      const response = await uploadImage(file, writeToken.trim());
-      const altText = insertImageMarkdown(response.url, inferImageAltText(file.name));
       setImageStatus(
-        response.cached
-          ? `已复用站点图片：${file.name}（alt: ${altText}）`
-          : `已上传并插入图片：${file.name}（alt: ${altText}）`,
+        file.size > maxUploadImageSizeBytes ? `图片超过 8MB，正在自动压缩：${formatFileSize(file.size)}` : null,
+      );
+
+      const preparedImage = await prepareImageForUpload(file, maxUploadImageSizeBytes);
+      if (preparedImage.compressed) {
+        setImageStatus(
+          `已自动压缩图片，准备上传：${formatFileSize(preparedImage.originalBytes)} -> ${formatFileSize(preparedImage.file.size)}`,
+        );
+      }
+
+      const response = await uploadImage(preparedImage.file, writeToken.trim());
+      const altText = insertImageMarkdown(response.url, inferImageAltText(file.name));
+      const uploadDetail = preparedImage.compressed
+        ? `（${formatFileSize(preparedImage.originalBytes)} -> ${formatFileSize(preparedImage.file.size)}，alt: ${altText}）`
+        : `（alt: ${altText}）`;
+
+      setImageStatus(
+        preparedImage.compressed
+          ? response.cached
+            ? `已自动压缩并复用站点图片：${file.name}${uploadDetail}`
+            : `已自动压缩并上传图片：${file.name}${uploadDetail}`
+          : response.cached
+            ? `已复用站点图片：${file.name}${uploadDetail}`
+            : `已上传并插入图片：${file.name}${uploadDetail}`,
       );
     } catch (requestError) {
       setImageStatus(null);
@@ -1314,14 +1475,14 @@ export function WritePage() {
                     <div>
                       <p className="font-medium text-[var(--ink)]">图片工具</p>
                       <p className="text-xs leading-6 text-[var(--muted)]">
-                        支持插入远程图片地址，也支持把本地图片上传到站点的 /media 目录后自动插进 Markdown。
+                        支持插入远程图片地址，也支持把本地图片上传到站点的 /media 目录后自动插进 Markdown；超过 8MB 的 JPG、PNG、WebP 会先在浏览器压缩。
                       </p>
                     </div>
 
                     <label
                       className={`inline-flex cursor-pointer rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90 ${uploadingImage ? "pointer-events-none opacity-60" : ""}`}
                     >
-                      {uploadingImage ? "上传中..." : "上传本地图片"}
+                      {uploadingImage ? "处理中..." : "上传本地图片"}
                       <input
                         type="file"
                         accept="image/*"
@@ -1360,7 +1521,7 @@ export function WritePage() {
                   </div>
 
                   <p className="text-xs leading-6 text-[var(--muted)]">
-                    图片会插入到当前光标位置。上传接口会把文件写进站点共享媒体目录，并由 Redis 基于文件指纹做去重；重复上传会直接复用已有路径。
+                    图片会插入到当前光标位置。上传接口会把文件写进站点共享媒体目录，并由 Redis 基于文件指纹做去重；重复上传会直接复用已有路径。GIF 超过 8MB 时仍需先手动压缩。
                   </p>
 
                   {imageStatus ? <p className="text-xs leading-6 text-emerald-700">{imageStatus}</p> : null}
