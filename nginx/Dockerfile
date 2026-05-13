@@ -13,7 +13,7 @@ RUN npm run build
 
 FROM nginx:1.27-alpine
 
-RUN mkdir -p /etc/nginx/certs /etc/nginx/templates
+RUN mkdir -p /etc/nginx/certs /etc/nginx/templates /usr/share/nginx/media
 
 COPY nginx/default.conf /etc/nginx/templates/default.conf.template
 COPY nginx/04-validate-certs.sh /docker-entrypoint.d/04-validate-certs.sh

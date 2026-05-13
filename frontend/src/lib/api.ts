@@ -11,6 +11,14 @@ interface BatchPostsResponse {
   affected: number;
 }
 
+export interface UploadImageResponse {
+  url: string;
+  path: string;
+  contentType: string;
+  bytes: number;
+  cached: boolean;
+}
+
 export type BatchPostsAction = "publish" | "draft" | "delete";
 
 export interface CreatePostPayload {
@@ -28,10 +36,12 @@ export interface CreatePostPayload {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const hasFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...(init?.body && !hasFormDataBody ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     },
   });
@@ -122,6 +132,17 @@ export function batchPosts(
   return request<BatchPostsResponse>("/admin/posts/batch", {
     method: "POST",
     body: JSON.stringify({ action, slugs }),
+    headers: writeAccessHeaders(writeToken),
+  });
+}
+
+export function uploadImage(file: File, writeToken: string): Promise<UploadImageResponse> {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  return request<UploadImageResponse>("/admin/uploads/images", {
+    method: "POST",
+    body: formData,
     headers: writeAccessHeaders(writeToken),
   });
 }

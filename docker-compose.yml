@@ -12,6 +12,31 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: wanderlust-redis
+    restart: unless-stopped
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--save",
+        "60",
+        "1000",
+        "--maxmemory",
+        "${REDIS_MAXMEMORY:-64mb}",
+        "--maxmemory-policy",
+        "allkeys-lru"
+      ]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   blog-api:
     build:
       context: ./backend
@@ -24,12 +49,22 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DATABASE: wanderlust
       BLOG_WRITE_TOKEN: ${BLOG_WRITE_TOKEN:-}
+      BLOG_MEDIA_DIR: /app/media
+      BLOG_MEDIA_URL_PATH: /media
+      BLOG_IMAGE_UPLOAD_MAX_BYTES: ${BLOG_IMAGE_UPLOAD_MAX_BYTES:-8388608}
+      REDIS_ADDR: redis:6379
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       GOMEMLIMIT: ${BLOG_API_GOMEMLIMIT:-120MiB}
       GOGC: ${BLOG_API_GOGC:-75}
+    volumes:
+      - blog-media:/app/media
     restart: unless-stopped
 
   blog-web:
@@ -61,6 +96,7 @@ services:
     volumes:
       - ${BLOG_TLS_CERTS_DIR:-./certs}:/etc/nginx/certs:ro
       - ${BLOG_CERTBOT_WEBROOT_DIR:-./certbot/www}:/var/www/certbot:ro
+      - blog-media:/usr/share/nginx/media:ro
 
   certbot:
     image: certbot/certbot:latest
@@ -75,3 +111,5 @@ services:
 
 volumes:
   mongodb-data:
+  redis-data:
+  blog-media:

@@ -15,11 +15,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=${BLOG_API_BUILD_P} GOMEMLIMIT=${BLOG_AP
 
 FROM alpine:3.21
 
-RUN adduser -D -u 10001 appuser
-
-USER appuser
+RUN adduser -D -u 10001 appuser \
+	&& mkdir -p /app/media \
+	&& chown -R appuser:appuser /app
 
 COPY --from=builder /out/blog-api /usr/local/bin/blog-api
+
+USER appuser
 
 EXPOSE 8080
 

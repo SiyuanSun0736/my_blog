@@ -2,24 +2,29 @@
 
 这份说明只解决一件事：在本地把 WanderlustBlog 跑起来，并看到页面效果。
 
+当前仓库已经拆成两套 Compose 环境：
+
+- 根目录 `.env` 是本地测试默认配置，允许更高并发，适合本机直接 `docker compose`。
+- 根目录 `.env.deploy` 是部署配置，专门给 `1CPU/1GB` VPS 用，相关部署脚本会显式读取它。
+
 当前仓库有 3 种常见用法：
 
 1. 日常改页面时看效果：前端 Vite 开发模式 + 本地后端。
-2. 想看更接近线上部署的完整效果：Docker Compose 启动 MongoDB、API、Nginx。
+2. 想看更接近线上部署的完整效果：Docker Compose 启动 MongoDB、Redis、API、Nginx。
 3. 只想确认前端能不能成功打包：只跑 `npm run build`。
 
 ## 先说结论
 
 - 你如果正在改首页样式、文案、布局，优先用“方案 A”。
 - 你如果想看真正的“本地构建后显示效果”，优先用“方案 B”。
-- 你如果只跑 `frontend/npm run preview`，当前仓库里**不能**完整看到数据页效果，因为它不会像开发模式那样自动代理 `/api`。
+- 你如果只跑 `frontend/npm run preview`，当前仓库里**不能**完整看到数据页效果，因为它不会像开发模式那样自动代理 `/api` 和 `/media`。
 
 ## 前置条件
 
 - Node.js 20+
 - Go 1.23+
 - Docker + Docker Compose（如果你走方案 B）
-- 本机可用的 MongoDB，或者直接用 `docker compose up -d mongodb`
+- 本机可用的 MongoDB，或者直接用 `docker compose up -d mongodb redis`
 
 仓库根目录默认是：
 
@@ -35,24 +40,25 @@ cd /home/ssy/web
 
 如果你本机已经有 MongoDB，可以跳过这一步。
 
-如果没有，直接用仓库自带 Compose 起一个数据库：
+如果没有，直接用仓库自带 Compose 起一个数据库；如果你也想本地验证图片上传去重，顺手把 Redis 一起起起来：
 
 ```bash
 cd /home/ssy/web
-docker compose up -d mongodb
+docker compose up -d mongodb redis
 ```
 
 ### 2. 启动后端 API
 
 如果你只是想浏览首页、归档、文章详情，可以不配写作令牌。
 
-如果你还想打开管理端发布测试文章，需要同时配置 `BLOG_WRITE_TOKEN`。
+如果你还想打开管理端发布测试文章或上传测试图片，需要同时配置 `BLOG_WRITE_TOKEN`。如果上一步已经启动 Redis，也可以顺手把 `REDIS_ADDR` 指到本机。
 
 ```bash
 cd /home/ssy/web/backend
 export MONGODB_URI=mongodb://localhost:27017
 export MONGODB_DATABASE=wanderlust
 export BLOG_WRITE_TOKEN=dev-token
+export REDIS_ADDR=localhost:6379
 go run .
 ```
 
@@ -61,6 +67,8 @@ go run .
 ```text
 http://localhost:8080
 ```
+
+本地上传图片默认会写到 `backend/uploads/`，并由后端直接通过 `http://localhost:8080/media/...` 提供访问；前端开发服务器也会把 `/media` 代理到这个地址。
 
 ### 3. 启动前端开发服务器
 
@@ -89,7 +97,7 @@ http://localhost:5173
 ### 5. 这个模式为什么最适合改样式
 
 - 支持热更新
-- 前端开发服务器会自动把 `/api` 代理到 `http://localhost:8080`
+- 前端开发服务器会自动把 `/api` 和 `/media` 代理到 `http://localhost:8080`
 - 不需要处理 HTTPS 和本地证书问题
 
 ## 方案 B：本地看“构建后”的完整显示效果
@@ -100,6 +108,7 @@ http://localhost:5173
 
 - 提供前端构建产物
 - 代理 `/api`
+- 服务 `/media`
 - 走 HTTPS
 
 所以如果你想看真正的“build 后完整页面”，不要只跑 `npm run preview`，而是直接走 Compose。
@@ -108,16 +117,14 @@ http://localhost:5173
 
 ```bash
 cd /home/ssy/web
-docker compose build blog-api
-docker compose build blog-web
+./scripts/up-local.sh
 ```
+
+这条脚本会直接按本地 `.env` 启动 `mongodb`、`redis`、`blog-api` 和 `blog-web`，并保留 Compose 默认并发；如果你只想手动执行，也可以继续使用普通 `docker compose up -d --build mongodb redis blog-api blog-web`。
 
 ### 2. 启动完整服务
 
-```bash
-cd /home/ssy/web
-docker compose up -d mongodb blog-api blog-web
-```
+如果上一步已经执行 `./scripts/up-local.sh`，这里可以直接跳过。
 
 ### 3. 打开页面
 
@@ -175,7 +182,7 @@ npm run preview
 只适合看静态打包是否能启动，**不适合**当成完整页面预览方式，原因是：
 
 - `preview` 只是静态文件服务
-- 它不会像 `npm run dev` 那样代理 `/api`
+- 它不会像 `npm run dev` 那样代理 `/api` 和 `/media`
 - 当前后端没有为 `http://localhost:4173` 单独配置跨域
 
 所以文章列表、文章详情、管理端这类依赖 API 的页面，在 `preview` 模式下通常会请求失败
@@ -224,12 +231,13 @@ cd /home/ssy/web
 
 ```bash
 cd /home/ssy/web
-docker compose up -d mongodb
+docker compose up -d mongodb redis
 
 cd backend
 export MONGODB_URI=mongodb://localhost:27017
 export MONGODB_DATABASE=wanderlust
 export BLOG_WRITE_TOKEN=dev-token
+export REDIS_ADDR=localhost:6379
 go run .
 
 cd ../frontend
@@ -246,9 +254,7 @@ http://localhost:5173
 
 ```bash
 cd /home/ssy/web
-docker compose build blog-api
-docker compose build blog-web
-docker compose up -d mongodb blog-api blog-web
+./scripts/up-local.sh
 ```
 
 然后打开：

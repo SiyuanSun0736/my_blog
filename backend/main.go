@@ -4,22 +4,39 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 
 	"wanderlust/backend/internal/blog"
 )
 
 func main() {
-	blogService, err := blog.NewService(context.Background(), mongoURI(), mongoDatabase())
+	ctx := context.Background()
+	blogService, err := blog.NewService(ctx, mongoURI(), mongoDatabase())
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer blogService.Close()
 
-	router := gin.Default()
+	redisClient := newRedisClient(ctx)
+	if redisClient != nil {
+		defer redisClient.Close()
+	}
 
-	blogHandler := blog.NewHandler(blogService)
+	router := gin.Default()
+	mediaDir := blogMediaDir()
+	mediaURLPath := blogMediaURLPath()
+
+	blogHandler := blog.NewHandler(blogService, blog.HandlerOptions{
+		MediaDir:       mediaDir,
+		MediaURLPath:   mediaURLPath,
+		MaxUploadBytes: blogImageUploadMaxBytes(),
+		UploadCache:    blog.NewRedisUploadCache(redisClient),
+	})
+	router.StaticFS(mediaURLPath, gin.Dir(mediaDir, false))
 
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
@@ -47,4 +64,83 @@ func mongoDatabase() string {
 	}
 
 	return "wanderlust"
+}
+
+func blogMediaDir() string {
+	if value := strings.TrimSpace(os.Getenv("BLOG_MEDIA_DIR")); value != "" {
+		return value
+	}
+
+	return "./uploads"
+}
+
+func blogMediaURLPath() string {
+	value := strings.TrimSpace(os.Getenv("BLOG_MEDIA_URL_PATH"))
+	if value == "" {
+		return "/media"
+	}
+
+	if !strings.HasPrefix(value, "/") {
+		value = "/" + value
+	}
+
+	value = strings.TrimRight(value, "/")
+	if value == "" {
+		return "/media"
+	}
+
+	return value
+}
+
+func blogImageUploadMaxBytes() int64 {
+	const defaultMaxUploadBytes = 8 * 1024 * 1024
+
+	value := strings.TrimSpace(os.Getenv("BLOG_IMAGE_UPLOAD_MAX_BYTES"))
+	if value == "" {
+		return defaultMaxUploadBytes
+	}
+
+	parsedValue, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsedValue <= 0 {
+		log.Printf("invalid BLOG_IMAGE_UPLOAD_MAX_BYTES %q, fallback to %d", value, defaultMaxUploadBytes)
+		return defaultMaxUploadBytes
+	}
+
+	return parsedValue
+}
+
+func newRedisClient(ctx context.Context) redis.UniversalClient {
+	address := strings.TrimSpace(os.Getenv("REDIS_ADDR"))
+	if address == "" {
+		return nil
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:     address,
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       redisDatabase(),
+	})
+
+	if err := client.Ping(ctx).Err(); err != nil {
+		log.Printf("redis unavailable, image upload dedupe disabled: %v", err)
+		_ = client.Close()
+		return nil
+	}
+
+	return client
+}
+
+func redisDatabase() int {
+	value := strings.TrimSpace(os.Getenv("REDIS_DB"))
+	if value == "" {
+		return 0
+	}
+
+	parsedValue, err := strconv.Atoi(value)
+	if err != nil || parsedValue < 0 {
+		log.Printf("invalid REDIS_DB %q, fallback to 0", value)
+		return 0
+	}
+
+	return parsedValue
 }

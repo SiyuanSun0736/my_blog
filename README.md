@@ -1,11 +1,11 @@
 # Wanderlust
 
-这是一个基于 Gin、MongoDB、Nginx 和 HeroUI 的现代博客示例项目。
+这是一个基于 Gin、MongoDB、Redis、Nginx 和 Vite React 的现代博客示例项目。
 
 ## 结构
 
-- `backend/`: Go + Gin 博客 API，使用 MongoDB 持久化文章并提供管理端写作接口
-- `frontend/`: Vite + React + HeroUI 前端，包含首页、文章详情页和管理端入口
+- `backend/`: Go + Gin 博客 API，使用 MongoDB 持久化文章并提供管理端写作、图片上传接口
+- `frontend/`: Vite + React 前端，包含首页、文章详情页和管理端入口
 - `nginx/`: Nginx 反向代理配置与前端静态资源镜像构建
 
 ## 功能
@@ -13,12 +13,22 @@
 - 首页文章列表与关键词过滤
 - 文章详情页
 - 管理端写作入口与新文章发布
+- 管理端图片上传接口与 `/media` 静态资源目录
 - MongoDB 持久化与 Markdown 正文渲染
+- Redis 持久化图片指纹索引，避免重复上传同一张图
 - MongoDB 数据卷持久化与归档备份脚本
 - Gin 提供 `/api/posts`、`/api/posts/:slug` 与 `POST /api/posts`
+- Gin 提供 `POST /api/admin/uploads/images`，管理端上传图片后可直接插入 Markdown
 - Nginx 提供 HTTPS 入口，并将 HTTP 自动跳转到 HTTPS
-- Nginx 统一代理 `/api` 并服务前端静态文件
+- Nginx 统一代理 `/api`，服务前端静态文件，并公开 `/media`
 - Docker Compose 一键启动
+
+## 环境拆分
+
+- 根目录 `.env` 是本地测试默认配置：使用 `localhost`、本地 `certs/` 证书目录，并给 MongoDB / Go build / 前端 build 更宽松的资源参数，适合本地并发构建。
+- 根目录 `.env.deploy` 是部署配置：保留 `wanderlust0736.top`、Let's Encrypt 路径和 `1CPU/1GB` VPS 的低内存参数，部署脚本会显式使用它。
+- `./scripts/up-local.sh` 会按本地环境启动整套 Compose，并保留 Compose 默认并发。
+- `./scripts/update-deploy.sh` 会按部署环境串行备份、拉代码、构建和重启；`./scripts/update-low-memory.sh` 现在只是它的兼容别名。
 
 ## 本地开发
 
@@ -30,10 +40,12 @@ go mod tidy
 export MONGODB_URI=mongodb://localhost:27017
 export MONGODB_DATABASE=wanderlust
 export BLOG_WRITE_TOKEN=替换成一个长随机字符串
+# 如果你希望本地图片上传也启用 Redis 去重，再额外配置：
+# export REDIS_ADDR=localhost:6379
 go run .
 ```
 
-服务默认运行在 `http://localhost:8080`。
+服务默认运行在 `http://localhost:8080`，本地上传图片默认写到 `backend/uploads/`，并通过 `http://localhost:8080/media/...` 访问。
 
 本地开发前请先确保 MongoDB 已启动；如果使用默认地址，可省略上述环境变量。
 
@@ -45,21 +57,23 @@ npm install
 npm run dev
 ```
 
-前端默认运行在 `http://localhost:5173`，并通过 Vite 代理访问后端 `/api`。
+前端默认运行在 `http://localhost:5173`，并通过 Vite 代理访问后端 `/api` 与 `/media`。
 
 ## Docker 部署
 
 ```bash
-docker compose build blog-api
-docker compose build blog-web
-docker compose up -d mongodb blog-api blog-web
+docker compose --env-file .env.deploy build blog-api
+docker compose --env-file .env.deploy build blog-web
+docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
 ```
 
 启动后主站访问地址为 `https://wanderlust0736.top`。
 
-Compose 模式下会启动 MongoDB、API 和 Nginx，外部暴露 Nginx 的 `80` 与 `443` 端口，其中 `80` 会自动跳转到 HTTPS，API 通过 `https://wanderlust0736.top/api` 访问。
+Compose 模式下会启动 MongoDB、Redis、API 和 Nginx，外部暴露 Nginx 的 `80` 与 `443` 端口，其中 `80` 会自动跳转到 HTTPS，API 通过 `https://wanderlust0736.top/api` 访问，上传图片通过 `https://wanderlust0736.top/media/...` 访问。
 
 MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器重建后文章数据仍会保留。
+
+管理端图片上传会把文件写进 Compose 命名卷 `blog-media`，由 `blog-api` 写入、`blog-web` 只读挂载并对外服务；Redis 会记录图片内容摘要到已存在路径的映射，重复上传同一张图时直接复用已有 `/media/...` 地址。
 
 如果你的 VPS 只有 `1GB` 内存，当前仓库也已经提供默认低内存优化：
 
@@ -67,11 +81,11 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 - Go API 默认设置 `GOMEMLIMIT=120MiB` 与 `GOGC=75`
 - 前端 Docker build 默认把 Node heap 限制到 `256MB`
 - 首次部署和日常更新都默认按串行 build 处理，避免 `up --build` 并行构建把内存顶满
-- 可直接执行 `./scripts/update-low-memory.sh` 按同一套串行方式更新服务
+- 可直接执行 `./scripts/update-deploy.sh` 按同一套串行方式更新服务
 
 当前镜像不再内置自签名证书，而是要求在启动时挂载外部证书文件。`www.wanderlust0736.top` 会被 Nginx 统一 301 跳转到 `wanderlust0736.top`。
 
-如果你要使用 `/admin` 管理端发布文章，必须先配置 `BLOG_WRITE_TOKEN`。前台访客不会在导航里看到这个入口；后端只会对 `GET /api/write-access` 和 `POST /api/posts` 放行带正确 Bearer token 的请求，未配置时这两个端点会直接返回 `503`。旧的 `/write` 路径会自动跳转到 `/admin`。
+如果你要使用 `/admin` 管理端发布文章或上传图片，必须先配置 `BLOG_WRITE_TOKEN`。前台访客不会在导航里看到这个入口；后端只会对带正确 Bearer token 的写操作放行，未配置时这些端点会直接返回 `503`。旧的 `/write` 路径会自动跳转到 `/admin`。
 
 ### 数据备份与恢复
 
@@ -128,15 +142,15 @@ sudo systemctl enable --now wanderlust-mongodb-backup.timer
 export BLOG_TLS_CERTS_DIR=/etc/letsencrypt
 export BLOG_TLS_CERT_PATH=/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem
 export BLOG_TLS_KEY_PATH=/etc/nginx/certs/live/wanderlust0736.top/privkey.pem
-docker compose up --build -d
+docker compose --env-file .env.deploy up --build -d
 ```
 
 如果当前机器只有 `1GB` 内存，更稳妥的方式仍然是：
 
 ```bash
-docker compose build blog-api
-docker compose build blog-web
-docker compose up -d mongodb blog-api blog-web
+docker compose --env-file .env.deploy build blog-api
+docker compose --env-file .env.deploy build blog-web
+docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
 ```
 
 如果你使用云证书但文件名不是 `fullchain.pem` 和 `privkey.pem`，可以继续挂载目录，同时指定容器内实际读取的文件名：
@@ -145,10 +159,10 @@ docker compose up -d mongodb blog-api blog-web
 export BLOG_TLS_CERTS_DIR=./certs
 export BLOG_TLS_CERT_PATH=/etc/nginx/certs/server.crt
 export BLOG_TLS_KEY_PATH=/etc/nginx/certs/server.key
-docker compose up --build -d
+docker compose --env-file .env.deploy up --build -d
 ```
 
-低内存机器上也建议改成先分别 build `blog-api` 和 `blog-web`，再执行 `docker compose up -d mongodb blog-api blog-web`。
+低内存机器上也建议改成先分别 build `blog-api` 和 `blog-web`，再执行 `docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web`。
 
 如果挂载目录里缺少证书文件，Nginx 容器会在启动前直接报错退出，避免带着错误配置继续运行。
 
@@ -220,10 +234,9 @@ crontab deploy/cron/wanderlust-cert-renew.cron
 
 当前仓库根目录也已经提供了 `.env`，Compose 默认会按 Let’s Encrypt 目录约定读取：
 
-- `BLOG_TLS_CERTS_DIR=./letsencrypt`
-- `BLOG_TLS_CERT_PATH=/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem`
-- `BLOG_TLS_KEY_PATH=/etc/nginx/certs/live/wanderlust0736.top/privkey.pem`
-- `BLOG_WRITE_TOKEN=`：默认留空，准备启用 `/admin` 管理端写作时再填入随机令牌
+- `.env`：本地默认，指向 `./certs` 和更宽松的本地资源配置
+- `.env.deploy`：部署默认，指向 `./letsencrypt` 和低内存 VPS 配置
+- `BLOG_WRITE_TOKEN=`：默认留空，准备启用 `/admin` 管理端写作和图片上传时再填入随机令牌
 
 ### Nginx 健康检查与排障
 

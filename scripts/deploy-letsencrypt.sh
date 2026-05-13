@@ -4,6 +4,17 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
+compose_env_file="${WANDERLUST_DEPLOY_ENV_FILE:-$ROOT_DIR/.env.deploy}"
+
+if [ ! -f "$compose_env_file" ]; then
+  echo "Deploy compose env file not found: $compose_env_file" >&2
+  exit 1
+fi
+
+set -a
+. "$compose_env_file"
+set +a
+
 primary_domain="${BLOG_PRIMARY_DOMAIN:-wanderlust0736.top}"
 www_domain="${BLOG_WWW_DOMAIN:-www.wanderlust0736.top}"
 certbot_email="${CERTBOT_EMAIL:-}"
@@ -20,6 +31,11 @@ export BLOG_CERTBOT_WEBROOT_DIR="$webroot_dir"
 export BLOG_TLS_CERT_PATH="$cert_path"
 export BLOG_TLS_KEY_PATH="$key_path"
 export COMPOSE_PARALLEL_LIMIT="$compose_parallel_limit"
+export WANDERLUST_COMPOSE_ENV_FILE="$compose_env_file"
+
+compose() {
+  docker compose --env-file "$compose_env_file" "$@"
+}
 
 mkdir -p "$letsencrypt_dir" "$webroot_dir"
 
@@ -32,8 +48,8 @@ if [ ! -f "$letsencrypt_dir/live/$primary_domain/fullchain.pem" ] || [ ! -f "$le
   sh "$ROOT_DIR/scripts/check-letsencrypt-dns.sh"
 
   echo "No existing Let's Encrypt certificate found. Requesting initial certificate for $primary_domain and $www_domain." >&2
-  docker compose stop blog-web >/dev/null 2>&1 || true
-  docker compose --profile certbot run --rm --service-ports certbot certonly \
+  compose stop blog-web >/dev/null 2>&1 || true
+  compose --profile certbot run --rm --service-ports certbot certonly \
     --standalone \
     --preferred-challenges http \
     --agree-tos \
@@ -45,12 +61,12 @@ if [ ! -f "$letsencrypt_dir/live/$primary_domain/fullchain.pem" ] || [ ! -f "$le
 fi
 
 echo "Building API image with low-memory settings." >&2
-docker compose build blog-api
+compose build blog-api
 
 echo "Building web image with low-memory settings." >&2
-docker compose build blog-web
+compose build blog-web
 
-docker compose up -d mongodb blog-api blog-web
+compose up -d mongodb redis blog-api blog-web
 
 echo "Deployment finished. blog-web will use certificates from $letsencrypt_dir." >&2
-echo "Check container health with: docker compose ps" >&2
+echo "Check container health with: docker compose --env-file $compose_env_file ps" >&2

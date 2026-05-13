@@ -8,6 +8,7 @@ import {
   fetchAdminPost,
   fetchAdminPosts,
   setPostFeatured,
+  uploadImage,
   updatePost,
   verifyWriteAccess,
   type BatchPostsAction,
@@ -49,6 +50,7 @@ const defaultAccent = "linear-gradient(135deg, #0f766e 0%, #f59e0b 100%)";
 const writeTokenStorageKey = "wanderlust:write-token";
 const autosaveStorageKeyPrefix = "wanderlust:admin-autosave:v1";
 const defaultBody = "# 新记录标题\n\n先写问题背景，再补关键指标、命令、日志或代码片段。";
+const maxUploadImageSizeBytes = 8 * 1024 * 1024;
 
 const batchActionLabels: Record<BatchPostsAction, string> = {
   publish: "发布",
@@ -227,6 +229,26 @@ function stripMarkdownExtension(fileName: string) {
   return fileName.replace(/\.(md|markdown)$/i, "");
 }
 
+function escapeMarkdownAltText(value: string) {
+  return value.replace(/[\[\]]/g, "\\$&");
+}
+
+function inferImageAltText(value: string) {
+  const inferredText = value
+    .split("/")
+    .pop()
+    ?.split("?")[0]
+    ?.replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+
+  return inferredText && inferredText.length > 0 ? inferredText : "image";
+}
+
+function buildImageMarkdown(source: string, altText: string) {
+  return `![${escapeMarkdownAltText(altText)}](${source})`;
+}
+
 function formSignature(form: WriteFormState) {
   return JSON.stringify({
     ...form,
@@ -371,6 +393,7 @@ function formatPublishDate(dateString: string) {
 }
 
 export function WritePage() {
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const newPostTemplateRef = useRef<WriteFormState>(createEmptyFormState());
   const skipNextAutosaveCleanupRef = useRef(false);
   const [form, setForm] = useState<WriteFormState>(newPostTemplateRef.current);
@@ -393,6 +416,10 @@ export function WritePage() {
   const [originalPost, setOriginalPost] = useState<Post | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [autosaveSavedAt, setAutosaveSavedAt] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageAltText, setImageAltText] = useState("");
+  const [imageStatus, setImageStatus] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const isEditing = selectedSlug !== null;
   const featuredPost = posts.find((post) => post.featured) ?? null;
@@ -540,6 +567,85 @@ export function WritePage() {
     }));
   }
 
+  function insertBodyBlock(snippet: string) {
+    const editor = bodyTextareaRef.current;
+    const selectionStart = editor?.selectionStart ?? form.body.length;
+    const selectionEnd = editor?.selectionEnd ?? form.body.length;
+    const before = form.body.slice(0, selectionStart);
+    const after = form.body.slice(selectionEnd);
+    const prefix = before.length > 0 && !before.endsWith("\n") ? "\n\n" : "";
+    const suffix = after.length > 0 && !after.startsWith("\n") ? "\n\n" : "";
+    const nextBody = `${before}${prefix}${snippet}${suffix}${after}`;
+    const nextCursorPosition = `${before}${prefix}${snippet}`.length;
+
+    updateField("body", nextBody);
+    window.requestAnimationFrame(() => {
+      const textarea = bodyTextareaRef.current;
+      if (!textarea) {
+        return;
+      }
+
+      textarea.focus();
+      textarea.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  }
+
+  function insertImageMarkdown(source: string, suggestedAltText?: string) {
+    const altText = imageAltText.trim() || suggestedAltText || inferImageAltText(source);
+    insertBodyBlock(buildImageMarkdown(source, altText));
+    setError(null);
+    return altText;
+  }
+
+  function handleInsertImageByUrl() {
+    const normalizedImageUrl = imageUrl.trim();
+    if (normalizedImageUrl.length === 0) {
+      return;
+    }
+
+    const altText = insertImageMarkdown(normalizedImageUrl);
+    setImageStatus(`已插入图片链接：${altText}`);
+    setImageUrl("");
+  }
+
+  async function handleImageFileInsert(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setImageStatus(null);
+      setError("只能插入图片文件。请重新选择 PNG、JPG、WebP 等图片。");
+      return;
+    }
+
+    if (file.size > maxUploadImageSizeBytes) {
+      setImageStatus(null);
+      setError("本地图片超过 8MB。请先压缩，或改用外部图片地址插入。");
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      setImageStatus(null);
+      setError(null);
+      const response = await uploadImage(file, writeToken.trim());
+      const altText = insertImageMarkdown(response.url, inferImageAltText(file.name));
+      setImageStatus(
+        response.cached
+          ? `已复用站点图片：${file.name}（alt: ${altText}）`
+          : `已上传并插入图片：${file.name}（alt: ${altText}）`,
+      );
+    } catch (requestError) {
+      setImageStatus(null);
+      setError(requestError instanceof Error ? requestError.message : "本地图片读取失败。");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   function confirmDiscardUnsavedChanges(actionLabel: string) {
     if (!hasUnsavedChanges) {
       return true;
@@ -566,6 +672,10 @@ export function WritePage() {
     setSuccessMessage(null);
     setAutosaveStatus("idle");
     setAutosaveSavedAt(null);
+    setImageUrl("");
+    setImageAltText("");
+    setImageStatus(null);
+    setUploadingImage(false);
   }
 
   function selectEditorPost(post: Post) {
@@ -573,6 +683,8 @@ export function WritePage() {
     setOriginalPost(post);
     setForm(formStateFromPost(post));
     setImportedFileName(null);
+    setImageStatus(null);
+    setUploadingImage(false);
   }
 
   function toggleSelectedSlug(slug: string) {
@@ -1196,9 +1308,69 @@ export function WritePage() {
                 </div>
               </div>
 
+              <div className="rounded-[1.5rem] border border-black/10 bg-white/70 p-4 text-sm leading-7 text-[var(--muted)]">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-[var(--ink)]">图片工具</p>
+                      <p className="text-xs leading-6 text-[var(--muted)]">
+                        支持插入远程图片地址，也支持把本地图片上传到站点的 /media 目录后自动插进 Markdown。
+                      </p>
+                    </div>
+
+                    <label
+                      className={`inline-flex cursor-pointer rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90 ${uploadingImage ? "pointer-events-none opacity-60" : ""}`}
+                    >
+                      {uploadingImage ? "上传中..." : "上传本地图片"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageFileInsert}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto] xl:items-end">
+                    <Input
+                      label="图片地址"
+                      labelPlacement="outside"
+                      placeholder="https://example.com/chart.webp 或 /media/2026/05/chart.png"
+                      radius="lg"
+                      value={imageUrl}
+                      onValueChange={setImageUrl}
+                    />
+                    <Input
+                      label="Alt 文本"
+                      labelPlacement="outside"
+                      placeholder="例如：压测结果曲线"
+                      radius="lg"
+                      value={imageAltText}
+                      onValueChange={setImageAltText}
+                    />
+                    <Button
+                      type="button"
+                      radius="full"
+                      variant="bordered"
+                      isDisabled={imageUrl.trim().length === 0 || uploadingImage}
+                      onPress={handleInsertImageByUrl}
+                    >
+                      插入图片
+                    </Button>
+                  </div>
+
+                  <p className="text-xs leading-6 text-[var(--muted)]">
+                    图片会插入到当前光标位置。上传接口会把文件写进站点共享媒体目录，并由 Redis 基于文件指纹做去重；重复上传会直接复用已有路径。
+                  </p>
+
+                  {imageStatus ? <p className="text-xs leading-6 text-emerald-700">{imageStatus}</p> : null}
+                </div>
+              </div>
+
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-[var(--ink)]">Markdown 正文</span>
                 <textarea
+                  ref={bodyTextareaRef}
                   className="min-h-[24rem] w-full rounded-[1.5rem] border border-black/10 bg-white/70 px-4 py-4 text-sm leading-7 text-[var(--ink)] outline-none transition focus:border-black/30 focus:bg-white"
                   placeholder="# 标题\n\n先写背景、结论和关键数据"
                   value={form.body}

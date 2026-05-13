@@ -4,6 +4,18 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
+compose_env_file="${WANDERLUST_COMPOSE_ENV_FILE:-$ROOT_DIR/.env}"
+
+if [ -f "$compose_env_file" ]; then
+  set -a
+  . "$compose_env_file"
+  set +a
+fi
+
+compose() {
+  docker compose --env-file "$compose_env_file" "$@"
+}
+
 database="${MONGODB_DATABASE:-wanderlust}"
 backup_root="${BLOG_BACKUP_DIR:-$ROOT_DIR/backups/mongodb}"
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -14,7 +26,7 @@ metadata_file="$output_dir/metadata.txt"
 mkdir -p "$output_dir"
 
 echo "Creating MongoDB backup for database '$database'." >&2
-docker compose exec -T mongodb mongodump --archive --gzip --db "$database" > "$archive_file"
+compose exec -T mongodb mongodump --archive --gzip --db "$database" > "$archive_file"
 
 cat > "$metadata_file" <<EOF
 database=$database

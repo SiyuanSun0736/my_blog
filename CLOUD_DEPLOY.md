@@ -7,6 +7,7 @@
 - 当前这台服务器只用于开发验证，不作为正式生产环境。
 - 当前开发部署主机公网 IP：`47.79.86.69`
 - 当前 VPS 只有 `1GB` 内存，部署和更新默认按低内存模式处理。
+- 当前部署相关脚本默认读取根目录 `.env.deploy`；本地开发继续使用根目录 `.env`。
 - 当前仓库在这台机器上的更新，默认按“先备份数据库，再更新代码，再重建网页和 API，最后验证”的顺序执行。
 
 ## 1GB VPS 优化
@@ -15,11 +16,12 @@
 
 - MongoDB 使用 `MONGODB_WIREDTIGER_CACHE_GB=0.25`，把 WiredTiger 缓存压到 Mongo 7 允许的最低值 `256MB`
 - Go API 使用 `BLOG_API_GOMEMLIMIT=120MiB` 和 `BLOG_API_GOGC=75`，降低运行时内存峰值
+- 后端镜像构建使用 `BLOG_API_BUILD_GOMEMLIMIT=120MiB`、`BLOG_API_BUILD_GOGC=50` 和 `BLOG_API_BUILD_P=1`，让 `go build` 在 1GB VPS 上按单并行、低内存模式编译
 - 前端构建使用 `FRONTEND_BUILD_MAX_OLD_SPACE_SIZE=256`，限制 Node build heap
 - Vite 关闭压缩体积统计，减少构建时额外内存开销
 - 更新脚本改为串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 同时构建把内存顶满
 
-这些默认值已经写进根目录 `.env`。当前前端构建已经在 `256MB` Node heap 下完成验证；如果后续页面体积再次上升，可以先回到 `320` 做对比，再根据实际构建日志微调。如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
+这些默认值已经写进根目录 `.env.deploy`。当前前端构建已经在 `256MB` Node heap 下完成验证；后端镜像构建也已经改成单并行 `go build`。如果后续页面体积再次上升，可以先回到 `320` 做对比，再根据实际构建日志微调。如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
 
 ## 前置条件
 
@@ -49,17 +51,55 @@ export BLOG_WRITE_TOKEN=替换成一个长随机字符串
 - 拉取最新代码
 - 给部署脚本执行权限
 - 用 Let's Encrypt 为主域名和 `www` 申请证书
-- 构建并启动 MongoDB、后端 API 和 Nginx 前端容器
-- 创建并挂载 MongoDB 数据卷，避免容器重建时丢数据
+- 构建并启动 MongoDB、Redis、后端 API 和 Nginx 前端容器
+- 创建并挂载 MongoDB 数据卷、Redis 数据卷和图片媒体卷，避免容器重建时丢文章、上传图片和去重索引
 
-如果你准备使用 `/admin` 管理端发布文章，记得在首次启动前就把 `BLOG_WRITE_TOKEN` 设好；前台访客不会在导航里看到这个入口，但直接访问管理端时仍然需要令牌验证。
+如果你准备使用 `/admin` 管理端发布文章或上传图片，记得在首次启动前就把 `BLOG_WRITE_TOKEN` 设好；前台访客不会在导航里看到这个入口，但直接访问管理端时仍然需要令牌验证。
+
+当前上传链路是：管理端调用 `POST /api/admin/uploads/images`，`blog-api` 把图片写进共享媒体卷，Nginx 直接对外公开 `/media/...`，Redis 记录图片摘要到路径的映射，重复上传同一张图会直接复用已有地址。
+
+### 如果首次部署时漏了 `BLOG_WRITE_TOKEN`
+
+这不影响公开页面和文章接口；影响的是 `/admin` 管理端写权限和图片上传。当前后端在 `BLOG_WRITE_TOKEN` 为空时会直接返回 `503 write access is not configured`，所以补上 token 后只需要重建 `blog-api` 容器，不需要重建 MongoDB、Redis，也不需要重建前端。
+
+推荐把 token 直接写进根目录 `.env.deploy`，这样后续重启后不会丢：
+
+```bash
+cd /你的仓库目录
+
+# 编辑根目录 .env.deploy，把这一行改成你自己的长随机字符串
+BLOG_WRITE_TOKEN=替换成一个长随机字符串
+
+docker compose --env-file .env.deploy up -d --force-recreate --no-deps blog-api
+```
+
+如果你只是想先临时补上，再决定是否写回 `.env`，也可以当前 shell 里先导出后重建：
+
+```bash
+cd /你的仓库目录
+
+export BLOG_WRITE_TOKEN=替换成一个长随机字符串
+docker compose --env-file .env.deploy up -d --force-recreate --no-deps blog-api
+```
+
+补完后可以直接验证：
+
+```bash
+cd /你的仓库目录
+
+curl -sk https://127.0.0.1/api/write-access \
+	-H 'Host: wanderlust0736.top' \
+	-H 'Authorization: Bearer 你的新token'
+```
+
+如果返回 `{"message":"write access granted"}`，说明新的 `BLOG_WRITE_TOKEN` 已经生效。
 
 ## 上线后检查
 
 ```bash
 cd /你的仓库目录
 
-docker compose ps
+docker compose --env-file .env.deploy ps
 docker logs wanderlust-web --since 10m
 docker exec wanderlust-web wget -q --no-check-certificate -O - https://127.0.0.1/nginx-healthz
 ```
@@ -80,15 +120,15 @@ curl -k -I https://127.0.0.1 -H 'Host: www.wanderlust0736.top'
 
 ## git pull 后更新数据库和网页
 
-当前项目已经把 MongoDB 数据放进命名卷 `mongodb-data`，所以日常 `git pull` 更新时，不需要先删库，也不需要重建 Mongo 容器。默认推荐下面这套顺序：
+当前项目已经把 MongoDB 数据放进命名卷 `mongodb-data`，上传图片放进命名卷 `blog-media`，Redis 索引放进命名卷 `redis-data`，所以日常 `git pull` 更新时，不需要先删库，也不需要重建这些数据卷。默认推荐下面这套顺序：
 
-当前这台 `1GB` VPS 更推荐直接使用仓库里的低内存更新脚本：
+当前这台 `1GB` VPS 更推荐直接使用仓库里的部署更新脚本：
 
 ```bash
 cd /你的仓库目录
 
-chmod +x scripts/update-low-memory.sh
-./scripts/update-low-memory.sh
+chmod +x scripts/update-deploy.sh
+./scripts/update-deploy.sh
 ```
 
 这条脚本内部已经固定做了：备份数据库、`git pull --ff-only`、串行 build `blog-api`、串行 build `blog-web`、重启容器、验证文章接口。
@@ -98,12 +138,12 @@ chmod +x scripts/update-low-memory.sh
 ```bash
 cd /你的仓库目录
 
-./scripts/backup-mongodb.sh
+WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
 git pull --ff-only
-docker compose build blog-api
-docker compose build blog-web
-docker compose up -d mongodb blog-api blog-web
-docker compose ps
+docker compose --env-file .env.deploy build blog-api
+docker compose --env-file .env.deploy build blog-web
+docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
+docker compose --env-file .env.deploy ps
 curl -sk https://127.0.0.1/api/posts -H 'Host: wanderlust0736.top'
 docker logs wanderlust-api --since 10m
 docker logs wanderlust-web --since 10m
@@ -114,14 +154,14 @@ docker logs wanderlust-web --since 10m
 - 先备份当前数据库，给回滚留出口
 - 拉取最新代码，避免 merge commit 混进服务器更新流程
 - 串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 在构建时同时占用过多内存
-- 重启 `mongodb`、`blog-api` 和 `blog-web`，但保留当前 MongoDB 数据卷
+- 重启 `mongodb`、`redis`、`blog-api` 和 `blog-web`，但保留当前 MongoDB 数据卷、Redis 数据卷和图片媒体卷
 - 用 `docker compose ps`、文章列表接口和最近日志确认网页与 API 都已切到新版本
 
 ### 日常更新原则
 
-- 只改前端、后端接口、页面样式、Nginx 配置时：重建 `blog-api` 和 `blog-web` 就够了。
+- 只改前端、后端接口、页面样式、Nginx 配置时：重建 `blog-api` 和 `blog-web` 就够了；Redis 一般不需要重建。
 - 当前版本没有独立 migration 系统，所以 `git pull` 后不会自动重写 MongoDB 里的内容。
-- 只要你不主动重建或删除 `mongodb-data` 卷，数据库内容会继续保留。
+- 只要你不主动重建或删除 `mongodb-data`、`redis-data` 和 `blog-media` 卷，数据库内容、上传图片与图片去重索引都会继续保留。
 
 ### 如果本次改动涉及数据库结构
 
@@ -130,14 +170,14 @@ docker logs wanderlust-web --since 10m
 ```bash
 cd /你的仓库目录
 
-./scripts/backup-mongodb.sh
+WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
 git pull --ff-only
-docker compose up -d --build blog-api blog-web
+docker compose --env-file .env.deploy up -d --build blog-api blog-web
 
 # 按本次改动需要执行数据库脚本或手动修正
 # 例如：docker compose exec -T mongodb mongosh
 
-docker compose ps
+docker compose --env-file .env.deploy ps
 curl -sk https://127.0.0.1/api/posts -H 'Host: wanderlust0736.top'
 docker logs wanderlust-api --since 10m
 ```
@@ -147,15 +187,15 @@ docker logs wanderlust-api --since 10m
 ```bash
 cd /你的仓库目录
 
-./scripts/restore-mongodb.sh ./backups/mongodb/最近一次备份目录
-docker compose up -d blog-api blog-web
+WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/restore-mongodb.sh ./backups/mongodb/最近一次备份目录
+docker compose --env-file .env.deploy up -d blog-api blog-web
 ```
 
-### 什么时候才需要重建 MongoDB 容器
+### 什么时候才需要重建 MongoDB / Redis 容器
 
-只有下面这些场景，才建议把 `mongodb` 也纳入重建范围：
+只有下面这些场景，才建议把 `mongodb` 或 `redis` 纳入重建范围：
 
-- `docker-compose.yml` 里 Mongo 镜像版本发生变化
+- `docker-compose.yml` 里 Mongo 或 Redis 镜像版本发生变化
 - 你需要验证新的 Mongo 配置是否生效
 - Mongo 容器本身异常，且仅重启不能恢复
 
@@ -164,12 +204,12 @@ docker compose up -d blog-api blog-web
 ```bash
 cd /你的仓库目录
 
-./scripts/backup-mongodb.sh
+WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
 git pull --ff-only
-docker compose build blog-api
-docker compose build blog-web
-docker compose up -d --build mongodb blog-api blog-web
-docker compose ps
+docker compose --env-file .env.deploy build blog-api
+docker compose --env-file .env.deploy build blog-web
+docker compose --env-file .env.deploy up -d --build mongodb redis blog-api blog-web
+docker compose --env-file .env.deploy ps
 ```
 
 ## 手动续期证书

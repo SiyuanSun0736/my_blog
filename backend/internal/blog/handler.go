@@ -12,11 +12,43 @@ import (
 const writeTokenEnvName = "BLOG_WRITE_TOKEN"
 
 type Handler struct {
-	service *Service
+	service        *Service
+	mediaDir       string
+	mediaURLPath   string
+	maxUploadBytes int64
+	uploadCache    UploadCache
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+type HandlerOptions struct {
+	MediaDir       string
+	MediaURLPath   string
+	MaxUploadBytes int64
+	UploadCache    UploadCache
+}
+
+func NewHandler(service *Service, options HandlerOptions) *Handler {
+	mediaDir := strings.TrimSpace(options.MediaDir)
+	if mediaDir == "" {
+		mediaDir = defaultMediaDir
+	}
+
+	maxUploadBytes := options.MaxUploadBytes
+	if maxUploadBytes <= 0 {
+		maxUploadBytes = defaultMaxUploadBytes
+	}
+
+	uploadCache := options.UploadCache
+	if uploadCache == nil {
+		uploadCache = noopUploadCache{}
+	}
+
+	return &Handler{
+		service:        service,
+		mediaDir:       mediaDir,
+		mediaURLPath:   normalizeMediaURLPath(options.MediaURLPath),
+		maxUploadBytes: maxUploadBytes,
+		uploadCache:    uploadCache,
+	}
 }
 
 func (h *Handler) RegisterRoutes(router gin.IRoutes) {
@@ -25,6 +57,7 @@ func (h *Handler) RegisterRoutes(router gin.IRoutes) {
 	router.GET("/admin/posts", h.requireWriteAccess, h.listAdminPosts)
 	router.GET("/admin/posts/:slug", h.requireWriteAccess, h.getAdminPost)
 	router.POST("/admin/posts/batch", h.requireWriteAccess, h.batchPosts)
+	router.POST("/admin/uploads/images", h.requireWriteAccess, h.uploadImage)
 	router.GET("/write-access", h.requireWriteAccess, h.confirmWriteAccess)
 	router.POST("/posts", h.requireWriteAccess, h.createPost)
 	router.PUT("/posts/:slug", h.requireWriteAccess, h.updatePost)
