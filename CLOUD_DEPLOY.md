@@ -265,6 +265,8 @@ rm -rf "$tmp_dir"
 
 说明：这个清理只会删除本机临时文件，不会删除已经写进 `blog-media` 卷里的测试图片。当前仓库还没有独立的图片删除接口，所以线上 smoke test 建议始终使用这种极小测试图。
 
+补充：后端现在会按 `BLOG_MEDIA_CLEANUP_INTERVAL` 定时扫描文章正文里的 `/media/...` 引用，自动删除长期未被任何文章引用的媒体文件，并同步清理对应的 Redis 去重键；Compose 默认值是 `24h`。如果你想更快回收 smoke test 产生的测试图，可以临时把这个环境变量调短后重启 `blog-api`。
+
 ## git pull 后更新数据库和网页
 
 当前项目已经把 MongoDB 数据放进命名卷 `mongodb-data`，上传图片放进命名卷 `blog-media`，Redis 索引放进命名卷 `redis-data`，所以日常 `git pull` 更新时，不需要先删库，也不需要重建这些数据卷。默认推荐下面这套顺序：

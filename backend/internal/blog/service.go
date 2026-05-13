@@ -65,6 +65,34 @@ func (s *Service) ListAdminPosts(ctx context.Context) ([]Post, error) {
 	return s.listPosts(ctx, true)
 }
 
+func (s *Service) ListPostBodies(ctx context.Context) ([]string, error) {
+	cursor, err := s.collection.Find(
+		ctx,
+		bson.D{},
+		options.Find().
+			SetProjection(bson.D{{Key: "body", Value: 1}, {Key: "_id", Value: 0}}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	bodies := make([]string, 0)
+	for cursor.Next(ctx) {
+		var projection struct {
+			Body string `bson:"body"`
+		}
+
+		if err := cursor.Decode(&projection); err != nil {
+			return nil, err
+		}
+
+		bodies = append(bodies, projection.Body)
+	}
+
+	return bodies, cursor.Err()
+}
+
 func (s *Service) listPosts(ctx context.Context, includeDrafts bool) ([]Post, error) {
 	filter := bson.D{{Key: "draft", Value: bson.D{{Key: "$ne", Value: true}}}}
 	if includeDrafts {

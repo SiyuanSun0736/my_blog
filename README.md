@@ -16,6 +16,7 @@
 - 管理端图片上传接口与 `/media` 静态资源目录
 - MongoDB 持久化与 Markdown 正文渲染
 - Redis 持久化图片指纹索引，避免重复上传同一张图
+- 后端按固定间隔扫描文章正文里的 `/media/...` 引用，自动回收未引用图片并清理 Redis 去重键
 - MongoDB 数据卷持久化与归档备份脚本
 - Gin 提供 `/api/posts`、`/api/posts/:slug` 与 `POST /api/posts`
 - Gin 提供 `POST /api/admin/uploads/images`，管理端上传图片后可直接插入 Markdown
@@ -42,6 +43,8 @@ export MONGODB_DATABASE=wanderlust
 export BLOG_WRITE_TOKEN=替换成一个长随机字符串
 # 如果你希望本地图片上传也启用 Redis 去重，再额外配置：
 # export REDIS_ADDR=localhost:6379
+# 可选：调整未引用图片清理间隔，默认 24h；设为 0 / off 可关闭
+# export BLOG_MEDIA_CLEANUP_INTERVAL=12h
 go run .
 ```
 
@@ -74,6 +77,8 @@ Compose 模式下会启动 MongoDB、Redis、API 和 Nginx，外部暴露 Nginx 
 MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器重建后文章数据仍会保留。
 
 管理端图片上传会把文件写进 Compose 命名卷 `blog-media`，由 `blog-api` 写入、`blog-web` 只读挂载并对外服务；Redis 会记录图片内容摘要到已存在路径的映射，重复上传同一张图时直接复用已有 `/media/...` 地址。
+
+后端默认每 `24h` 会扫描所有文章正文里的 `/media/...` 引用，删除磁盘上未被任何文章引用的媒体文件，并同步删除对应的 Redis 摘要键；如需调短、调长或关闭，可设置 `BLOG_MEDIA_CLEANUP_INTERVAL`，其中 `0`、`off`、`false` 表示禁用。
 
 如果你的 VPS 只有 `1GB` 内存，当前仓库也已经提供默认低内存优化：
 

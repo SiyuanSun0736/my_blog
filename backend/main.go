@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -14,7 +15,9 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	blogService, err := blog.NewService(ctx, mongoURI(), mongoDatabase())
 	if err != nil {
 		log.Fatal(err)
@@ -29,13 +32,20 @@ func main() {
 	router := gin.Default()
 	mediaDir := blogMediaDir()
 	mediaURLPath := blogMediaURLPath()
+	uploadCache := blog.NewRedisUploadCache(redisClient)
 
 	blogHandler := blog.NewHandler(blogService, blog.HandlerOptions{
 		MediaDir:       mediaDir,
 		MediaURLPath:   mediaURLPath,
 		MaxUploadBytes: blogImageUploadMaxBytes(),
-		UploadCache:    blog.NewRedisUploadCache(redisClient),
+		UploadCache:    uploadCache,
 	})
+	startMediaCleanupLoop(ctx, blog.NewMediaCleaner(blogService, blog.MediaCleanerOptions{
+		MediaDir:     mediaDir,
+		MediaURLPath: mediaURLPath,
+		UploadCache:  uploadCache,
+	}), blogMediaCleanupInterval())
+
 	router.StaticFS(mediaURLPath, gin.Dir(mediaDir, false))
 
 	router.GET("/healthz", func(c *gin.Context) {
@@ -48,6 +58,53 @@ func main() {
 	if err := router.Run(":8080"); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func startMediaCleanupLoop(ctx context.Context, cleaner *blog.MediaCleaner, interval time.Duration) {
+	if cleaner == nil {
+		return
+	}
+
+	if interval <= 0 {
+		log.Print("blog media cleanup disabled")
+		return
+	}
+
+	go func() {
+		runMediaCleanup(ctx, cleaner)
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				runMediaCleanup(ctx, cleaner)
+			}
+		}
+	}()
+}
+
+func runMediaCleanup(ctx context.Context, cleaner *blog.MediaCleaner) {
+	report, err := cleaner.CleanupUnusedMedia(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+
+		log.Printf("blog media cleanup failed: %v", err)
+		return
+	}
+
+	log.Printf(
+		"blog media cleanup completed: referenced=%d scanned=%d deleted=%d cache_deleted=%d",
+		report.ReferencedPaths,
+		report.ScannedFiles,
+		report.DeletedFiles,
+		report.DeletedCacheEntries,
+	)
 }
 
 func mongoURI() string {
@@ -107,6 +164,27 @@ func blogImageUploadMaxBytes() int64 {
 	}
 
 	return parsedValue
+}
+
+func blogMediaCleanupInterval() time.Duration {
+	const defaultInterval = 24 * time.Hour
+
+	value := strings.TrimSpace(os.Getenv("BLOG_MEDIA_CLEANUP_INTERVAL"))
+	if value == "" {
+		return defaultInterval
+	}
+
+	if value == "0" || strings.EqualFold(value, "off") || strings.EqualFold(value, "false") {
+		return 0
+	}
+
+	interval, err := time.ParseDuration(value)
+	if err != nil || interval < 0 {
+		log.Printf("invalid BLOG_MEDIA_CLEANUP_INTERVAL %q, fallback to %s", value, defaultInterval)
+		return defaultInterval
+	}
+
+	return interval
 }
 
 func newRedisClient(ctx context.Context) redis.UniversalClient {

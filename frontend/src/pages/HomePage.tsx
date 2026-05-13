@@ -239,19 +239,33 @@ export function HomePage() {
               </Card>
             </div>
 
-            {featuredPost ? (
+            {featuredShelfPosts.length > 0 ? (
               <div className="rounded-[1.75rem] border border-black/10 bg-[rgba(15,118,110,0.08)] p-5 text-sm leading-7 text-[var(--muted)] sm:p-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">先读这篇</p>
-                <Link
-                  to={`/posts/${featuredPost.slug}`}
-                  className="mt-2 block text-2xl font-semibold text-[var(--ink)] transition hover:opacity-70"
-                >
-                  {featuredPost.title}
-                </Link>
-                <p className="mt-3 max-w-3xl">{featuredPost.summary}</p>
-                <p className="mt-4 text-xs leading-6 text-[var(--muted)]">
-                  {formatPublishDate(featuredPost.publishedAt)} · {featuredPost.category} · {featuredPost.readMinutes} 分钟阅读
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  {featuredPosts.length > 0 ? "先读这几篇" : "先看这些"}
                 </p>
+                <div className="mt-3 space-y-3">
+                  {featuredShelfPosts.map((post, index) => (
+                    <Link
+                      key={post.slug}
+                      to={`/posts/${post.slug}`}
+                      className="block rounded-[1.2rem] border border-black/10 bg-white/70 px-4 py-4 text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                          {featuredPosts.length > 0 ? `编辑精选 ${index + 1}` : `推荐阅读 ${index + 1}`}
+                        </span>
+                        <span className="text-xs leading-6 text-[var(--muted)]">
+                          {formatPublishDate(post.publishedAt)} · {post.readMinutes} 分钟阅读
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xl font-semibold leading-8 text-[var(--ink)] transition hover:opacity-70">
+                        {post.title}
+                      </p>
+                      <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-7 text-[var(--muted)]">{post.summary}</p>
+                    </Link>
+                  ))}
+                </div>
               </div>
             ) : null}
           </CardBody>
@@ -540,36 +554,6 @@ export function HomePage() {
                   清空筛选
                 </Button>
               )}
-            </CardBody>
-          </Card>
-
-          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
-            <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">
-                {featuredPosts.length > 0 ? "Featured Picks" : "Start Here"}
-              </p>
-              <h3 className="display-type text-3xl text-[var(--ink)]">
-                {featuredPosts.length > 0 ? "首页精选" : "先看这些"}
-              </h3>
-            </CardHeader>
-            <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm">
-              <p className="leading-7 text-[var(--muted)]">
-                {featuredPosts.length > 0
-                  ? `当前展示 ${featuredPosts.length} / 3 篇精选。`
-                  : "还没手动设置精选时，这里先用最近发布补位。"}
-              </p>
-              {featuredShelfPosts.map((post) => (
-                <Link
-                  key={post.slug}
-                  to={`/posts/${post.slug}`}
-                  className="rounded-[1.2rem] border border-black/10 bg-white/70 px-4 py-3 leading-7 text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30"
-                >
-                  <span className="block font-medium">{post.title}</span>
-                  <span className="mt-1 block text-[var(--muted)]">
-                    {formatPublishDate(post.publishedAt)} · {post.readMinutes} 分钟阅读
-                  </span>
-                </Link>
-              ))}
             </CardBody>
           </Card>
 
