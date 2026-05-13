@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM golang:1.23-alpine AS builder
 
 ARG BLOG_API_BUILD_GOMEMLIMIT=120MiB
@@ -7,10 +9,13 @@ ARG BLOG_API_BUILD_P=1
 WORKDIR /src
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+	go mod download
 
 COPY . ./
-RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=${BLOG_API_BUILD_P} GOMEMLIMIT=${BLOG_API_BUILD_GOMEMLIMIT} GOGC=${BLOG_API_BUILD_GOGC} \
+RUN --mount=type=cache,target=/go/pkg/mod \
+	--mount=type=cache,target=/root/.cache/go-build \
+	CGO_ENABLED=0 GOOS=linux GOMAXPROCS=${BLOG_API_BUILD_P} GOMEMLIMIT=${BLOG_API_BUILD_GOMEMLIMIT} GOGC=${BLOG_API_BUILD_GOGC} \
 	go build -p=${BLOG_API_BUILD_P} -trimpath -o /out/blog-api .
 
 FROM alpine:3.21

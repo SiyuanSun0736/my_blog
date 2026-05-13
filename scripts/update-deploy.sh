@@ -16,11 +16,24 @@ set -a
 set +a
 
 primary_domain="${BLOG_PRIMARY_DOMAIN:-wanderlust0736.top}"
+build_nice_level="${WANDERLUST_BUILD_NICE_LEVEL:-10}"
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
+export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
 export WANDERLUST_COMPOSE_ENV_FILE="$compose_env_file"
 
 compose() {
   docker compose --env-file "$compose_env_file" "$@"
+}
+
+compose_build() {
+  service_name="$1"
+
+  if command -v nice >/dev/null 2>&1 && [ "$build_nice_level" != "0" ]; then
+    nice -n "$build_nice_level" docker compose --env-file "$compose_env_file" build "$service_name"
+    return
+  fi
+
+  compose build "$service_name"
 }
 
 echo "[1/6] Backing up MongoDB before update..." >&2
@@ -30,10 +43,10 @@ echo "[2/6] Pulling latest code..." >&2
 git pull --ff-only
 
 echo "[3/6] Building API image with deploy low-memory settings..." >&2
-compose build blog-api
+compose_build blog-api
 
 echo "[4/6] Building web image with deploy low-memory settings..." >&2
-compose build blog-web
+compose_build blog-web
 
 echo "[5/6] Restarting application containers with deploy environment..." >&2
 compose up -d mongodb redis blog-api blog-web
