@@ -18,7 +18,7 @@ import (
 
 const (
 	postsCollectionName = "posts"
-	maxFeaturedPosts   = 3
+	maxFeaturedPosts    = 3
 )
 
 var (
