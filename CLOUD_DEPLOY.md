@@ -7,7 +7,7 @@
 - 当前这台服务器只用于开发验证，不作为正式生产环境。
 - 当前开发部署主机公网 IP：`47.79.86.69`
 - 当前 VPS 只有 `1GB` 内存，部署和更新默认按低内存模式处理。
-- 当前部署相关脚本默认读取根目录 `.env.deploy`；本地开发继续使用根目录 `.env`。
+- 当前部署相关脚本默认读取根目录 `.env.deploy`；建议先由仓库里的 `.env.deploy.example` 复制生成。实际 `.env.deploy` 不再纳入 git 跟踪，本地开发继续使用根目录 `.env`。
 - 当前仓库在这台机器上的更新，默认按“先备份数据库，再停止当前服务，再更新代码、重建网页和 API，最后验证”的顺序执行。
 
 ## 1GB VPS 优化
@@ -23,7 +23,7 @@
 - Vite 关闭压缩体积统计，减少构建时额外内存开销
 - 更新脚本改为串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 同时构建把内存顶满
 
-这些默认值已经写进根目录 `.env.deploy`。当前前端构建已经在 `256MB` Node heap 下完成验证；后端镜像构建也已经改成单并行 `go build`。如果后续页面体积再次上升，可以先回到 `320` 做对比，再根据实际构建日志微调。如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
+这些默认值已经写进根目录 `.env.deploy.example`。服务器实际部署时，复制成 `.env.deploy` 后再按机器情况覆盖。当前前端构建已经在 `256MB` Node heap 下完成验证；后端镜像构建也已经改成单并行 `go build`。如果后续页面体积再次上升，可以先回到 `320` 做对比，再根据实际构建日志微调。如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
 
 ## 前置条件
 
@@ -40,6 +40,7 @@
 cd /你的仓库目录
 
 git pull
+test -f .env.deploy || cp .env.deploy.example .env.deploy
 chmod +x scripts/deploy-letsencrypt.sh scripts/renew-letsencrypt.sh
 
 export CERTBOT_EMAIL=你的邮箱
@@ -64,7 +65,7 @@ export BLOG_WRITE_TOKEN=替换成一个长随机字符串
 
 这不影响公开页面和文章接口；影响的是 `/admin` 管理端写权限和图片上传。当前后端在 `BLOG_WRITE_TOKEN` 为空时会直接返回 `503 write access is not configured`，所以补上 token 后只需要重建 `blog-api` 容器，不需要重建 MongoDB、Redis，也不需要重建前端。
 
-推荐把 token 直接写进根目录 `.env.deploy`，这样后续重启后不会丢：
+推荐把 token 直接写进根目录 `.env.deploy`，这样后续重启后不会丢；该文件现在默认不进 git：
 
 ```bash
 cd /你的仓库目录
@@ -282,6 +283,25 @@ chmod +x scripts/update-deploy.sh
 
 这条脚本内部已经固定做了：备份数据库、停止当前 `mongodb`/`redis`/`blog-api`/`blog-web` 容器、`git pull --ff-only`、串行 build `blog-api`、串行 build `blog-web`、重新启动容器、验证文章接口。
 
+默认会读取仓库根目录 `.env.deploy`，并在执行 `git pull --ff-only` 前先检查当前 tracked 文件是否干净；当前脚本里的 `git pull` 已改成非交互模式，如果服务器还没配好免交互拉取，会直接失败而不是卡住。如果你服务器上正准备部署本地未提交改动，可以改用：
+
+```bash
+./scripts/update-deploy.sh --skip-pull
+```
+
+如果你想在更新完成后顺手看最近日志，可以加上：
+
+```bash
+./scripts/update-deploy.sh --logs
+```
+
+如果部署环境文件不在默认位置，或者你想先看完整参数说明：
+
+```bash
+./scripts/update-deploy.sh --help
+./scripts/update-deploy.sh --env-file /你的部署目录/.env.deploy --logs
+```
+
 如果你想手动执行，再用下面这套命令：
 
 ```bash
@@ -289,7 +309,7 @@ cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
 docker compose --env-file .env.deploy stop mongodb redis blog-api blog-web
-git pull --ff-only
+GIT_TERMINAL_PROMPT=0 git pull --ff-only
 docker compose --env-file .env.deploy build blog-api
 docker compose --env-file .env.deploy build blog-web
 docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
@@ -302,8 +322,9 @@ docker logs wanderlust-web --since 10m
 这组命令分别处理的事情是：
 
 - 先备份当前数据库，给回滚留出口
+- 备份脚本只会把归档写到本机 `backups/`，不会再自动 `git commit` / `git push`，避免定时任务和部署流程卡在 git 认证
 - 先停止当前 `mongodb`、`redis`、`blog-api` 和 `blog-web`，再进入部署流程，避免云上构建时继续占用运行时内存
-- 拉取最新代码，避免 merge commit 混进服务器更新流程
+- 非交互拉取最新代码，避免 merge commit 混进服务器更新流程；如果服务器没配好免交互认证，会直接报错退出
 - 串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 在构建时同时占用过多内存
 - 重启 `mongodb`、`redis`、`blog-api` 和 `blog-web`，但保留当前 MongoDB 数据卷、Redis 数据卷和图片媒体卷
 - 用 `docker compose ps`、文章列表接口和最近日志确认网页与 API 都已切到新版本
@@ -322,7 +343,7 @@ docker logs wanderlust-web --since 10m
 cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
-git pull --ff-only
+GIT_TERMINAL_PROMPT=0 git pull --ff-only
 docker compose --env-file .env.deploy up -d --build blog-api blog-web
 
 # 按本次改动需要执行数据库脚本或手动修正
@@ -356,7 +377,7 @@ docker compose --env-file .env.deploy up -d blog-api blog-web
 cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
-git pull --ff-only
+GIT_TERMINAL_PROMPT=0 git pull --ff-only
 docker compose --env-file .env.deploy build blog-api
 docker compose --env-file .env.deploy build blog-web
 docker compose --env-file .env.deploy up -d --build mongodb redis blog-api blog-web
@@ -390,6 +411,8 @@ ls backups/mongodb
 ```
 
 默认备份会输出到 `backups/mongodb/<database>-<timestamp>/dump.archive.gz`。
+
+当前备份只保留在服务器本机目录，不会自动提交到仓库；`backups/latest-mongodb/` 仍会同步最近一次副本，方便恢复，但生成的 archive / metadata / checksum 文件默认不再进入 git。
 
 恢复示例：
 

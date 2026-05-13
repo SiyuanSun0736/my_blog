@@ -192,10 +192,6 @@ export function PostPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
           <CardBody className="space-y-8 p-6 sm:p-8 lg:p-10">
-            <div className="rounded-[1.75rem] border border-black/10 bg-white/55 px-5 py-4 text-sm leading-7 text-[var(--muted)]">
-              这里默认把注意力放回正文。背景、实验过程、指标变化和取舍，比花哨控件更值得占据读者的注意力。
-            </div>
-
             <div className="story-prose">
               <ReactMarkdown rehypePlugins={[rehypeKatex]} remarkPlugins={[remarkMath, remarkGfm]}>
                 {post.body}

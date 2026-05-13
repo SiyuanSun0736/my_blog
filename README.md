@@ -2,6 +2,8 @@
 
 这是一个基于 Gin、MongoDB、Redis、Nginx 和 Vite React 的现代博客示例项目。
 
+访问链接：https://wanderlust0736.top/
+
 ## 结构
 
 - `backend/`: Go + Gin 博客 API，使用 MongoDB 持久化文章并提供管理端写作、图片上传接口
@@ -27,7 +29,7 @@
 ## 环境拆分
 
 - 根目录 `.env` 是本地测试默认配置：使用 `localhost`、本地 `certs/` 证书目录，并给 MongoDB / Go build / 前端 build 更宽松的资源参数，适合本地并发构建。
-- 根目录 `.env.deploy` 是部署配置：保留 `wanderlust0736.top`、Let's Encrypt 路径和 `1CPU/1GB` VPS 的低内存参数，部署脚本会显式使用它。
+- 根目录 `.env.deploy.example` 是部署模板：保留 `wanderlust0736.top`、Let's Encrypt 路径和 `1CPU/1GB` VPS 的低内存参数；服务器上请复制为 `.env.deploy` 后再填实际值。实际 `.env.deploy` 已加入 `.gitignore`，避免把云端配置和 token 提交进仓库。
 - `./scripts/up-local.sh` 会按本地环境启动整套 Compose，并保留 Compose 默认并发。
 - `./scripts/update-deploy.sh` 会按部署环境串行备份、停止当前容器、拉代码、构建和重新启动；`./scripts/update-low-memory.sh` 现在只是它的兼容别名。
 
@@ -63,6 +65,12 @@ npm run dev
 前端默认运行在 `http://localhost:5173`，并通过 Vite 代理访问后端 `/api` 与 `/media`。
 
 ## Docker 部署
+
+先复制部署模板并按服务器实际值填写：
+
+```bash
+cp .env.deploy.example .env.deploy
+```
 
 ```bash
 docker compose --env-file .env.deploy build blog-api
@@ -242,10 +250,10 @@ crontab deploy/cron/wanderlust-cert-renew.cron
 
 这两条脚本默认会把 Let’s Encrypt 数据写到仓库下的 `./letsencrypt`，把 ACME challenge webroot 写到 `./certbot/www`，不会覆盖当前 `./certs` 里的本地自签名证书。
 
-当前仓库根目录也已经提供了 `.env`，Compose 默认会按 Let’s Encrypt 目录约定读取：
+当前仓库根目录也已经提供了 `.env` 与 `.env.deploy.example`，Compose 默认会按 Let’s Encrypt 目录约定读取：
 
 - `.env`：本地默认，指向 `./certs` 和更宽松的本地资源配置
-- `.env.deploy`：部署默认，指向 `./letsencrypt` 和低内存 VPS 配置
+- `.env.deploy.example`：部署模板；服务器上复制为 `.env.deploy` 后再填入真实部署值
 - `BLOG_WRITE_TOKEN=`：默认留空，准备启用 `/admin` 管理端写作和图片上传时再填入随机令牌
 
 ### Nginx 健康检查与排障

@@ -3,6 +3,7 @@ frontend/dist/
 backend/bin/
 backend/.cache/
 backend/uploads/
+.env.deploy
 certs/*
 !certs/README.md
 letsencrypt/
@@ -10,5 +11,6 @@ certbot/
 backups/*
 !backups/README.md
 !backups/latest-mongodb/
-!backups/latest-mongodb/**
+backups/latest-mongodb/*
+!backups/latest-mongodb/README.md
 *.log
