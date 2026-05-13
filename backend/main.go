@@ -51,6 +51,7 @@ func main() {
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
+	blogHandler.RegisterMetadataRoutes(router)
 
 	api := router.Group("/api")
 	blogHandler.RegisterRoutes(api)
