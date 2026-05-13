@@ -127,14 +127,14 @@ export function PostPage() {
   }
 
   return (
-    <article className="mx-auto max-w-5xl space-y-8">
-      <div className="space-y-5">
+    <article className="mx-auto max-w-5xl space-y-6 sm:space-y-8">
+      <div className="space-y-4 sm:space-y-5">
         <Link to="/" className="inline-flex text-sm font-medium text-[var(--muted)] transition hover:text-[var(--ink)]">
           返回首页文章流
         </Link>
-        <div className="overflow-hidden rounded-[2.25rem] border border-black/10 bg-[var(--panel-strong)] shadow-[0_32px_100px_rgba(77,53,35,0.12)]">
-          <div className="h-4 w-full" style={{ background: post.accent }} />
-          <div className="space-y-8 px-6 py-7 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+        <div className="overflow-hidden rounded-[1.75rem] border border-black/10 bg-[var(--panel-strong)] shadow-[0_22px_60px_rgba(77,53,35,0.12)] sm:rounded-[2.25rem] sm:shadow-[0_32px_100px_rgba(77,53,35,0.12)]">
+          <div className="h-3 w-full sm:h-4" style={{ background: post.accent }} />
+          <div className="space-y-6 px-4 py-5 sm:space-y-8 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
             <div className="space-y-4">
               <p className="text-xs uppercase tracking-[0.32em] text-[var(--muted)]">Wanderlust Notes</p>
               <div className="flex flex-wrap gap-2">
@@ -153,16 +153,16 @@ export function PostPage() {
                 ))}
               </div>
 
-              <h1 className="display-type max-w-4xl text-4xl leading-tight text-[var(--ink)] sm:text-5xl lg:text-6xl">
+              <h1 className="display-type max-w-4xl text-[2.15rem] leading-[1.08] text-[var(--ink)] sm:text-5xl sm:leading-tight lg:text-6xl">
                 {post.title}
               </h1>
-              <p className="max-w-3xl text-base leading-8 text-[var(--muted)] sm:text-lg">
+              <p className="max-w-3xl text-[0.98rem] leading-7 text-[var(--muted)] sm:text-lg sm:leading-8">
                 {post.summary}
               </p>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="grid gap-4 rounded-[1.75rem] border border-black/10 bg-white/65 p-5 sm:grid-cols-3">
+            <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="grid gap-4 rounded-[1.35rem] border border-black/10 bg-white/65 p-4 sm:rounded-[1.75rem] sm:p-5 sm:grid-cols-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">发布时间</p>
                   <p className="mt-2 text-sm font-medium text-[var(--ink)]">{formatPublishDate(post.publishedAt)}</p>
@@ -177,7 +177,7 @@ export function PostPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 rounded-[1.75rem] border border-black/10 bg-white/60 p-4">
+              <div className="flex items-center gap-3 rounded-[1.35rem] border border-black/10 bg-white/60 p-4 sm:gap-4 sm:rounded-[1.75rem]">
                 <Avatar name={post.author} color="primary" className="text-white" />
                 <div>
                   <p className="font-medium text-[var(--ink)]">{post.author}</p>
@@ -189,9 +189,9 @@ export function PostPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
-          <CardBody className="space-y-8 p-6 sm:p-8 lg:p-10">
+          <CardBody className="space-y-7 p-4 sm:space-y-8 sm:p-8 lg:p-10">
             <div className="story-prose">
               <ReactMarkdown rehypePlugins={[rehypeKatex]} remarkPlugins={[remarkMath, remarkGfm]}>
                 {post.body}
@@ -204,14 +204,14 @@ export function PostPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Keep Reading</p>
-                  <h2 className="display-type mt-2 text-3xl text-[var(--ink)]">沿时间线继续</h2>
+                  <h2 className="display-type mt-2 text-[1.75rem] text-[var(--ink)] sm:text-3xl">沿时间线继续</h2>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   {previousPost ? (
                     <Link
                       to={`/posts/${previousPost.slug}`}
-                      className="rounded-[1.5rem] border border-black/10 bg-white/70 px-5 py-4 transition hover:-translate-y-0.5 hover:border-black/30"
+                      className="rounded-[1.35rem] border border-black/10 bg-white/70 px-4 py-4 transition hover:-translate-y-0.5 hover:border-black/30 sm:rounded-[1.5rem] sm:px-5"
                     >
                       <span className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">上一篇</span>
                       <span className="mt-3 block text-lg font-medium leading-7 text-[var(--ink)]">
@@ -222,7 +222,7 @@ export function PostPage() {
                       </span>
                     </Link>
                   ) : (
-                    <div className="rounded-[1.5rem] border border-dashed border-black/10 bg-white/40 px-5 py-4 text-sm leading-7 text-[var(--muted)]">
+                    <div className="rounded-[1.35rem] border border-dashed border-black/10 bg-white/40 px-4 py-4 text-sm leading-7 text-[var(--muted)] sm:rounded-[1.5rem] sm:px-5">
                       这已经是当前时间线里最早的一篇记录。
                     </div>
                   )}
@@ -230,7 +230,7 @@ export function PostPage() {
                   {nextPost ? (
                     <Link
                       to={`/posts/${nextPost.slug}`}
-                      className="rounded-[1.5rem] border border-black/10 bg-white/70 px-5 py-4 transition hover:-translate-y-0.5 hover:border-black/30"
+                      className="rounded-[1.35rem] border border-black/10 bg-white/70 px-4 py-4 transition hover:-translate-y-0.5 hover:border-black/30 sm:rounded-[1.5rem] sm:px-5"
                     >
                       <span className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">下一篇</span>
                       <span className="mt-3 block text-lg font-medium leading-7 text-[var(--ink)]">
@@ -241,7 +241,7 @@ export function PostPage() {
                       </span>
                     </Link>
                   ) : (
-                    <div className="rounded-[1.5rem] border border-dashed border-black/10 bg-white/40 px-5 py-4 text-sm leading-7 text-[var(--muted)]">
+                    <div className="rounded-[1.35rem] border border-dashed border-black/10 bg-white/40 px-4 py-4 text-sm leading-7 text-[var(--muted)] sm:rounded-[1.5rem] sm:px-5">
                       这已经是当前时间线里最新的一篇记录。
                     </div>
                   )}
@@ -256,7 +256,7 @@ export function PostPage() {
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Related Reading</p>
-                    <h2 className="display-type mt-2 text-3xl text-[var(--ink)]">同主题延伸</h2>
+                    <h2 className="display-type mt-2 text-[1.75rem] text-[var(--ink)] sm:text-3xl">同主题延伸</h2>
                   </div>
 
                   <div className="grid gap-4 lg:grid-cols-2">
@@ -264,7 +264,7 @@ export function PostPage() {
                       <Link
                         key={relatedPost.slug}
                         to={`/posts/${relatedPost.slug}`}
-                        className="rounded-[1.5rem] border border-black/10 bg-white/70 px-5 py-4 transition hover:-translate-y-0.5 hover:border-black/30"
+                        className="rounded-[1.35rem] border border-black/10 bg-white/70 px-4 py-4 transition hover:-translate-y-0.5 hover:border-black/30 sm:rounded-[1.5rem] sm:px-5"
                       >
                         <span className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
                           {relatedPost.category} · {relatedPost.readMinutes} 分钟阅读
@@ -293,7 +293,7 @@ export function PostPage() {
               </div>
               <Link
                 to="/"
-                className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+                className="inline-flex w-full justify-center rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70 sm:w-auto"
               >
                 回首页继续翻
               </Link>
@@ -301,9 +301,9 @@ export function PostPage() {
           </CardBody>
         </Card>
 
-        <aside className="space-y-5">
+        <aside className="space-y-4 sm:space-y-5">
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
-            <CardBody className="gap-3 p-5">
+            <CardBody className="gap-3 p-4 sm:p-5">
               <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">文章信息</p>
               <div className="space-y-2 text-sm leading-7 text-[var(--muted)]">
                 <p>作者：{post.author}</p>
@@ -314,7 +314,7 @@ export function PostPage() {
           </Card>
 
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
-            <CardBody className="gap-3 p-5">
+            <CardBody className="gap-3 p-4 sm:p-5">
               <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">标签</p>
               <div className="flex flex-wrap gap-2">
                 {post.tags.map((tag) => (
@@ -327,12 +327,12 @@ export function PostPage() {
           </Card>
 
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
-            <CardBody className="gap-3 p-5 text-sm leading-7 text-[var(--muted)]">
+            <CardBody className="gap-3 p-4 text-sm leading-7 text-[var(--muted)] sm:p-5">
               <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">继续阅读</p>
               <p>读完后回首页继续看最新记录，或者沿标签与归档把同主题的内容继续串起来。</p>
               <Link
                 to="/"
-                className="inline-flex rounded-full bg-[var(--ink)] px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-lg"
+                className="inline-flex w-full justify-center rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-lg sm:w-auto sm:justify-start sm:py-2"
               >
                 回首页
               </Link>

@@ -19,6 +19,8 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -78,6 +80,15 @@ a {
   margin: 0;
 }
 
+.story-prose :where(p, li, blockquote, td, th, a, code) {
+  overflow-wrap: anywhere;
+}
+
+.story-prose :where(pre, table, .katex-display) {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
 .story-prose h1,
 .story-prose h2,
 .story-prose h3,
@@ -107,7 +118,7 @@ a {
 .story-prose th {
   margin: 0;
   font-size: 1.08rem;
-  line-height: 1.95;
+  line-height: 1.82;
   color: rgba(36, 24, 15, 0.88);
 }
 
@@ -154,9 +165,12 @@ a {
 }
 
 .story-prose pre code {
+  display: block;
+  min-width: max-content;
   background: transparent;
   padding: 0;
   color: rgba(36, 24, 15, 0.92);
+  line-height: 1.7;
 }
 
 .story-prose table {
@@ -177,6 +191,7 @@ a {
 }
 
 .story-prose img {
+  display: block;
   width: 100%;
   border-radius: 1.5rem;
 }
@@ -185,4 +200,64 @@ a {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0.25rem 0;
+}
+
+@media (max-width: 639px) {
+  .story-prose {
+    gap: 1rem;
+  }
+
+  .story-prose h1 {
+    font-size: 1.75rem;
+  }
+
+  .story-prose h2 {
+    font-size: 1.5rem;
+  }
+
+  .story-prose h3 {
+    font-size: 1.28rem;
+  }
+
+  .story-prose p,
+  .story-prose li,
+  .story-prose blockquote,
+  .story-prose td,
+  .story-prose th {
+    font-size: 1rem;
+    line-height: 1.72;
+  }
+
+  .story-prose ul,
+  .story-prose ol {
+    gap: 0.6rem;
+    padding-left: 1.2rem;
+  }
+
+  .story-prose blockquote {
+    border-radius: 0 0.9rem 0.9rem 0;
+    padding: 0.9rem 1rem;
+  }
+
+  .story-prose pre {
+    margin-inline: -0.25rem;
+    border-radius: 1rem;
+    padding: 0.9rem 1rem;
+  }
+
+  .story-prose th,
+  .story-prose td {
+    min-width: 110px;
+    padding: 0.6rem 0.65rem;
+    font-size: 0.92rem;
+  }
+
+  .story-prose img {
+    border-radius: 1.15rem;
+  }
+
+  .story-prose .katex-display {
+    margin-inline: -0.15rem;
+    padding-inline: 0.15rem;
+  }
 }
