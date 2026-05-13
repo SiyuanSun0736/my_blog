@@ -1,14 +1,16 @@
 import { Button, Card, CardBody, CardHeader, Chip, Input, Spinner } from "../components/ui";
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  batchPosts,
   createPost,
   deletePost,
-  fetchPost,
-  fetchPosts,
+  fetchAdminPost,
+  fetchAdminPosts,
   setPostFeatured,
   updatePost,
   verifyWriteAccess,
+  type BatchPostsAction,
 } from "../lib/api";
 import type { Post, PostSummary } from "../types";
 
@@ -22,12 +24,37 @@ interface WriteFormState {
   publishedAt: string;
   accent: string;
   body: string;
+  draft: boolean;
   featured: boolean;
+}
+
+interface MetadataChange {
+  label: string;
+  before: string;
+  after: string;
+}
+
+interface DiffLine {
+  kind: "add" | "remove";
+  text: string;
+}
+
+interface AutosaveSnapshot {
+  form: WriteFormState;
+  importedFileName: string | null;
+  savedAt: string;
 }
 
 const defaultAccent = "linear-gradient(135deg, #0f766e 0%, #f59e0b 100%)";
 const writeTokenStorageKey = "wanderlust:write-token";
+const autosaveStorageKeyPrefix = "wanderlust:admin-autosave:v1";
 const defaultBody = "# 新记录标题\n\n先写问题背景，再补关键指标、命令、日志或代码片段。";
+
+const batchActionLabels: Record<BatchPostsAction, string> = {
+  publish: "发布",
+  draft: "转为草稿",
+  delete: "删除",
+};
 
 function createEmptyFormState(): WriteFormState {
   return {
@@ -40,6 +67,7 @@ function createEmptyFormState(): WriteFormState {
     publishedAt: new Date().toISOString().slice(0, 10),
     accent: defaultAccent,
     body: defaultBody,
+    draft: true,
     featured: false,
   };
 }
@@ -55,6 +83,7 @@ function formStateFromPost(post: Post): WriteFormState {
     publishedAt: post.publishedAt,
     accent: post.accent,
     body: post.body,
+    draft: post.draft,
     featured: post.featured,
   };
 }
@@ -68,6 +97,7 @@ interface FrontmatterData {
   author?: string;
   publishedAt?: string;
   accent?: string;
+  draft?: boolean;
   featured?: boolean;
 }
 
@@ -197,6 +227,135 @@ function stripMarkdownExtension(fileName: string) {
   return fileName.replace(/\.(md|markdown)$/i, "");
 }
 
+function formSignature(form: WriteFormState) {
+  return JSON.stringify({
+    ...form,
+    title: form.title.trim(),
+    slug: form.slug.trim(),
+    summary: form.summary.trim(),
+    category: form.category.trim(),
+    tags: normalizeTags(form.tags),
+    author: form.author.trim(),
+    publishedAt: form.publishedAt.trim(),
+    accent: form.accent.trim(),
+    body: normalizeMarkdownLineEndings(form.body),
+  });
+}
+
+function autosaveStorageKey(editorKey: string) {
+  return `${autosaveStorageKeyPrefix}:${editorKey}`;
+}
+
+function readAutosaveSnapshot(storageKey: string): AutosaveSnapshot | null {
+  try {
+    const rawValue = window.localStorage.getItem(storageKey);
+    if (!rawValue) {
+      return null;
+    }
+
+    return JSON.parse(rawValue) as AutosaveSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function writeAutosaveSnapshot(storageKey: string, snapshot: AutosaveSnapshot) {
+  window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
+}
+
+function clearAutosaveSnapshot(storageKey: string) {
+  window.localStorage.removeItem(storageKey);
+}
+
+function formatAutosaveTime(dateString: string) {
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
+function normalizeTags(tags: string) {
+  return tags
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function buildMetadataChanges(originalPost: Post, form: WriteFormState): MetadataChange[] {
+  const comparisons: Array<[string, string, string]> = [
+    ["标题", originalPost.title, form.title.trim()],
+    ["Slug", originalPost.slug, form.slug.trim()],
+    ["摘要", originalPost.summary, form.summary.trim()],
+    ["分类", originalPost.category, form.category.trim()],
+    ["标签", originalPost.tags.join(", "), normalizeTags(form.tags)],
+    ["作者", originalPost.author, form.author.trim()],
+    ["发布日期", originalPost.publishedAt, form.publishedAt.trim()],
+    ["草稿", originalPost.draft ? "是" : "否", form.draft ? "是" : "否"],
+    ["首页精选", originalPost.featured ? "是" : "否", form.featured ? "是" : "否"],
+    ["Accent", originalPost.accent, form.accent.trim()],
+  ];
+
+  return comparisons
+    .filter(([, before, after]) => before !== after)
+    .map(([label, before, after]) => ({ label, before, after }));
+}
+
+function buildBodyDiff(before: string, after: string): DiffLine[] {
+  const beforeLines = normalizeMarkdownLineEndings(before).split("\n");
+  const afterLines = normalizeMarkdownLineEndings(after).split("\n");
+  const lengths = Array.from({ length: beforeLines.length + 1 }, () => Array(afterLines.length + 1).fill(0));
+
+  for (let beforeIndex = beforeLines.length - 1; beforeIndex >= 0; beforeIndex -= 1) {
+    for (let afterIndex = afterLines.length - 1; afterIndex >= 0; afterIndex -= 1) {
+      lengths[beforeIndex][afterIndex] =
+        beforeLines[beforeIndex] === afterLines[afterIndex]
+          ? lengths[beforeIndex + 1][afterIndex + 1] + 1
+          : Math.max(lengths[beforeIndex + 1][afterIndex], lengths[beforeIndex][afterIndex + 1]);
+    }
+  }
+
+  const diff: DiffLine[] = [];
+  let beforeIndex = 0;
+  let afterIndex = 0;
+
+  while (beforeIndex < beforeLines.length && afterIndex < afterLines.length) {
+    if (beforeLines[beforeIndex] === afterLines[afterIndex]) {
+      beforeIndex += 1;
+      afterIndex += 1;
+      continue;
+    }
+
+    if (lengths[beforeIndex + 1][afterIndex] >= lengths[beforeIndex][afterIndex + 1]) {
+      diff.push({ kind: "remove", text: beforeLines[beforeIndex] });
+      beforeIndex += 1;
+      continue;
+    }
+
+    diff.push({ kind: "add", text: afterLines[afterIndex] });
+    afterIndex += 1;
+  }
+
+  while (beforeIndex < beforeLines.length) {
+    diff.push({ kind: "remove", text: beforeLines[beforeIndex] });
+    beforeIndex += 1;
+  }
+
+  while (afterIndex < afterLines.length) {
+    diff.push({ kind: "add", text: afterLines[afterIndex] });
+    afterIndex += 1;
+  }
+
+  return diff;
+}
+
 function formatPublishDate(dateString: string) {
   const date = new Date(dateString);
 
@@ -212,11 +371,14 @@ function formatPublishDate(dateString: string) {
 }
 
 export function WritePage() {
-  const [form, setForm] = useState<WriteFormState>(createEmptyFormState);
+  const newPostTemplateRef = useRef<WriteFormState>(createEmptyFormState());
+  const skipNextAutosaveCleanupRef = useRef(false);
+  const [form, setForm] = useState<WriteFormState>(newPostTemplateRef.current);
   const [posts, setPosts] = useState<PostSummary[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [editorLoading, setEditorLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [batchAction, setBatchAction] = useState<BatchPostsAction | null>(null);
   const [actingSlug, setActingSlug] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -226,9 +388,36 @@ export function WritePage() {
   const [accessMessage, setAccessMessage] = useState<string | null>(null);
   const [importedFileName, setImportedFileName] = useState<string | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>([]);
+  const [listFilter, setListFilter] = useState<"all" | "published" | "draft">("all");
+  const [originalPost, setOriginalPost] = useState<Post | null>(null);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [autosaveSavedAt, setAutosaveSavedAt] = useState<string | null>(null);
 
   const isEditing = selectedSlug !== null;
   const featuredPost = posts.find((post) => post.featured) ?? null;
+  const draftCount = posts.filter((post) => post.draft).length;
+  const publishedCount = posts.length - draftCount;
+  const editorKey = selectedSlug ?? "new";
+  const currentAutosaveKey = autosaveStorageKey(editorKey);
+  const baselineForm = originalPost ? formStateFromPost(originalPost) : newPostTemplateRef.current;
+  const hasUnsavedChanges = formSignature(form) !== formSignature(baselineForm);
+  const hasUnpublishedChanges = form.draft && hasUnsavedChanges;
+  const visiblePosts = posts.filter((post) => {
+    if (listFilter === "draft") {
+      return post.draft;
+    }
+
+    if (listFilter === "published") {
+      return !post.draft;
+    }
+
+    return true;
+  });
+  const allVisibleSelected = visiblePosts.length > 0 && visiblePosts.every((post) => selectedSlugs.includes(post.slug));
+  const metadataChanges = originalPost ? buildMetadataChanges(originalPost, form) : [];
+  const bodyDiff = originalPost ? buildBodyDiff(originalPost.body, form.body).slice(0, 120) : [];
+  const hasPendingDiff = metadataChanges.length > 0 || bodyDiff.length > 0;
 
   useEffect(() => {
     const storedToken = window.sessionStorage.getItem(writeTokenStorageKey);
@@ -250,12 +439,93 @@ export function WritePage() {
     void loadPosts();
   }, [accessVerified]);
 
+  useEffect(() => {
+    if (!accessVerified) {
+      setAutosaveStatus("idle");
+      setAutosaveSavedAt(null);
+      return;
+    }
+
+    setAutosaveStatus("idle");
+    setAutosaveSavedAt(null);
+
+    const snapshot = readAutosaveSnapshot(currentAutosaveKey);
+    if (!snapshot) {
+      return;
+    }
+
+    if (formSignature(snapshot.form) === formSignature(baselineForm)) {
+      clearAutosaveSnapshot(currentAutosaveKey);
+      return;
+    }
+
+    skipNextAutosaveCleanupRef.current = true;
+    setForm(snapshot.form);
+    setImportedFileName(snapshot.importedFileName);
+    setAutosaveStatus("saved");
+    setAutosaveSavedAt(snapshot.savedAt);
+    setSuccessMessage("已恢复本地自动保存内容。未保存变更仍会在离开页面前提醒。");
+  }, [accessVerified, currentAutosaveKey, selectedSlug, originalPost]);
+
+  useEffect(() => {
+    if (!accessVerified) {
+      return;
+    }
+
+    if (!hasUnsavedChanges) {
+      if (skipNextAutosaveCleanupRef.current) {
+        skipNextAutosaveCleanupRef.current = false;
+        return;
+      }
+
+      clearAutosaveSnapshot(currentAutosaveKey);
+      setAutosaveStatus("idle");
+      setAutosaveSavedAt(null);
+      return;
+    }
+
+    setAutosaveStatus("saving");
+    const snapshot: AutosaveSnapshot = {
+      form,
+      importedFileName,
+      savedAt: new Date().toISOString(),
+    };
+
+    const timer = window.setTimeout(() => {
+      writeAutosaveSnapshot(currentAutosaveKey, snapshot);
+      setAutosaveStatus("saved");
+      setAutosaveSavedAt(snapshot.savedAt);
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [accessVerified, currentAutosaveKey, form, importedFileName, hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (!accessVerified || !hasUnsavedChanges) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [accessVerified, hasUnsavedChanges]);
+
   async function loadPosts() {
     setPostsLoading(true);
 
     try {
-      const items = await fetchPosts();
+      const items = await fetchAdminPosts(writeToken.trim());
       setPosts(items);
+      setSelectedSlugs((current) => current.filter((slug) => items.some((post) => post.slug === slug)));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "文章列表加载失败。");
     } finally {
@@ -270,18 +540,66 @@ export function WritePage() {
     }));
   }
 
-  function resetEditor() {
+  function confirmDiscardUnsavedChanges(actionLabel: string) {
+    if (!hasUnsavedChanges) {
+      return true;
+    }
+
+    const reminder = hasUnpublishedChanges
+      ? "当前草稿有未保存且未发布的变更。"
+      : "当前编辑器有未保存变更。";
+
+    return window.confirm(`${reminder} 确认继续${actionLabel}吗？`);
+  }
+
+  function resetEditor(options?: { preserveCurrentAutosave?: boolean }) {
+    if (!options?.preserveCurrentAutosave) {
+      clearAutosaveSnapshot(currentAutosaveKey);
+    }
+
+    newPostTemplateRef.current = createEmptyFormState();
     setSelectedSlug(null);
-    setForm(createEmptyFormState());
+    setOriginalPost(null);
+    setForm(newPostTemplateRef.current);
     setImportedFileName(null);
     setError(null);
     setSuccessMessage(null);
+    setAutosaveStatus("idle");
+    setAutosaveSavedAt(null);
   }
 
   function selectEditorPost(post: Post) {
     setSelectedSlug(post.slug);
+    setOriginalPost(post);
     setForm(formStateFromPost(post));
     setImportedFileName(null);
+  }
+
+  function toggleSelectedSlug(slug: string) {
+    setSelectedSlugs((current) =>
+      current.includes(slug) ? current.filter((entry) => entry !== slug) : [...current, slug],
+    );
+  }
+
+  function toggleSelectAllVisible() {
+    if (allVisibleSelected) {
+      setSelectedSlugs((current) => current.filter((slug) => !visiblePosts.some((post) => post.slug === slug)));
+      return;
+    }
+
+    setSelectedSlugs((current) => {
+      const next = new Set(current);
+      visiblePosts.forEach((post) => next.add(post.slug));
+      return Array.from(next);
+    });
+  }
+
+  function updateDraftState(draft: boolean) {
+    setForm((current) => ({
+      ...current,
+      draft,
+      featured: draft ? false : current.featured,
+    }));
   }
 
   async function handleVerifyAccess(tokenOverride?: string, silent = false) {
@@ -318,12 +636,16 @@ export function WritePage() {
   }
 
   function clearWriteAccess() {
+    if (!confirmDiscardUnsavedChanges("退出管理端")) {
+      return;
+    }
+
     window.sessionStorage.removeItem(writeTokenStorageKey);
     setWriteToken("");
     setAccessVerified(false);
     setAccessMessage("已清除当前浏览器会话里的写作令牌。");
     setPosts([]);
-    resetEditor();
+    resetEditor({ preserveCurrentAutosave: true });
   }
 
   async function handleMarkdownImport(event: ChangeEvent<HTMLInputElement>) {
@@ -370,6 +692,7 @@ export function WritePage() {
           typeof frontmatter.accent === "string" && frontmatter.accent.trim().length > 0
             ? frontmatter.accent.trim()
             : current.accent,
+        draft: typeof frontmatter.draft === "boolean" ? frontmatter.draft : current.draft,
         featured: typeof frontmatter.featured === "boolean" ? frontmatter.featured : current.featured,
         body: resolvedBody || current.body,
       }));
@@ -382,12 +705,16 @@ export function WritePage() {
   }
 
   async function handleEditPost(slug: string) {
+    if (slug !== selectedSlug && !confirmDiscardUnsavedChanges("切换到另一篇文章")) {
+      return;
+    }
+
     setEditorLoading(true);
     setError(null);
     setSuccessMessage(null);
 
     try {
-      const post = await fetchPost(slug);
+      const post = await fetchAdminPost(slug, writeToken.trim());
       selectEditorPost(post);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "文章详情加载失败。");
@@ -432,8 +759,10 @@ export function WritePage() {
       if (selectedSlug === updatedPost.slug) {
         setForm((current) => ({
           ...current,
+          draft: updatedPost.draft,
           featured: updatedPost.featured,
         }));
+        setOriginalPost(updatedPost);
       }
 
       setSuccessMessage(updatedPost.featured ? `已将《${updatedPost.title}》设为首页精选。` : `已取消《${updatedPost.title}》的首页精选。`);
@@ -441,6 +770,58 @@ export function WritePage() {
       setError(requestError instanceof Error ? requestError.message : "更新置顶状态失败。");
     } finally {
       setActingSlug(null);
+    }
+  }
+
+  async function handleBatchAction(action: BatchPostsAction) {
+    if (selectedSlugs.length === 0) {
+      return;
+    }
+
+    if (selectedSlug && selectedSlugs.includes(selectedSlug) && !confirmDiscardUnsavedChanges(`执行批量${batchActionLabels[action]}`)) {
+      return;
+    }
+
+    if (action === "delete" && !window.confirm(`确认批量删除 ${selectedSlugs.length} 篇文章吗？此操作无法撤销。`)) {
+      return;
+    }
+
+    setBatchAction(action);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await batchPosts(action, selectedSlugs, writeToken.trim());
+
+      if (selectedSlug && selectedSlugs.includes(selectedSlug)) {
+        if (action === "delete") {
+          resetEditor();
+        } else {
+          const nextDraft = action === "draft";
+          setForm((current) => ({
+            ...current,
+            draft: nextDraft,
+            featured: nextDraft ? false : current.featured,
+          }));
+          setOriginalPost((current) =>
+            current
+              ? {
+                  ...current,
+                  draft: nextDraft,
+                  featured: nextDraft ? false : current.featured,
+                }
+              : current,
+          );
+        }
+      }
+
+      await loadPosts();
+      setSelectedSlugs([]);
+      setSuccessMessage(`已对 ${response.affected} 篇文章执行${batchActionLabels[action]}操作。`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "批量操作失败。");
+    } finally {
+      setBatchAction(null);
     }
   }
 
@@ -472,6 +853,7 @@ export function WritePage() {
           .filter(Boolean),
         author: form.author || undefined,
         publishedAt: form.publishedAt || undefined,
+        draft: form.draft,
         featured: form.featured,
         accent: form.accent || undefined,
         body: form.body,
@@ -481,8 +863,14 @@ export function WritePage() {
         ? await updatePost(selectedSlug, payload, writeToken.trim())
         : await createPost(payload, writeToken.trim());
 
+      clearAutosaveSnapshot(currentAutosaveKey);
+      clearAutosaveSnapshot(autosaveStorageKey(post.slug));
+
       selectEditorPost(post);
       await loadPosts();
+      setSelectedSlugs([]);
+      setAutosaveStatus("idle");
+      setAutosaveSavedAt(null);
       setSuccessMessage(isEditing ? `已更新《${post.title}》。` : `已创建《${post.title}》。`);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : isEditing ? "更新失败，请稍后再试。" : "发布失败，请稍后再试。");
@@ -580,23 +968,23 @@ export function WritePage() {
           <CardBody className="gap-2 p-5">
             <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Admin Status</p>
             <p className="text-3xl font-semibold text-[var(--ink)]">已解锁</p>
-            <p className="text-sm leading-7 text-[var(--muted)]">当前浏览器会话已验证，可执行新建、编辑、删除和置顶操作。</p>
+            <p className="text-sm leading-7 text-[var(--muted)]">当前浏览器会话已验证，可执行草稿、批量操作、编辑、删除和置顶操作。</p>
           </CardBody>
         </Card>
 
         <Card className="border border-black/10 bg-[var(--panel-strong)] shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
           <CardBody className="gap-2 p-5">
-            <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Post Count</p>
-            <p className="text-3xl font-semibold text-[var(--ink)]">{posts.length}</p>
-            <p className="text-sm leading-7 text-[var(--muted)]">管理端现在直接列出全部文章，方便按时间线维护而不是只做一次性发布。</p>
+            <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Published</p>
+            <p className="text-3xl font-semibold text-[var(--ink)]">{publishedCount}</p>
+            <p className="text-sm leading-7 text-[var(--muted)]">已发布内容继续走公开列表与详情页，保持访客视角稳定。</p>
           </CardBody>
         </Card>
 
         <Card className="border border-black/10 bg-[var(--panel-strong)] shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
           <CardBody className="gap-2 p-5">
-            <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Featured</p>
-            <p className="text-xl font-semibold text-[var(--ink)]">{featuredPost ? featuredPost.title : "未设置"}</p>
-            <p className="text-sm leading-7 text-[var(--muted)]">首页精选现在按单篇置顶处理；新的置顶会自动取消旧的置顶。</p>
+            <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Drafts</p>
+            <p className="text-3xl font-semibold text-[var(--ink)]">{draftCount}</p>
+            <p className="text-sm leading-7 text-[var(--muted)]">草稿只在管理端可见，适合先整理内容再决定是否发布。</p>
           </CardBody>
         </Card>
       </section>
@@ -609,10 +997,10 @@ export function WritePage() {
             <div className="flex w-full flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl space-y-4">
                 <h1 className="display-type text-4xl leading-none text-[var(--ink)] sm:text-5xl">
-                  {isEditing ? "编辑现有文章" : "发布新文章"}
+                  {isEditing ? "编辑现有文章" : "新建后台内容"}
                 </h1>
                 <p className="max-w-2xl text-base leading-8 text-[var(--muted)] sm:text-lg">
-                  后台现在不只是发布表单。你可以在右侧选中一篇文章后回填表单继续编辑，也可以直接删除或切换首页精选。
+                  后台现在不只是发布表单。你可以在右侧按发布状态筛选、批量操作多篇文章，选中单篇后继续编辑，还能在保存前看元数据和正文 diff；未保存内容会自动保存到本地。
                 </p>
               </div>
 
@@ -621,11 +1009,15 @@ export function WritePage() {
                   type="button"
                   radius="full"
                   variant={isEditing ? "bordered" : "solid"}
-                  onPress={resetEditor}
+                  onPress={() => {
+                    if (confirmDiscardUnsavedChanges("开始新建文章")) {
+                      resetEditor();
+                    }
+                  }}
                 >
                   新建文章
                 </Button>
-                {selectedSlug ? (
+                {selectedSlug && !form.draft ? (
                   <Link
                     to={`/posts/${selectedSlug}`}
                     className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
@@ -633,6 +1025,7 @@ export function WritePage() {
                     预览正文
                   </Link>
                 ) : null}
+                {selectedSlug && form.draft ? <Chip color="warning" variant="flat">草稿仅管理端可见</Chip> : null}
                 <Button type="button" radius="full" variant="light" onPress={clearWriteAccess}>
                   退出管理端
                 </Button>
@@ -645,9 +1038,25 @@ export function WritePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Chip color="secondary" variant="flat">当前会话已验证</Chip>
                 <Chip color="warning" variant="flat">管理令牌已载入</Chip>
+                {featuredPost ? <Chip variant="bordered">当前精选：{featuredPost.title}</Chip> : null}
                 {isEditing ? <Chip variant="bordered">编辑模式</Chip> : <Chip variant="bordered">新建模式</Chip>}
+                {hasUnsavedChanges ? <Chip color="warning" variant="flat">未保存变更</Chip> : null}
+                {hasUnpublishedChanges ? <Chip variant="bordered">未发布变更</Chip> : null}
               </div>
-              <p className="mt-3">{accessMessage ?? "当前会话会自动附带 Bearer token，无需在每次提交前重复验证。"}</p>
+              <p className="mt-3">
+                {hasUnsavedChanges
+                  ? hasUnpublishedChanges
+                    ? "当前草稿有未保存且未发布的变更；继续编辑时会自动保存到本地，离开页面前也会提醒。"
+                    : "当前文章有未保存变更；继续编辑时会自动保存到本地，离开页面前也会提醒。"
+                  : accessMessage ?? "当前会话会自动附带 Bearer token，无需在每次提交前重复验证。"}
+              </p>
+              <p className="text-xs leading-6 text-[var(--muted)]">
+                {autosaveStatus === "saving"
+                  ? "自动保存中..."
+                  : autosaveSavedAt
+                    ? `本地自动保存时间：${formatAutosaveTime(autosaveSavedAt)}`
+                    : "当前内容与最近一次保存保持一致。"}
+              </p>
             </div>
 
             {editorLoading ? (
@@ -742,11 +1151,30 @@ export function WritePage() {
                 <label className="flex items-center gap-3 rounded-[1rem] border border-black/10 bg-white/70 px-4 py-3 text-sm text-[var(--ink)]">
                   <input
                     type="checkbox"
+                    checked={form.draft}
+                    onChange={(event) => {
+                      updateDraftState(event.target.checked);
+                    }}
+                  />
+                  保持草稿
+                </label>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
+                <label className="flex items-center gap-3 rounded-[1rem] border border-black/10 bg-white/70 px-4 py-3 text-sm text-[var(--ink)]">
+                  <input
+                    type="checkbox"
                     checked={form.featured}
+                    disabled={form.draft}
                     onChange={(event) => updateField("featured", event.target.checked)}
                   />
                   首页精选
                 </label>
+                <div className="rounded-[1rem] border border-black/10 bg-white/70 px-4 py-3 text-sm leading-7 text-[var(--muted)]">
+                  {form.draft
+                    ? "草稿不会出现在公开页面里，且不能被设为首页精选。"
+                    : "取消草稿后，这篇文章会进入公开列表；若勾选首页精选，会自动替换当前精选。"}
+                </div>
               </div>
 
               <div className="rounded-[1.5rem] border border-black/10 bg-white/70 p-4 text-sm leading-7 text-[var(--muted)]">
@@ -778,6 +1206,54 @@ export function WritePage() {
                 />
               </label>
 
+              {isEditing && originalPost && hasPendingDiff ? (
+                <Card className="border border-black/10 bg-white/65 shadow-none">
+                  <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
+                    <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Diff Preview</p>
+                    <h2 className="display-type text-3xl text-[var(--ink)]">编辑前后 diff</h2>
+                  </CardHeader>
+                  <CardBody className="gap-4 px-5 pb-5 pt-4">
+                    {metadataChanges.length > 0 ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {metadataChanges.map((change) => (
+                          <div key={change.label} className="rounded-[1.25rem] border border-black/10 bg-white/75 p-4 text-sm leading-7 text-[var(--muted)]">
+                            <p className="font-medium text-[var(--ink)]">{change.label}</p>
+                            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted)]">Before</p>
+                            <p>{change.before || "(空)"}</p>
+                            <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted)]">After</p>
+                            <p>{change.after || "(空)"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {bodyDiff.length > 0 ? (
+                      <div className="rounded-[1.25rem] border border-black/10 bg-white/75 p-4">
+                        <p className="text-sm font-medium text-[var(--ink)]">正文行级 diff</p>
+                        <div className="mt-3 space-y-2 font-mono text-xs leading-6 text-[var(--ink)]">
+                          {bodyDiff.map((line, index) => (
+                            <div
+                              key={`${line.kind}-${index}-${line.text}`}
+                              className={
+                                line.kind === "add"
+                                  ? "rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800"
+                                  : "rounded-lg bg-rose-50 px-3 py-2 text-rose-800"
+                              }
+                            >
+                              <span className="mr-2 inline-block w-4 font-semibold">{line.kind === "add" ? "+" : "-"}</span>
+                              <span>{line.text || " "}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {originalPost && buildBodyDiff(originalPost.body, form.body).length > 120 ? (
+                          <p className="mt-3 text-xs leading-6 text-[var(--muted)]">正文 diff 已截断到前 120 行变更，避免后台页面过长。</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </CardBody>
+                </Card>
+              ) : null}
+
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="submit"
@@ -788,7 +1264,14 @@ export function WritePage() {
                   {submitting ? (isEditing ? "更新中..." : "发布中...") : isEditing ? "保存修改" : "发布到站点"}
                 </Button>
                 {selectedSlug ? (
-                  <Button type="button" radius="full" variant="bordered" onPress={resetEditor}>
+                  <Button
+                    type="button"
+                    radius="full"
+                    variant="bordered"
+                    onPress={() => {
+                      resetEditor();
+                    }}
+                  >
                     取消编辑
                   </Button>
                 ) : null}
@@ -810,20 +1293,76 @@ export function WritePage() {
               <h2 className="display-type text-3xl text-[var(--ink)]">文章列表</h2>
             </CardHeader>
             <CardBody className="gap-4 px-5 pb-5 pt-4">
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" radius="full" variant={listFilter === "all" ? "solid" : "bordered"} onPress={() => setListFilter("all")}>
+                  全部
+                </Button>
+                <Button size="sm" radius="full" variant={listFilter === "published" ? "solid" : "bordered"} onPress={() => setListFilter("published")}>
+                  已发布
+                </Button>
+                <Button size="sm" radius="full" variant={listFilter === "draft" ? "solid" : "bordered"} onPress={() => setListFilter("draft")}>
+                  草稿
+                </Button>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-black/10 bg-white/70 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" radius="full" variant="bordered" onPress={toggleSelectAllVisible} isDisabled={visiblePosts.length === 0 || batchAction !== null}>
+                    {allVisibleSelected ? "取消全选" : `全选当前(${visiblePosts.length})`}
+                  </Button>
+                  <Button
+                    size="sm"
+                    radius="full"
+                    variant="bordered"
+                    isDisabled={selectedSlugs.length === 0 || batchAction !== null}
+                    onPress={() => {
+                      void handleBatchAction("publish");
+                    }}
+                  >
+                    {batchAction === "publish" ? "处理中..." : "批量发布"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    radius="full"
+                    variant="bordered"
+                    color="warning"
+                    isDisabled={selectedSlugs.length === 0 || batchAction !== null}
+                    onPress={() => {
+                      void handleBatchAction("draft");
+                    }}
+                  >
+                    {batchAction === "draft" ? "处理中..." : "批量转草稿"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    radius="full"
+                    variant="light"
+                    color="warning"
+                    isDisabled={selectedSlugs.length === 0 || batchAction !== null}
+                    onPress={() => {
+                      void handleBatchAction("delete");
+                    }}
+                  >
+                    {batchAction === "delete" ? "处理中..." : "批量删除"}
+                  </Button>
+                  {selectedSlugs.length > 0 ? <Chip variant="bordered">已选 {selectedSlugs.length}</Chip> : null}
+                </div>
+              </div>
+
               {postsLoading ? (
                 <div className="flex min-h-40 items-center justify-center rounded-[1.5rem] border border-dashed border-black/10 bg-white/40">
                   <Spinner color="warning" label="正在加载文章列表" labelColor="warning" />
                 </div>
               ) : null}
 
-              {!postsLoading && posts.length === 0 ? (
+              {!postsLoading && visiblePosts.length === 0 ? (
                 <div className="rounded-[1.5rem] border border-black/10 bg-white/70 p-4 text-sm leading-7 text-[var(--muted)]">
-                  还没有文章。可以先从左侧表单发布第一篇，再回到这里继续维护。
+                  当前筛选下没有文章。可以切换筛选条件，或者先从左侧新建一篇草稿。
                 </div>
               ) : null}
 
               {!postsLoading
-                ? posts.map((post) => (
+                ? visiblePosts.map((post) => (
                     <div
                       key={post.slug}
                       className={
@@ -833,16 +1372,25 @@ export function WritePage() {
                       }
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <button type="button" className="text-left" onClick={() => { void handleEditPost(post.slug); }}>
-                          <span className="block text-sm font-semibold text-[var(--ink)]">{post.title}</span>
-                          <span className="mt-1 block text-xs leading-6 text-[var(--muted)]">
-                            {formatPublishDate(post.publishedAt)} · {post.category} · {post.readMinutes} 分钟阅读
-                          </span>
-                        </button>
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded border-black/20"
+                            checked={selectedSlugs.includes(post.slug)}
+                            onChange={() => toggleSelectedSlug(post.slug)}
+                          />
+                          <button type="button" className="text-left" onClick={() => { void handleEditPost(post.slug); }}>
+                            <span className="block text-sm font-semibold text-[var(--ink)]">{post.title}</span>
+                            <span className="mt-1 block text-xs leading-6 text-[var(--muted)]">
+                              {formatPublishDate(post.publishedAt)} · {post.category} · {post.readMinutes} 分钟阅读
+                            </span>
+                          </button>
+                        </div>
 
-                        {post.featured ? (
-                          <Chip size="sm" color="warning" variant="flat">置顶</Chip>
-                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          {post.draft ? <Chip size="sm" variant="bordered">草稿</Chip> : <Chip size="sm" color="secondary" variant="flat">已发布</Chip>}
+                          {post.featured ? <Chip size="sm" color="warning" variant="flat">置顶</Chip> : null}
+                        </div>
                       </div>
 
                       <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{post.summary}</p>
@@ -862,23 +1410,25 @@ export function WritePage() {
                           radius="full"
                           variant={post.featured ? "light" : "bordered"}
                           color="warning"
-                          isDisabled={editorLoading || actingSlug === post.slug || submitting}
+                          isDisabled={post.draft || editorLoading || actingSlug === post.slug || submitting || batchAction !== null}
                           onPress={() => { void handleToggleFeatured(post); }}
                         >
                           {actingSlug === post.slug ? "处理中..." : post.featured ? "取消置顶" : "设为置顶"}
                         </Button>
-                        <Link
-                          to={`/posts/${post.slug}`}
-                          className="inline-flex items-center justify-center rounded-full border border-black/10 px-3 py-1.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90"
-                        >
-                          预览
-                        </Link>
+                        {!post.draft ? (
+                          <Link
+                            to={`/posts/${post.slug}`}
+                            className="inline-flex items-center justify-center rounded-full border border-black/10 px-3 py-1.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90"
+                          >
+                            预览
+                          </Link>
+                        ) : null}
                         <Button
                           size="sm"
                           radius="full"
                           variant="light"
                           color="warning"
-                          isDisabled={editorLoading || actingSlug === post.slug || submitting}
+                          isDisabled={editorLoading || actingSlug === post.slug || submitting || batchAction !== null}
                           onPress={() => { void handleDeletePost(post); }}
                         >
                           删除
@@ -909,9 +1459,10 @@ export function WritePage() {
               <h2 className="display-type text-3xl text-[var(--ink)]">后台操作</h2>
             </CardHeader>
             <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm leading-7 text-[var(--muted)]">
-              <p>1. 右侧选一篇文章后，正文和元数据会自动回填到左侧表单。</p>
-              <p>2. 删除会直接操作数据库，所以保留了确认弹窗，不做静默删除。</p>
-              <p>3. 首页置顶按单篇生效；设新置顶时，旧置顶会自动取消。</p>
+              <p>1. 新建内容默认先走草稿，确认后再取消草稿公开发布。</p>
+              <p>2. 右侧支持多选批量发布、批量转草稿和批量删除。</p>
+              <p>3. 编辑现有文章时，左侧会显示元数据变化和正文行级 diff。</p>
+              <p>4. 首页置顶按单篇生效；草稿不能置顶，设新置顶时旧置顶会自动取消。</p>
             </CardBody>
           </Card>
         </aside>

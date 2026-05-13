@@ -8,6 +8,7 @@ export interface PostSummary {
   author: string;
   publishedAt: string;
   readMinutes: number;
+  draft: boolean;
   featured: boolean;
   accent: string;
 }

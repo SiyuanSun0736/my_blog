@@ -6,6 +6,13 @@ interface WriteAccessResponse {
   message: string;
 }
 
+interface BatchPostsResponse {
+  message: string;
+  affected: number;
+}
+
+export type BatchPostsAction = "publish" | "draft" | "delete";
+
 export interface CreatePostPayload {
   slug?: string;
   title: string;
@@ -14,6 +21,7 @@ export interface CreatePostPayload {
   tags?: string[];
   author?: string;
   publishedAt?: string;
+  draft?: boolean;
   featured?: boolean;
   accent?: string;
   body: string;
@@ -57,6 +65,18 @@ export function fetchPost(slug: string): Promise<Post> {
   return request<Post>(`/posts/${slug}`);
 }
 
+export function fetchAdminPosts(writeToken: string): Promise<PostSummary[]> {
+  return request<PostSummary[]>("/admin/posts", {
+    headers: writeAccessHeaders(writeToken),
+  });
+}
+
+export function fetchAdminPost(slug: string, writeToken: string): Promise<Post> {
+  return request<Post>(`/admin/posts/${slug}`, {
+    headers: writeAccessHeaders(writeToken),
+  });
+}
+
 export function verifyWriteAccess(writeToken: string): Promise<WriteAccessResponse> {
   return request<WriteAccessResponse>("/write-access", {
     headers: writeAccessHeaders(writeToken),
@@ -90,6 +110,18 @@ export function setPostFeatured(slug: string, featured: boolean, writeToken: str
   return request<Post>(`/posts/${slug}/featured`, {
     method: "PATCH",
     body: JSON.stringify({ featured }),
+    headers: writeAccessHeaders(writeToken),
+  });
+}
+
+export function batchPosts(
+  action: BatchPostsAction,
+  slugs: string[],
+  writeToken: string,
+): Promise<BatchPostsResponse> {
+  return request<BatchPostsResponse>("/admin/posts/batch", {
+    method: "POST",
+    body: JSON.stringify({ action, slugs }),
     headers: writeAccessHeaders(writeToken),
   });
 }

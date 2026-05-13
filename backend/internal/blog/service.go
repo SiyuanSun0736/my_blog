@@ -19,8 +19,10 @@ import (
 const postsCollectionName = "posts"
 
 var (
-	ErrInvalidPost  = errors.New("invalid post")
-	ErrPostNotFound = errors.New("post not found")
+	ErrInvalidPost        = errors.New("invalid post")
+	ErrPostNotFound       = errors.New("post not found")
+	ErrInvalidBatchAction = errors.New("invalid batch action")
+	ErrDraftCannotFeature = errors.New("draft post cannot be featured")
 )
 
 type Service struct {
@@ -52,9 +54,22 @@ func (s *Service) Close() {
 }
 
 func (s *Service) ListPosts(ctx context.Context) ([]Post, error) {
+	return s.listPosts(ctx, false)
+}
+
+func (s *Service) ListAdminPosts(ctx context.Context) ([]Post, error) {
+	return s.listPosts(ctx, true)
+}
+
+func (s *Service) listPosts(ctx context.Context, includeDrafts bool) ([]Post, error) {
+	filter := bson.D{{Key: "draft", Value: bson.D{{Key: "$ne", Value: true}}}}
+	if includeDrafts {
+		filter = bson.D{}
+	}
+
 	cursor, err := s.collection.Find(
 		ctx,
-		bson.D{},
+		filter,
 		options.Find().
 			SetProjection(bson.D{{Key: "body", Value: 0}}).
 			SetSort(bson.D{{Key: "publishedAt", Value: -1}, {Key: "id", Value: -1}}),
@@ -78,9 +93,21 @@ func (s *Service) ListPosts(ctx context.Context) ([]Post, error) {
 }
 
 func (s *Service) GetPostBySlug(ctx context.Context, slug string) (Post, bool, error) {
-	var post Post
+	return s.getPostBySlug(ctx, slug, false)
+}
 
-	err := s.collection.FindOne(ctx, bson.D{{Key: "slug", Value: slug}}).Decode(&post)
+func (s *Service) GetAdminPostBySlug(ctx context.Context, slug string) (Post, bool, error) {
+	return s.getPostBySlug(ctx, slug, true)
+}
+
+func (s *Service) getPostBySlug(ctx context.Context, slug string, includeDrafts bool) (Post, bool, error) {
+	var post Post
+	filter := bson.D{{Key: "slug", Value: slug}}
+	if !includeDrafts {
+		filter = append(filter, bson.E{Key: "draft", Value: bson.D{{Key: "$ne", Value: true}}})
+	}
+
+	err := s.collection.FindOne(ctx, filter).Decode(&post)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return Post{}, false, nil
@@ -118,6 +145,7 @@ func (s *Service) CreatePost(ctx context.Context, input CreatePostInput) (Post, 
 		Author:      normalized.Author,
 		PublishedAt: normalized.PublishedAt,
 		ReadMinutes: estimateReadMinutes(normalized.Body),
+		Draft:       normalized.Draft,
 		Featured:    normalized.Featured,
 		Accent:      normalized.Accent,
 		Body:        normalized.Body,
@@ -137,7 +165,7 @@ func (s *Service) CreatePost(ctx context.Context, input CreatePostInput) (Post, 
 }
 
 func (s *Service) UpdatePost(ctx context.Context, currentSlug string, input CreatePostInput) (Post, error) {
-	existingPost, found, err := s.GetPostBySlug(ctx, currentSlug)
+	existingPost, found, err := s.GetAdminPostBySlug(ctx, currentSlug)
 	if err != nil {
 		return Post{}, err
 	}
@@ -166,6 +194,7 @@ func (s *Service) UpdatePost(ctx context.Context, currentSlug string, input Crea
 		Author:      normalized.Author,
 		PublishedAt: normalized.PublishedAt,
 		ReadMinutes: estimateReadMinutes(normalized.Body),
+		Draft:       normalized.Draft,
 		Featured:    normalized.Featured,
 		Accent:      normalized.Accent,
 		Body:        normalized.Body,
@@ -203,13 +232,17 @@ func (s *Service) DeletePost(ctx context.Context, slug string) error {
 }
 
 func (s *Service) SetPostFeatured(ctx context.Context, slug string, featured bool) (Post, error) {
-	post, found, err := s.GetPostBySlug(ctx, slug)
+	post, found, err := s.GetAdminPostBySlug(ctx, slug)
 	if err != nil {
 		return Post{}, err
 	}
 
 	if !found {
 		return Post{}, ErrPostNotFound
+	}
+
+	if post.Draft && featured {
+		return Post{}, ErrDraftCannotFeature
 	}
 
 	if featured {
@@ -233,6 +266,49 @@ func (s *Service) SetPostFeatured(ctx context.Context, slug string, featured boo
 
 	post.Featured = featured
 	return post, nil
+}
+
+func (s *Service) BatchPosts(ctx context.Context, action string, slugs []string) (int64, error) {
+	normalizedSlugs := normalizeSlugs(slugs)
+	if len(normalizedSlugs) == 0 {
+		return 0, ErrInvalidBatchAction
+	}
+
+	filter := bson.D{{Key: "slug", Value: bson.D{{Key: "$in", Value: normalizedSlugs}}}}
+
+	switch action {
+	case "publish":
+		result, err := s.collection.UpdateMany(
+			ctx,
+			filter,
+			bson.D{{Key: "$set", Value: bson.D{{Key: "draft", Value: false}}}},
+		)
+		if err != nil {
+			return 0, err
+		}
+
+		return result.MatchedCount, nil
+	case "draft":
+		result, err := s.collection.UpdateMany(
+			ctx,
+			filter,
+			bson.D{{Key: "$set", Value: bson.D{{Key: "draft", Value: true}, {Key: "featured", Value: false}}}},
+		)
+		if err != nil {
+			return 0, err
+		}
+
+		return result.MatchedCount, nil
+	case "delete":
+		result, err := s.collection.DeleteMany(ctx, filter)
+		if err != nil {
+			return 0, err
+		}
+
+		return result.DeletedCount, nil
+	default:
+		return 0, ErrInvalidBatchAction
+	}
 }
 
 func (s *Service) ReplaceAllPosts(ctx context.Context, inputs []CreatePostInput) ([]Post, error) {
@@ -396,7 +472,8 @@ func normalizeCreatePostInput(input CreatePostInput) (CreatePostInput, error) {
 		Tags:        tags,
 		Author:      fallback(strings.TrimSpace(input.Author), "Wanderlust"),
 		PublishedAt: publishedAt,
-		Featured:    input.Featured,
+		Draft:       input.Draft,
+		Featured:    input.Featured && !input.Draft,
 		Accent:      fallback(strings.TrimSpace(input.Accent), "linear-gradient(135deg, #0f766e 0%, #f59e0b 100%)"),
 		Body:        body,
 	}, nil
@@ -490,4 +567,25 @@ func fallback(value string, defaultValue string) string {
 	}
 
 	return value
+}
+
+func normalizeSlugs(slugs []string) []string {
+	seen := make(map[string]struct{}, len(slugs))
+	normalized := make([]string, 0, len(slugs))
+
+	for _, slug := range slugs {
+		trimmedSlug := strings.TrimSpace(slug)
+		if trimmedSlug == "" {
+			continue
+		}
+
+		if _, exists := seen[trimmedSlug]; exists {
+			continue
+		}
+
+		seen[trimmedSlug] = struct{}{}
+		normalized = append(normalized, trimmedSlug)
+	}
+
+	return normalized
 }

@@ -7,6 +7,7 @@ import { PostCard } from "../components/PostCard";
 
 const POSTS_PER_PAGE = 2;
 const GITHUB_PROFILE_URL = "https://github.com/SiyuanSun0736";
+const AVATAR_URL = "/profile-avatar.jpg";
 
 export function HomePage() {
   const [posts, setPosts] = useState<PostSummary[]>([]);
@@ -162,13 +163,13 @@ export function HomePage() {
                 Engineering Log / Compiler / Perf / Deep Learning / Build / Kubernetes
               </p>
               <h1 className="display-type text-4xl leading-none text-[var(--ink)] sm:text-5xl lg:text-6xl">
-                Wanderlust
+                WanderlustBlog
               </h1>
               <p className="max-w-2xl text-base leading-8 text-[var(--muted)] sm:text-lg">
                 记录编译器、性能和系统工程里的真实工作流。
               </p>
               <p className="max-w-2xl text-base leading-8 text-[var(--muted)] sm:text-lg">
-                这里主要写编译器实现、perf 火焰图、深度学习训练里的工程细节、automake 和 make 脚本，以及 Kubernetes 上线与排障。内容优先级永远高于人设包装。
+                这里主要写编译器实现、perf 火焰图、深度学习训练里的工程细节、automake 和 make 脚本，以及 Kubernetes 上线与排障。
               </p>
             </div>
           </CardHeader>
@@ -240,9 +241,33 @@ export function HomePage() {
 
         <div className="grid gap-6">
           <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
-            <CardHeader className="flex flex-col items-start gap-2 px-6 pb-0 pt-6">
-              <p className="font-mono text-sm tracking-[0.18em] text-[var(--muted)]">REPOSITORY</p>
-              <h2 className="display-type text-3xl text-[var(--ink)]">工程入口</h2>
+            <CardHeader className="flex flex-col items-start gap-4 px-6 pb-0 pt-6">
+              <p className="font-mono text-sm tracking-[0.18em] text-[var(--muted)]">PROFILE</p>
+              <div className="grid w-full gap-5 sm:grid-cols-[144px_minmax(0,1fr)] sm:items-start">
+                <div className="aspect-square overflow-hidden rounded-[2rem] border-2 border-black shadow-[8px_8px_0_rgba(36,24,15,0.9)]">
+                  <img
+                    src={AVATAR_URL}
+                    alt="Wanderlust 的头像"
+                    className="h-full w-full object-cover object-center"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <h2 className="display-type text-3xl text-[var(--ink)] sm:text-4xl">Wanderlust</h2>
+                    <p className="text-sm leading-7 text-[var(--muted)]">
+                      主要记录编译器、性能分析、深度学习工程和系统维护的相关项目和笔记。
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Chip color="secondary" variant="flat">Compiler</Chip>
+                    <Chip color="warning" variant="flat">Perf</Chip>
+                    <Chip variant="bordered">Deep Learning</Chip>
+                    <Chip variant="bordered">Kubernetes</Chip>
+                  </div>
+                </div>
+              </div>
             </CardHeader>
             <CardBody className="gap-4 px-6 pb-6 pt-5">
               <div className="rounded-[1.5rem] border border-black/10 bg-white/75 p-5 text-sm leading-7 text-[var(--muted)]">
@@ -262,20 +287,20 @@ export function HomePage() {
                     rel="noreferrer"
                     className="inline-flex rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-lg"
                   >
-                    打开仓库
+                    去 GitHub
                   </a>
                   <Link
                     to="/archive"
                     className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
                   >
-                    浏览时间线
+                    看时间线
                   </Link>
                 </div>
               </div>
 
               {featuredPost ? (
                 <div className="rounded-[1.5rem] border border-black/10 bg-[rgba(15,118,110,0.08)] p-5 text-sm leading-7 text-[var(--muted)]">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Current Highlight</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">先读这篇</p>
                   <Link
                     to={`/posts/${featuredPost.slug}`}
                     className="mt-2 block text-xl font-semibold text-[var(--ink)] transition hover:opacity-70"

@@ -22,6 +22,9 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) RegisterRoutes(router gin.IRoutes) {
 	router.GET("/posts", h.listPosts)
 	router.GET("/posts/:slug", h.getPost)
+	router.GET("/admin/posts", h.requireWriteAccess, h.listAdminPosts)
+	router.GET("/admin/posts/:slug", h.requireWriteAccess, h.getAdminPost)
+	router.POST("/admin/posts/batch", h.requireWriteAccess, h.batchPosts)
 	router.GET("/write-access", h.requireWriteAccess, h.confirmWriteAccess)
 	router.POST("/posts", h.requireWriteAccess, h.createPost)
 	router.PUT("/posts/:slug", h.requireWriteAccess, h.updatePost)
@@ -43,6 +46,31 @@ func (h *Handler) getPost(c *gin.Context) {
 	post, found, err := h.service.GetPostBySlug(c.Request.Context(), c.Param("slug"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load post"})
+		return
+	}
+
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"message": "post not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, post)
+}
+
+func (h *Handler) listAdminPosts(c *gin.Context) {
+	posts, err := h.service.ListAdminPosts(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to list admin posts"})
+		return
+	}
+
+	c.JSON(http.StatusOK, posts)
+}
+
+func (h *Handler) getAdminPost(c *gin.Context) {
+	post, found, err := h.service.GetAdminPostBySlug(c.Request.Context(), c.Param("slug"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load admin post"})
 		return
 	}
 
@@ -137,6 +165,11 @@ func (h *Handler) setPostFeatured(c *gin.Context) {
 
 	post, err := h.service.SetPostFeatured(c.Request.Context(), c.Param("slug"), *request.Featured)
 	if err != nil {
+		if err == ErrDraftCannotFeature {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "draft post cannot be featured"})
+			return
+		}
+
 		if err == ErrPostNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"message": "post not found"})
 			return
@@ -147,6 +180,31 @@ func (h *Handler) setPostFeatured(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, post)
+}
+
+func (h *Handler) batchPosts(c *gin.Context) {
+	var request BatchPostsInput
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid batch payload"})
+		return
+	}
+
+	affected, err := h.service.BatchPosts(c.Request.Context(), request.Action, request.Slugs)
+	if err != nil {
+		if err == ErrInvalidBatchAction {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid batch action or empty selection"})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to apply batch operation"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "batch operation applied",
+		"affected": affected,
+	})
 }
 
 func (h *Handler) deletePost(c *gin.Context) {
