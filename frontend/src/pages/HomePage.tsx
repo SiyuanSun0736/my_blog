@@ -403,10 +403,6 @@ export function HomePage() {
                   ))}
                 </div>
               </div>
-
-              <div className="rounded-[1.5rem] border border-black/10 bg-[rgba(15,118,110,0.08)] p-4 text-sm leading-7 text-[var(--muted)]">
-                先用关键词缩到一个技术面，再按栏目回看，是工程博客里最省时间的找法。
-              </div>
             </CardBody>
           </Card>
 

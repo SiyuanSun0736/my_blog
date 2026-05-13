@@ -15,14 +15,17 @@ RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=${BLOG_API_BUILD_P} GOMEMLIMIT=${BLOG_AP
 
 FROM alpine:3.21
 
-RUN adduser -D -u 10001 appuser \
+RUN apk add --no-cache su-exec \
+	&& adduser -D -u 10001 appuser \
 	&& mkdir -p /app/media \
 	&& chown -R appuser:appuser /app
 
 COPY --from=builder /out/blog-api /usr/local/bin/blog-api
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-USER appuser
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["blog-api"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["blog-api"]
