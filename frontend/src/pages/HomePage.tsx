@@ -236,6 +236,22 @@ export function HomePage() {
                 </CardBody>
               </Card>
             </div>
+
+            {featuredPost ? (
+              <div className="rounded-[1.75rem] border border-black/10 bg-[rgba(15,118,110,0.08)] p-5 text-sm leading-7 text-[var(--muted)] sm:p-6">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">先读这篇</p>
+                <Link
+                  to={`/posts/${featuredPost.slug}`}
+                  className="mt-2 block text-2xl font-semibold text-[var(--ink)] transition hover:opacity-70"
+                >
+                  {featuredPost.title}
+                </Link>
+                <p className="mt-3 max-w-3xl">{featuredPost.summary}</p>
+                <p className="mt-4 text-xs leading-6 text-[var(--muted)]">
+                  {formatPublishDate(featuredPost.publishedAt)} · {featuredPost.category} · {featuredPost.readMinutes} 分钟阅读
+                </p>
+              </div>
+            ) : null}
           </CardBody>
         </Card>
 
@@ -297,22 +313,6 @@ export function HomePage() {
                   </Link>
                 </div>
               </div>
-
-              {featuredPost ? (
-                <div className="rounded-[1.5rem] border border-black/10 bg-[rgba(15,118,110,0.08)] p-5 text-sm leading-7 text-[var(--muted)]">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">先读这篇</p>
-                  <Link
-                    to={`/posts/${featuredPost.slug}`}
-                    className="mt-2 block text-xl font-semibold text-[var(--ink)] transition hover:opacity-70"
-                  >
-                    {featuredPost.title}
-                  </Link>
-                  <p className="mt-2">{featuredPost.summary}</p>
-                  <p className="mt-3 text-xs leading-6 text-[var(--muted)]">
-                    {formatPublishDate(featuredPost.publishedAt)} · {featuredPost.category} · {featuredPost.readMinutes} 分钟阅读
-                  </p>
-                </div>
-              ) : null}
             </CardBody>
           </Card>
 

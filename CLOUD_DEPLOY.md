@@ -432,11 +432,16 @@ crontab -l
 ```bash
 cd /你的仓库目录
 
-sudo cp deploy/systemd/wanderlust-cert-renew.service /etc/systemd/system/
-sudo cp deploy/systemd/wanderlust-cert-renew.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now wanderlust-cert-renew.timer
+./scripts/install-cert-renew-timer.sh
 sudo systemctl status wanderlust-cert-renew.timer
+```
+
+如需先检查脚本会生成什么 unit，可先执行：
+
+```bash
+cd /你的仓库目录
+
+./scripts/install-cert-renew-timer.sh --dry-run
 ```
 
 如果你更想用 `cron`，执行：
@@ -524,6 +529,7 @@ export CERTBOT_EMAIL=你的邮箱
 
 - `scripts/deploy-letsencrypt.sh`：首次签发和部署
 - `scripts/renew-letsencrypt.sh`：续期命令
+- `scripts/install-cert-renew-timer.sh`：一键安装并启用 systemd timer
 - `deploy/systemd/wanderlust-cert-renew.service`：systemd service
 - `deploy/systemd/wanderlust-cert-renew.timer`：systemd timer
 - `deploy/cron/wanderlust-cert-renew.cron`：cron 配置

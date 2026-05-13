@@ -209,8 +209,9 @@ export CERTBOT_EMAIL=you@example.com
 cd /home/ssy/web && ./scripts/renew-letsencrypt.sh >> /var/log/wanderlust-certbot.log 2>&1
 ```
 
-仓库里也已经直接生成了可安装文件：
+仓库里也已经直接生成了相关脚本和配置：
 
+- `scripts/install-cert-renew-timer.sh`
 - `deploy/systemd/wanderlust-cert-renew.service`
 - `deploy/systemd/wanderlust-cert-renew.timer`
 - `deploy/cron/wanderlust-cert-renew.cron`
@@ -218,10 +219,14 @@ cd /home/ssy/web && ./scripts/renew-letsencrypt.sh >> /var/log/wanderlust-certbo
 安装 `systemd timer` 的最短路径：
 
 ```bash
-sudo cp deploy/systemd/wanderlust-cert-renew.service /etc/systemd/system/
-sudo cp deploy/systemd/wanderlust-cert-renew.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now wanderlust-cert-renew.timer
+./scripts/install-cert-renew-timer.sh
+sudo systemctl status wanderlust-cert-renew.timer
+```
+
+如果想先预览脚本渲染出的 unit 内容，可以先执行：
+
+```bash
+./scripts/install-cert-renew-timer.sh --dry-run
 ```
 
 如果你更偏向 `cron`，可以直接：

@@ -5,9 +5,34 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
 compose_env_file="${WANDERLUST_DEPLOY_ENV_FILE:-$ROOT_DIR/.env.deploy}"
+lock_dir="${WANDERLUST_CERTBOT_LOCK_DIR:-${TMPDIR:-/tmp}/wanderlust-certbot-renew.lock}"
+
+log() {
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2
+}
+
+cleanup() {
+  rmdir "$lock_dir" >/dev/null 2>&1 || true
+}
 
 if [ ! -f "$compose_env_file" ]; then
-  echo "Deploy compose env file not found: $compose_env_file" >&2
+  log "Deploy compose env file not found: $compose_env_file"
+  exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  log "docker command not found. Install Docker Engine and the Compose plugin first."
+  exit 1
+fi
+
+if ! mkdir "$lock_dir" 2>/dev/null; then
+  log "Another Let's Encrypt renewal run is already in progress: $lock_dir"
+  exit 0
+fi
+trap cleanup EXIT HUP INT TERM
+
+if ! docker compose version >/dev/null 2>&1; then
+  log "docker compose plugin is unavailable."
   exit 1
 fi
 
@@ -34,6 +59,11 @@ compose() {
   docker compose --env-file "$compose_env_file" "$@"
 }
 
+if ! compose --profile certbot config --services | grep -qx 'certbot'; then
+  log "Compose service 'certbot' is not defined."
+  exit 1
+fi
+
 mkdir -p "$letsencrypt_dir" "$webroot_dir"
 
 renew_args="renew --webroot -w /var/www/certbot"
@@ -41,8 +71,12 @@ if [ "$dry_run" = "1" ]; then
   renew_args="$renew_args --dry-run"
 fi
 
-echo "Running certbot renewal with webroot challenge." >&2
+if [ -z "$(compose ps --status running -q blog-web 2>/dev/null || true)" ]; then
+  log "Warning: blog-web is not running. HTTP-01 webroot renewals require a web server to serve $webroot_dir on port 80."
+fi
+
+log "Running certbot renewal with webroot challenge."
 compose --profile certbot run --rm certbot $renew_args
 
-echo "Renewal command finished. If certificates changed, blog-web will reload them automatically within ${BLOG_TLS_RELOAD_INTERVAL_SECONDS:-60} seconds." >&2
-echo "Inspect reload logs with: docker logs wanderlust-web --since 10m" >&2
+log "Renewal command finished. If certificates changed, blog-web will reload them automatically within ${BLOG_TLS_RELOAD_INTERVAL_SECONDS:-60} seconds."
+log "Inspect reload logs with: docker logs wanderlust-web --since 10m"

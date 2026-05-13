@@ -11,6 +11,6 @@
 9. 做一次续期演练：执行 `CERTBOT_DRY_RUN=1 ./scripts/renew-letsencrypt.sh`，确认 Certbot dry-run 可以完成。
 10. 查看重载日志：执行 `docker logs wanderlust-web --since 10m`，确认能看到 TLS watcher 的启动日志与证书指纹日志。
 11. 安装自动续期任务：二选一。
-12. 选择 `systemd`：复制 `deploy/systemd/wanderlust-cert-renew.service` 和 `deploy/systemd/wanderlust-cert-renew.timer` 到 `/etc/systemd/system/`，然后执行 `sudo systemctl daemon-reload && sudo systemctl enable --now wanderlust-cert-renew.timer`。
+12. 选择 `systemd`：在仓库根目录执行 `./scripts/install-cert-renew-timer.sh`，然后用 `sudo systemctl status wanderlust-cert-renew.timer` 确认定时器已启用。
 13. 选择 `cron`：把 `deploy/cron/wanderlust-cert-renew.cron` 追加到 `crontab -e` 或 `/etc/cron.d/`。
 14. 证书续期上线后复查：再次执行 `docker compose --env-file .env.deploy ps`、`docker logs wanderlust-web --since 10m`，确认没有 `nginx reload failed` 或 `Nginx config test failed` 日志。
