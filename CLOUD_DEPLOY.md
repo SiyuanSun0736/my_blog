@@ -8,7 +8,7 @@
 - 当前开发部署主机公网 IP：`47.79.86.69`
 - 当前 VPS 只有 `1GB` 内存，部署和更新默认按低内存模式处理。
 - 当前部署相关脚本默认读取根目录 `.env.deploy`；本地开发继续使用根目录 `.env`。
-- 当前仓库在这台机器上的更新，默认按“先备份数据库，再更新代码，再重建网页和 API，最后验证”的顺序执行。
+- 当前仓库在这台机器上的更新，默认按“先备份数据库，再停止当前服务，再更新代码、重建网页和 API，最后验证”的顺序执行。
 
 ## 1GB VPS 优化
 
@@ -278,7 +278,7 @@ chmod +x scripts/update-deploy.sh
 ./scripts/update-deploy.sh
 ```
 
-这条脚本内部已经固定做了：备份数据库、`git pull --ff-only`、串行 build `blog-api`、串行 build `blog-web`、重启容器、验证文章接口。
+这条脚本内部已经固定做了：备份数据库、停止当前 `mongodb`/`redis`/`blog-api`/`blog-web` 容器、`git pull --ff-only`、串行 build `blog-api`、串行 build `blog-web`、重新启动容器、验证文章接口。
 
 如果你想手动执行，再用下面这套命令：
 
@@ -286,6 +286,7 @@ chmod +x scripts/update-deploy.sh
 cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
+docker compose --env-file .env.deploy stop mongodb redis blog-api blog-web
 git pull --ff-only
 docker compose --env-file .env.deploy build blog-api
 docker compose --env-file .env.deploy build blog-web
@@ -299,6 +300,7 @@ docker logs wanderlust-web --since 10m
 这组命令分别处理的事情是：
 
 - 先备份当前数据库，给回滚留出口
+- 先停止当前 `mongodb`、`redis`、`blog-api` 和 `blog-web`，再进入部署流程，避免云上构建时继续占用运行时内存
 - 拉取最新代码，避免 merge commit 混进服务器更新流程
 - 串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 在构建时同时占用过多内存
 - 重启 `mongodb`、`redis`、`blog-api` 和 `blog-web`，但保留当前 MongoDB 数据卷、Redis 数据卷和图片媒体卷

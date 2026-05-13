@@ -39,18 +39,21 @@ compose_build() {
 echo "[1/6] Backing up MongoDB before update..." >&2
 ./scripts/backup-mongodb.sh
 
-echo "[2/6] Pulling latest code..." >&2
+echo "[2/7] Stopping running containers before deploy..." >&2
+compose stop blog-web blog-api redis mongodb >/dev/null 2>&1 || true
+
+echo "[3/7] Pulling latest code..." >&2
 git pull --ff-only
 
-echo "[3/6] Building API image with deploy low-memory settings..." >&2
+echo "[4/7] Building API image with deploy low-memory settings..." >&2
 compose_build blog-api
 
-echo "[4/6] Building web image with deploy low-memory settings..." >&2
+echo "[5/7] Building web image with deploy low-memory settings..." >&2
 compose_build blog-web
 
-echo "[5/6] Restarting application containers with deploy environment..." >&2
+echo "[6/7] Starting application containers with deploy environment..." >&2
 compose up -d mongodb redis blog-api blog-web
 
-echo "[6/6] Verifying container status and API response..." >&2
+echo "[7/7] Verifying container status and API response..." >&2
 compose ps
 curl -sk "https://127.0.0.1/api/posts" -H "Host: ${primary_domain}"

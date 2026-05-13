@@ -28,7 +28,7 @@
 - 根目录 `.env` 是本地测试默认配置：使用 `localhost`、本地 `certs/` 证书目录，并给 MongoDB / Go build / 前端 build 更宽松的资源参数，适合本地并发构建。
 - 根目录 `.env.deploy` 是部署配置：保留 `wanderlust0736.top`、Let's Encrypt 路径和 `1CPU/1GB` VPS 的低内存参数，部署脚本会显式使用它。
 - `./scripts/up-local.sh` 会按本地环境启动整套 Compose，并保留 Compose 默认并发。
-- `./scripts/update-deploy.sh` 会按部署环境串行备份、拉代码、构建和重启；`./scripts/update-low-memory.sh` 现在只是它的兼容别名。
+- `./scripts/update-deploy.sh` 会按部署环境串行备份、停止当前容器、拉代码、构建和重新启动；`./scripts/update-low-memory.sh` 现在只是它的兼容别名。
 
 ## 本地开发
 
