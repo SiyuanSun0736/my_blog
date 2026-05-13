@@ -9,11 +9,14 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "katex": "^0.16.45",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.30.1",
-    "remark-gfm": "^4.0.1"
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",

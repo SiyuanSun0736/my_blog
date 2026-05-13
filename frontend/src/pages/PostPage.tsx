@@ -1,7 +1,9 @@
 import { Avatar, Card, CardBody, Chip, Divider, Spinner } from "../components/ui";
 import { useEffect, useState } from "react";
+import rehypeKatex from "rehype-katex";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { Link, useParams } from "react-router-dom";
 import { fetchPost, fetchPosts } from "../lib/api";
 import type { Post, PostSummary } from "../types";
@@ -195,7 +197,9 @@ export function PostPage() {
             </div>
 
             <div className="story-prose">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.body}</ReactMarkdown>
+              <ReactMarkdown rehypePlugins={[rehypeKatex]} remarkPlugins={[remarkMath, remarkGfm]}>
+                {post.body}
+              </ReactMarkdown>
             </div>
 
             <Divider />
