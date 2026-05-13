@@ -9,4 +9,6 @@ letsencrypt/
 certbot/
 backups/*
 !backups/README.md
+!backups/latest-mongodb/
+!backups/latest-mongodb/**
 *.log
