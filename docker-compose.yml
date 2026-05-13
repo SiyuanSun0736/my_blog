@@ -16,6 +16,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        BLOG_API_BUILD_GOMEMLIMIT: ${BLOG_API_BUILD_GOMEMLIMIT:-120MiB}
+        BLOG_API_BUILD_GOGC: ${BLOG_API_BUILD_GOGC:-50}
+        BLOG_API_BUILD_P: ${BLOG_API_BUILD_P:-1}
     container_name: wanderlust-api
     depends_on:
       mongodb:
