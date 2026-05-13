@@ -766,15 +766,17 @@ export function WritePage() {
 
     if (!file.type.startsWith("image/")) {
       setImageStatus(null);
-      setError("只能插入图片文件。请重新选择 PNG、JPG、WebP 等图片。");
+	  setError("只能插入图片文件。请重新选择 PNG、JPG、SVG、WebP 等图片。");
       return;
     }
+
+	const shouldAttemptCompression = file.size > maxUploadImageSizeBytes && autoCompressibleImageTypes.has(file.type);
 
     try {
       setUploadingImage(true);
       setError(null);
       setImageStatus(
-        file.size > maxUploadImageSizeBytes ? `图片超过 8MB，正在自动压缩：${formatFileSize(file.size)}` : null,
+	    shouldAttemptCompression ? `图片超过 8MB，正在自动压缩：${formatFileSize(file.size)}` : null,
       );
 
       const preparedImage = await prepareImageForUpload(file, maxUploadImageSizeBytes);
@@ -1475,7 +1477,7 @@ export function WritePage() {
                     <div>
                       <p className="font-medium text-[var(--ink)]">图片工具</p>
                       <p className="text-xs leading-6 text-[var(--muted)]">
-                        支持插入远程图片地址，也支持把本地图片上传到站点的 /media 目录后自动插进 Markdown；超过 8MB 的 JPG、PNG、WebP 会先在浏览器压缩。
+                        支持插入远程图片地址，也支持把本地 JPG、PNG、SVG、GIF、WebP 上传到站点的 /media 目录后自动插进 Markdown；超过 8MB 的 JPG、PNG、WebP 会先在浏览器压缩。
                       </p>
                     </div>
 
@@ -1485,7 +1487,7 @@ export function WritePage() {
                       {uploadingImage ? "处理中..." : "上传本地图片"}
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.svg,image/svg+xml"
                         className="hidden"
                         onChange={handleImageFileInsert}
                       />
@@ -1496,7 +1498,7 @@ export function WritePage() {
                     <Input
                       label="图片地址"
                       labelPlacement="outside"
-                      placeholder="https://example.com/chart.webp 或 /media/2026/05/chart.png"
+                      placeholder="https://example.com/logo.svg 或 /media/2026/05/chart.png"
                       radius="lg"
                       value={imageUrl}
                       onValueChange={setImageUrl}
@@ -1521,7 +1523,7 @@ export function WritePage() {
                   </div>
 
                   <p className="text-xs leading-6 text-[var(--muted)]">
-                    图片会插入到当前光标位置。上传接口会把文件写进站点共享媒体目录，并由 Redis 基于文件指纹做去重；重复上传会直接复用已有路径。GIF 超过 8MB 时仍需先手动压缩。
+                    图片会插入到当前光标位置。上传接口会把文件写进站点共享媒体目录，并由 Redis 基于文件指纹做去重；重复上传会直接复用已有路径。SVG 会按原文件上传；GIF 超过 8MB 时仍需先手动压缩。
                   </p>
 
                   {imageStatus ? <p className="text-xs leading-6 text-emerald-700">{imageStatus}</p> : null}

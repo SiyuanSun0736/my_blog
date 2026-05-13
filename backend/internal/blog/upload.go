@@ -1,8 +1,10 @@
 package blog
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/xml"
 	"errors"
 	"io"
 	"net/http"
@@ -23,10 +25,11 @@ const (
 )
 
 var allowedImageContentTypes = map[string]string{
-	"image/gif":  ".gif",
-	"image/jpeg": ".jpg",
-	"image/png":  ".png",
-	"image/webp": ".webp",
+	"image/gif":     ".gif",
+	"image/jpeg":    ".jpg",
+	"image/png":     ".png",
+	"image/svg+xml": ".svg",
+	"image/webp":    ".webp",
 }
 
 type ImageUploadResponse struct {
@@ -94,15 +97,9 @@ func (h *Handler) uploadImage(c *gin.Context) {
 		return
 	}
 
-	sniffLength := len(data)
-	if sniffLength > 512 {
-		sniffLength = 512
-	}
-
-	contentType := http.DetectContentType(data[:sniffLength])
-	fileExtension, allowed := allowedImageContentTypes[contentType]
+	contentType, fileExtension, allowed := detectAllowedImageUploadType(data, fileHeader.Filename)
 	if !allowed {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "only gif, jpg, png and webp images are supported"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "only gif, jpg, png, svg and webp images are supported"})
 		return
 	}
 
@@ -179,4 +176,47 @@ func isUploadTooLarge(err error) bool {
 
 	errText := err.Error()
 	return strings.Contains(errText, "request body too large") || strings.Contains(errText, "message too large")
+}
+
+func detectAllowedImageUploadType(data []byte, originalFilename string) (string, string, bool) {
+	sniffLength := len(data)
+	if sniffLength > 512 {
+		sniffLength = 512
+	}
+
+	contentType := http.DetectContentType(data[:sniffLength])
+	if fileExtension, allowed := allowedImageContentTypes[contentType]; allowed {
+		return contentType, fileExtension, true
+	}
+
+	if looksLikeSVGImage(data, originalFilename) {
+		return "image/svg+xml", allowedImageContentTypes["image/svg+xml"], true
+	}
+
+	return "", "", false
+}
+
+func looksLikeSVGImage(data []byte, originalFilename string) bool {
+	if !strings.EqualFold(filepath.Ext(strings.TrimSpace(originalFilename)), ".svg") {
+		return false
+	}
+
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return false
+		}
+
+		startElement, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+
+		if startElement.Name.Local != "svg" {
+			return false
+		}
+
+		return startElement.Name.Space == "" || startElement.Name.Space == "http://www.w3.org/2000/svg"
+	}
 }
