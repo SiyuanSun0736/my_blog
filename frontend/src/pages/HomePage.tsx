@@ -1,12 +1,12 @@
 import { Button, Card, CardBody, CardHeader, Chip, Input, Spinner } from "../components/ui";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { WriterPanel } from "../components/WriterPanel";
 import { fetchPosts } from "../lib/api";
 import type { PostSummary } from "../types";
 import { PostCard } from "../components/PostCard";
 
 const POSTS_PER_PAGE = 2;
+const GITHUB_PROFILE_URL = "https://github.com/SiyuanSun0736";
 
 export function HomePage() {
   const [posts, setPosts] = useState<PostSummary[]>([]);
@@ -90,7 +90,6 @@ export function HomePage() {
       return left[0].localeCompare(right[0], "zh-CN");
     })
     .slice(0, 6);
-  const authors = Array.from(new Set(sortedPosts.map((post) => post.author)));
   const averageReadMinutes =
     sortedPosts.length > 0
       ? Math.round(
@@ -158,43 +157,51 @@ export function HomePage() {
         <Card className="overflow-hidden border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
           <div className="h-3 w-full bg-[linear-gradient(90deg,#d96c3d_0%,#0f766e_100%)]" />
           <CardHeader className="flex flex-col items-start gap-4 px-6 pb-0 pt-6 sm:px-8 sm:pt-8">
-            <Chip color="warning" variant="flat">
-              个人博客
-            </Chip>
             <div className="max-w-3xl space-y-4">
-              <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">
-                写作手记 / 前端琐记 / 部署日志
+              <p className="font-mono text-sm uppercase tracking-[0.28em] text-[var(--muted)]">
+                Engineering Log / Compiler / Perf / Deep Learning / Build / Kubernetes
               </p>
               <h1 className="display-type text-4xl leading-none text-[var(--ink)] sm:text-5xl lg:text-6xl">
-                写下我在做博客、改前端和上线站点时留下的笔记。
+                Wanderlust
               </h1>
               <p className="max-w-2xl text-base leading-8 text-[var(--muted)] sm:text-lg">
-                这里不再把博客当成一个技术演示页，而是当成长期写作的入口。会有改版首页时的犹豫，也会有调样式、配 Nginx 和排查发布问题时留下的真实记录。
+                记录编译器、性能和系统工程里的真实工作流。
+              </p>
+              <p className="max-w-2xl text-base leading-8 text-[var(--muted)] sm:text-lg">
+                这里主要写编译器实现、perf 火焰图、深度学习训练里的工程细节、automake 和 make 脚本，以及 Kubernetes 上线与排障。内容优先级永远高于人设包装。
               </p>
             </div>
           </CardHeader>
           <CardBody className="grid gap-6 px-6 pb-6 pt-8 sm:px-8 sm:pb-8">
             <div className="flex flex-wrap gap-3">
-              {featuredPost ? (
-                <Link
-                  to={`/posts/${featuredPost.slug}`}
-                  className="inline-flex rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-lg"
-                >
-                  先读精选文章
-                </Link>
-              ) : null}
+              <a
+                href={GITHUB_PROFILE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-lg"
+              >
+                去 GitHub
+              </a>
               <a
                 href="#latest-posts"
                 className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
               >
-                查看最新文章
+                进入文章
               </a>
               <Link
                 to="/archive"
                 className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
               >
-                浏览往期归档
+                翻归档
               </Link>
+              {featuredPost ? (
+                <Link
+                  to={`/posts/${featuredPost.slug}`}
+                  className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+                >
+                  先读精选
+                </Link>
+              ) : null}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
@@ -205,7 +212,7 @@ export function HomePage() {
                     {latestPost ? formatPublishDate(latestPost.publishedAt) : "等待加载"}
                   </p>
                   <p className="text-sm leading-6 text-[var(--muted)]">
-                    首页会优先展示最新发布的内容，保持博客常见的时间线入口。
+                    先把最近一次发布放在最上面，方便从最新实验、复盘或修订开始读。
                   </p>
                 </CardBody>
               </Card>
@@ -214,7 +221,7 @@ export function HomePage() {
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">内容规模</p>
                   <p className="text-3xl font-semibold text-[var(--ink)]">{sortedPosts.length || 0}</p>
                   <p className="text-sm leading-6 text-[var(--muted)]">
-                    篇文章，分布在 {Object.keys(categoryCounts).length || 0} 个栏目中，适合按主题持续浏览。
+                    篇记录，拆成 {Object.keys(categoryCounts).length || 0} 个栏目，方便按问题域而不是按时间硬翻。
                   </p>
                 </CardBody>
               </Card>
@@ -223,7 +230,7 @@ export function HomePage() {
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">阅读节奏</p>
                   <p className="text-3xl font-semibold text-[var(--ink)]">{averageReadMinutes || 0} 分钟</p>
                   <p className="text-sm leading-6 text-[var(--muted)]">
-                    单篇平均阅读时长，控制在适合碎片时间完成的一次完整阅读。
+                    单篇平均时长，尽量控制在一次完整 review、通勤或 benchmark 复盘里能读完。
                   </p>
                 </CardBody>
               </Card>
@@ -231,65 +238,110 @@ export function HomePage() {
           </CardBody>
         </Card>
 
-        <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
-          <CardHeader className="flex flex-col items-start gap-3 px-6 pb-0 pt-6">
-            <p className="text-sm tracking-[0.18em] text-[var(--muted)]">本周推荐</p>
-            <h2 className="display-type text-3xl leading-tight text-[var(--ink)]">
-              {featuredPost?.title ?? "正在整理本周推荐文章"}
-            </h2>
-            <p className="text-sm leading-7 text-[var(--muted)]">
-              {featuredPost?.summary ?? "文章加载完成后，这里会显示一篇置顶推荐内容。"}
-            </p>
-          </CardHeader>
-          <CardBody className="gap-4 px-6 pb-6 pt-6">
-            <div className="flex flex-wrap gap-2">
-              {featuredPost ? (
-                <>
-                  <Chip color="secondary" variant="flat">
-                    {featuredPost.category}
-                  </Chip>
-                  <Chip color="warning" variant="bordered">
-                    编辑精选
-                  </Chip>
-                </>
-              ) : null}
-            </div>
+        <div className="grid gap-6">
+          <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
+            <CardHeader className="flex flex-col items-start gap-2 px-6 pb-0 pt-6">
+              <p className="font-mono text-sm tracking-[0.18em] text-[var(--muted)]">REPOSITORY</p>
+              <h2 className="display-type text-3xl text-[var(--ink)]">工程入口</h2>
+            </CardHeader>
+            <CardBody className="gap-4 px-6 pb-6 pt-5">
+              <div className="rounded-[1.5rem] border border-black/10 bg-white/75 p-5 text-sm leading-7 text-[var(--muted)]">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">GitHub</p>
+                <a
+                  href={GITHUB_PROFILE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 block font-mono text-lg font-semibold text-[var(--ink)] transition hover:opacity-70"
+                >
+                  github.com/SiyuanSun0736
+                </a>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <a
+                    href={GITHUB_PROFILE_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    打开仓库
+                  </a>
+                  <Link
+                    to="/archive"
+                    className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+                  >
+                    浏览时间线
+                  </Link>
+                </div>
+              </div>
 
-            <div className="rounded-[1.5rem] border border-black/10 bg-white/70 p-5 text-sm leading-7 text-[var(--muted)]">
-              <p>
-                {featuredPost
-                  ? `${formatPublishDate(featuredPost.publishedAt)} · ${featuredPost.author} · ${featuredPost.readMinutes} 分钟阅读`
-                  : "文章元信息会在数据返回后显示。"}
-              </p>
               {featuredPost ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {featuredPost.tags.map((tag) => (
-                    <Chip key={tag} size="sm" variant="light">
-                      #{tag}
-                    </Chip>
-                  ))}
+                <div className="rounded-[1.5rem] border border-black/10 bg-[rgba(15,118,110,0.08)] p-5 text-sm leading-7 text-[var(--muted)]">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Current Highlight</p>
+                  <Link
+                    to={`/posts/${featuredPost.slug}`}
+                    className="mt-2 block text-xl font-semibold text-[var(--ink)] transition hover:opacity-70"
+                  >
+                    {featuredPost.title}
+                  </Link>
+                  <p className="mt-2">{featuredPost.summary}</p>
+                  <p className="mt-3 text-xs leading-6 text-[var(--muted)]">
+                    {formatPublishDate(featuredPost.publishedAt)} · {featuredPost.category} · {featuredPost.readMinutes} 分钟阅读
+                  </p>
                 </div>
               ) : null}
-            </div>
+            </CardBody>
+          </Card>
 
-            {featuredPost ? (
-              <Link
-                to={`/posts/${featuredPost.slug}`}
-                className="inline-flex rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-lg"
-              >
-                阅读这篇文章
-              </Link>
-            ) : null}
-          </CardBody>
-        </Card>
+          <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
+            <CardHeader className="flex flex-col items-start gap-2 px-6 pb-0 pt-6">
+              <p className="font-mono text-sm tracking-[0.18em] text-[var(--muted)]">FOCUS MAP</p>
+              <h2 className="display-type text-3xl text-[var(--ink)]">当前关注</h2>
+            </CardHeader>
+            <CardBody className="gap-4 px-6 pb-6 pt-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
+                  <p className="text-sm font-semibold text-[var(--ink)]">Compiler</p>
+                  <p className="mt-2 text-sm leading-7 text-[var(--muted)]">SSA、IR lowering、pass 顺序与代码生成细节。</p>
+                </div>
+                <div className="rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
+                  <p className="text-sm font-semibold text-[var(--ink)]">Perf</p>
+                  <p className="mt-2 text-sm leading-7 text-[var(--muted)]">flamegraph、cache 行为、回归定位与 microbenchmark。</p>
+                </div>
+                <div className="rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
+                  <p className="text-sm font-semibold text-[var(--ink)]">Deep Learning</p>
+                  <p className="mt-2 text-sm leading-7 text-[var(--muted)]">训练流水线、CUDA 资源预算和可恢复的实验流程。</p>
+                </div>
+                <div className="rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
+                  <p className="text-sm font-semibold text-[var(--ink)]">Build / K8s</p>
+                  <p className="mt-2 text-sm leading-7 text-[var(--muted)]">Makefile、发布脚本、集群排障与运行手册。</p>
+                </div>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-black/10 bg-white/75 p-5">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Hot Tags</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {topTags.slice(0, 4).map(([tag, count]) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setKeyword(tag)}
+                      className="rounded-full border border-black/10 bg-white/80 px-3 py-1.5 text-sm text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30"
+                    >
+                      #{tag} · {count}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_320px]">
         <div id="latest-posts" className="space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Latest Posts</p>
-              <h2 className="display-type text-4xl text-[var(--ink)]">最新文章</h2>
+              <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Latest Notes</p>
+              <h2 className="display-type text-4xl text-[var(--ink)]">最新记录</h2>
             </div>
             <p className="text-sm text-[var(--muted)]">
               第 {currentPage} / {totalPages} 页 · 共 {filteredPosts.length} 篇
@@ -302,7 +354,7 @@ export function HomePage() {
                 <p className="text-sm font-medium text-[var(--ink)]">关键词搜索</p>
                 <Input
                   aria-label="搜索博客文章"
-                  placeholder="输入关键词，例如：部署、阅读体验、Nginx"
+                  placeholder="输入关键词，例如：SSA、perf、CUDA、Makefile、Kubernetes"
                   radius="lg"
                   value={keyword}
                   onValueChange={setKeyword}
@@ -310,7 +362,7 @@ export function HomePage() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-sm font-medium text-[var(--ink)]">栏目筛选</p>
+                <p className="text-sm font-medium text-[var(--ink)]">主题筛选</p>
                 <div className="flex flex-wrap gap-2">
                   {categories.map((category) => (
                     <Button
@@ -328,7 +380,7 @@ export function HomePage() {
               </div>
 
               <div className="rounded-[1.5rem] border border-black/10 bg-[rgba(15,118,110,0.08)] p-4 text-sm leading-7 text-[var(--muted)]">
-                先用关键词缩小范围，再按栏目筛选，是博客首页最常见也最稳定的浏览方式。
+                先用关键词缩到一个技术面，再按栏目回看，是工程博客里最省时间的找法。
               </div>
             </CardBody>
           </Card>
@@ -358,7 +410,7 @@ export function HomePage() {
           {!loading && !error && filteredPosts.length > 0 ? (
             <div className="flex flex-col gap-3 rounded-[1.75rem] border border-black/10 bg-white/60 p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm leading-7 text-[var(--muted)]">
-                当前显示第 {currentPage} 页。首页分页保留时间线感，也避免文章卡片一次堆得太满。
+                当前命中 {filteredPosts.length} 篇文章，覆盖 {Object.keys(categoryCounts).length || 0} 个主题入口。
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -398,7 +450,7 @@ export function HomePage() {
           {!loading && !error && filteredPosts.length === 0 ? (
             <Card className="glass-panel border border-black/10">
               <CardBody className="p-6 text-sm leading-7 text-[var(--muted)]">
-                没有匹配的文章。你可以清空搜索词，或者切换到其他栏目。
+                没有匹配的文章。试试换成更短的关键词，比如 perf、编译器、Kubernetes或训练。
               </CardBody>
             </Card>
           ) : null}
@@ -407,23 +459,8 @@ export function HomePage() {
         <aside className="space-y-5">
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">About Wanderlust</p>
-              <h3 className="display-type text-3xl text-[var(--ink)]">关于 Wanderlust</h3>
-            </CardHeader>
-            <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm leading-7 text-[var(--muted)]">
-              <p>
-                {authors.length > 0
-                  ? `${authors.join(" / ")} 在这里写下做网站时的判断、返工和偶尔的自我怀疑。`
-                  : "这里会展示 Wanderlust 的作者与写作方向。"}
-              </p>
-              <p>如果你习惯先看作者、栏目、归档，再决定要不要往下读，这一栏就是给这种阅读方式准备的。</p>
-            </CardBody>
-          </Card>
-
-          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
-            <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Sections</p>
-              <h3 className="display-type text-3xl text-[var(--ink)]">栏目导航</h3>
+              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Columns</p>
+              <h3 className="display-type text-3xl text-[var(--ink)]">栏目入口</h3>
             </CardHeader>
             <CardBody className="gap-3 px-5 pb-5 pt-4">
               {categories
@@ -448,8 +485,8 @@ export function HomePage() {
 
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Popular Tags</p>
-              <h3 className="display-type text-3xl text-[var(--ink)]">热门标签</h3>
+              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">High-Signal Tags</p>
+              <h3 className="display-type text-3xl text-[var(--ink)]">高频标签</h3>
             </CardHeader>
             <CardBody className="gap-4 px-5 pb-5 pt-4">
               <div className="flex flex-wrap gap-2">
@@ -486,7 +523,7 @@ export function HomePage() {
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
               <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Start Here</p>
-              <h3 className="display-type text-3xl text-[var(--ink)]">开始阅读</h3>
+              <h3 className="display-type text-3xl text-[var(--ink)]">先看这些</h3>
             </CardHeader>
             <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm">
               {sortedPosts.slice(0, 3).map((post) => (
@@ -504,21 +541,20 @@ export function HomePage() {
             </CardBody>
           </Card>
 
-          <WriterPanel />
         </aside>
       </section>
 
       <section id="archive" className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Archive Preview</p>
-            <h2 className="display-type text-4xl text-[var(--ink)]">归档预览</h2>
+            <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Recent Timeline</p>
+            <h2 className="display-type text-4xl text-[var(--ink)]">近期归档</h2>
           </div>
           <Link
             to="/archive"
             className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
           >
-            进入完整归档页
+            打开完整时间线
           </Link>
         </div>
 
@@ -530,7 +566,7 @@ export function HomePage() {
             >
               <CardHeader className="flex items-center justify-between gap-3 px-5 pb-0 pt-5">
                 <div>
-                  <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Monthly Notes</p>
+                  <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Monthly Archive</p>
                   <h3 className="display-type mt-2 text-3xl text-[var(--ink)]">{group.label}</h3>
                 </div>
                 <Chip variant="flat" color="warning">

@@ -10,11 +10,11 @@ interface WriterPanelProps {
 }
 
 export function WriterPanel({
-  eyebrow = "Writer's Desk",
-  title = "写作入口",
-  description = "直接把新文章写进 Wanderlust。标题、摘要、标签和 Markdown 正文会一起保存，发布后就能在前台阅读。",
-  ctaLabel = "开始写新文章",
-  hint = "正文支持 Markdown 与 GFM，适合直接贴现成 md 草稿。",
+  eyebrow = "Workspace",
+  title = "工作台",
+  description = "把新的工程记录直接写进 Wanderlust。标题、摘要、标签和 Markdown 正文会一起保存，发布后就能在前台阅读。",
+  ctaLabel = "去工作台",
+  hint = "适合贴 benchmark 结果、实验日志、runbook 和现成的 Markdown 草稿。",
 }: WriterPanelProps) {
   return (
     <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">

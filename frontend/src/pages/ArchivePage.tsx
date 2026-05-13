@@ -1,7 +1,6 @@
 import { Button, Card, CardBody, CardHeader, Chip, Spinner } from "../components/ui";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { WriterPanel } from "../components/WriterPanel";
 import { fetchPosts } from "../lib/api";
 import type { PostSummary } from "../types";
 
@@ -108,15 +107,15 @@ export function ArchivePage() {
         <div className="h-3 w-full bg-[linear-gradient(90deg,#0f766e_0%,#d96c3d_100%)]" />
         <div className="space-y-5 px-6 py-7 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
           <Chip color="secondary" variant="flat">
-            独立归档页
+            时间线归档
           </Chip>
           <div className="max-w-3xl space-y-4">
-            <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">按年份筛选 / 按月份回看 / 长期写作</p>
+            <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">按年份筛选 / 按月份折叠 / 长期维护</p>
             <h1 className="display-type text-4xl leading-none text-[var(--ink)] sm:text-5xl lg:text-6xl">
-              把已经写过的东西，按时间线好好摆出来。
+              把实验、复盘和线上记录按时间线放好。
             </h1>
             <p className="max-w-2xl text-base leading-8 text-[var(--muted)] sm:text-lg">
-              归档页不是为了堆文章数量，而是为了让人知道这个站点有没有在持续更新。你可以先按年份缩小范围，再按月份回看每一次发布。
+              归档不是装饰，它更像工程博客的检索面板。你可以先按年份缩小范围，再按月份回看一次版本迭代、一次性能追踪，或者一次部署事故之后留下了什么。
             </p>
           </div>
         </div>
@@ -166,7 +165,7 @@ export function ArchivePage() {
           {!loading && !error && archiveGroups.length === 0 ? (
             <Card className="glass-panel border border-black/10">
               <CardBody className="p-6 text-sm leading-7 text-[var(--muted)]">
-                当前年份下还没有文章，可以切换到其他年份看看。
+                当前筛选下还没有记录，可以换一个年份，或者回到全部年份看看。
               </CardBody>
             </Card>
           ) : null}
@@ -180,7 +179,7 @@ export function ArchivePage() {
                 >
                   <CardHeader className="flex items-center justify-between gap-3 px-5 pb-0 pt-5">
                     <div>
-                      <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Monthly Notes</p>
+                      <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Monthly Archive</p>
                       <h3 className="display-type mt-2 text-3xl text-[var(--ink)]">{group.label}</h3>
                     </div>
                     <Chip variant="flat" color="warning">
@@ -211,27 +210,21 @@ export function ArchivePage() {
         <aside className="space-y-5">
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Archive Stats</p>
-              <h3 className="display-type text-3xl text-[var(--ink)]">归档概览</h3>
+              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Timeline Stats</p>
+              <h3 className="display-type text-3xl text-[var(--ink)]">时间线概览</h3>
             </CardHeader>
             <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm leading-7 text-[var(--muted)]">
-              <p>总计 {sortedPosts.length} 篇文章，当前筛选后可见 {filteredPosts.length} 篇。</p>
-              <p>写作时间跨度覆盖 {years.length - 1 > 0 ? years.length - 1 : 1} 个年份，适合从最近的更新一路往前翻。</p>
+              <p>总计 {sortedPosts.length} 篇记录，当前年份下可见 {filteredPosts.length} 篇。</p>
+              <p>时间跨度覆盖 {years.length - 1 > 0 ? years.length - 1 : 1} 个年份，适合从最近一次实验或线上变更一路往前翻。</p>
               <Link
                 to="/"
                 className="inline-flex rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
               >
-                返回首页
+                回首页
               </Link>
             </CardBody>
           </Card>
 
-          <WriterPanel
-            eyebrow="Archive Writer"
-            title="写新内容"
-            description="归档页右侧不再放订阅表单，改成直接进入写作入口。发新文章后，这里会立刻出现在归档时间线里。"
-            ctaLabel="去写作入口"
-          />
         </aside>
       </section>
     </div>

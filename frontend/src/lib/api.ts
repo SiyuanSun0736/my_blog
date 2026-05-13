@@ -70,3 +70,26 @@ export function createPost(payload: CreatePostPayload, writeToken: string): Prom
     headers: writeAccessHeaders(writeToken),
   });
 }
+
+export function updatePost(slug: string, payload: CreatePostPayload, writeToken: string): Promise<Post> {
+  return request<Post>(`/posts/${slug}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    headers: writeAccessHeaders(writeToken),
+  });
+}
+
+export function deletePost(slug: string, writeToken: string): Promise<{ message: string }> {
+  return request<{ message: string }>(`/posts/${slug}`, {
+    method: "DELETE",
+    headers: writeAccessHeaders(writeToken),
+  });
+}
+
+export function setPostFeatured(slug: string, featured: boolean, writeToken: string): Promise<Post> {
+  return request<Post>(`/posts/${slug}/featured`, {
+    method: "PATCH",
+    body: JSON.stringify({ featured }),
+    headers: writeAccessHeaders(writeToken),
+  });
+}

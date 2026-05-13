@@ -18,7 +18,10 @@ import (
 
 const postsCollectionName = "posts"
 
-var ErrInvalidPost = errors.New("invalid post")
+var (
+	ErrInvalidPost  = errors.New("invalid post")
+	ErrPostNotFound = errors.New("post not found")
+)
 
 type Service struct {
 	client     *mongo.Client
@@ -120,11 +123,134 @@ func (s *Service) CreatePost(ctx context.Context, input CreatePostInput) (Post, 
 		Body:        normalized.Body,
 	}
 
+	if post.Featured {
+		if err := s.clearFeaturedPosts(ctx, 0); err != nil {
+			return Post{}, err
+		}
+	}
+
 	if _, err := s.collection.InsertOne(ctx, post); err != nil {
 		return Post{}, err
 	}
 
 	return post, nil
+}
+
+func (s *Service) UpdatePost(ctx context.Context, currentSlug string, input CreatePostInput) (Post, error) {
+	existingPost, found, err := s.GetPostBySlug(ctx, currentSlug)
+	if err != nil {
+		return Post{}, err
+	}
+
+	if !found {
+		return Post{}, ErrPostNotFound
+	}
+
+	normalized, err := normalizeCreatePostInput(input)
+	if err != nil {
+		return Post{}, err
+	}
+
+	slug, err := s.reserveSlugForPost(ctx, normalized.Slug, existingPost.ID)
+	if err != nil {
+		return Post{}, err
+	}
+
+	updatedPost := Post{
+		ID:          existingPost.ID,
+		Slug:        slug,
+		Title:       normalized.Title,
+		Summary:     normalized.Summary,
+		Category:    normalized.Category,
+		Tags:        normalized.Tags,
+		Author:      normalized.Author,
+		PublishedAt: normalized.PublishedAt,
+		ReadMinutes: estimateReadMinutes(normalized.Body),
+		Featured:    normalized.Featured,
+		Accent:      normalized.Accent,
+		Body:        normalized.Body,
+	}
+
+	if updatedPost.Featured {
+		if err := s.clearFeaturedPosts(ctx, updatedPost.ID); err != nil {
+			return Post{}, err
+		}
+	}
+
+	result, err := s.collection.ReplaceOne(ctx, bson.D{{Key: "id", Value: existingPost.ID}}, updatedPost)
+	if err != nil {
+		return Post{}, err
+	}
+
+	if result.MatchedCount == 0 {
+		return Post{}, ErrPostNotFound
+	}
+
+	return updatedPost, nil
+}
+
+func (s *Service) DeletePost(ctx context.Context, slug string) error {
+	result, err := s.collection.DeleteOne(ctx, bson.D{{Key: "slug", Value: slug}})
+	if err != nil {
+		return err
+	}
+
+	if result.DeletedCount == 0 {
+		return ErrPostNotFound
+	}
+
+	return nil
+}
+
+func (s *Service) SetPostFeatured(ctx context.Context, slug string, featured bool) (Post, error) {
+	post, found, err := s.GetPostBySlug(ctx, slug)
+	if err != nil {
+		return Post{}, err
+	}
+
+	if !found {
+		return Post{}, ErrPostNotFound
+	}
+
+	if featured {
+		if err := s.clearFeaturedPosts(ctx, post.ID); err != nil {
+			return Post{}, err
+		}
+	}
+
+	result, err := s.collection.UpdateOne(
+		ctx,
+		bson.D{{Key: "id", Value: post.ID}},
+		bson.D{{Key: "$set", Value: bson.D{{Key: "featured", Value: featured}}}},
+	)
+	if err != nil {
+		return Post{}, err
+	}
+
+	if result.MatchedCount == 0 {
+		return Post{}, ErrPostNotFound
+	}
+
+	post.Featured = featured
+	return post, nil
+}
+
+func (s *Service) ReplaceAllPosts(ctx context.Context, inputs []CreatePostInput) ([]Post, error) {
+	if _, err := s.collection.DeleteMany(ctx, bson.D{}); err != nil {
+		return nil, err
+	}
+
+	posts := make([]Post, 0, len(inputs))
+	for _, input := range inputs {
+		post, err := s.CreatePost(ctx, input)
+		if err != nil {
+			return nil, err
+		}
+
+		posts = append(posts, post)
+	}
+
+	return posts, nil
 }
 
 func (s *Service) initialize(ctx context.Context) error {
@@ -183,6 +309,48 @@ func (s *Service) reserveSlug(ctx context.Context, rawSlug string) (string, erro
 
 		candidate = fmt.Sprintf("%s-%d", base, index)
 	}
+}
+
+func (s *Service) reserveSlugForPost(ctx context.Context, rawSlug string, postID int) (string, error) {
+	base := rawSlug
+	if base == "" {
+		base = fmt.Sprintf("post-%d", time.Now().UTC().Unix())
+	}
+
+	candidate := base
+	for index := 2; ; index++ {
+		count, err := s.collection.CountDocuments(
+			ctx,
+			bson.D{
+				{Key: "slug", Value: candidate},
+				{Key: "id", Value: bson.D{{Key: "$ne", Value: postID}}},
+			},
+		)
+		if err != nil {
+			return "", err
+		}
+
+		if count == 0 {
+			return candidate, nil
+		}
+
+		candidate = fmt.Sprintf("%s-%d", base, index)
+	}
+}
+
+func (s *Service) clearFeaturedPosts(ctx context.Context, keepID int) error {
+	filter := bson.D{{Key: "featured", Value: true}}
+	if keepID > 0 {
+		filter = append(filter, bson.E{Key: "id", Value: bson.D{{Key: "$ne", Value: keepID}}})
+	}
+
+	_, err := s.collection.UpdateMany(
+		ctx,
+		filter,
+		bson.D{{Key: "$set", Value: bson.D{{Key: "featured", Value: false}}}},
+	)
+
+	return err
 }
 
 func normalizeCreatePostInput(input CreatePostInput) (CreatePostInput, error) {

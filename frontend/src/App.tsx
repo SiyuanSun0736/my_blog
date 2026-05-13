@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
 
 const HomePage = lazy(() => import("./pages/HomePage").then((module) => ({ default: module.HomePage })));
@@ -23,7 +23,8 @@ export default function App() {
           <Route index element={<HomePage />} />
           <Route path="/archive" element={<ArchivePage />} />
           <Route path="/posts/:slug" element={<PostPage />} />
-          <Route path="/write" element={<WritePage />} />
+          <Route path="/admin" element={<WritePage />} />
+          <Route path="/write" element={<Navigate to="/admin" replace />} />
         </Route>
       </Routes>
     </Suspense>

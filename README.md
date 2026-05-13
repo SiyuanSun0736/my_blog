@@ -4,15 +4,15 @@
 
 ## 结构
 
-- `backend/`: Go + Gin 博客 API，使用 MongoDB 持久化文章并提供写作接口
-- `frontend/`: Vite + React + HeroUI 前端，包含首页、文章详情页和写作入口
+- `backend/`: Go + Gin 博客 API，使用 MongoDB 持久化文章并提供管理端写作接口
+- `frontend/`: Vite + React + HeroUI 前端，包含首页、文章详情页和管理端入口
 - `nginx/`: Nginx 反向代理配置与前端静态资源镜像构建
 
 ## 功能
 
 - 首页文章列表与关键词过滤
 - 文章详情页
-- 写作入口与新文章发布
+- 管理端写作入口与新文章发布
 - MongoDB 持久化与 Markdown 正文渲染
 - MongoDB 数据卷持久化与归档备份脚本
 - Gin 提供 `/api/posts`、`/api/posts/:slug` 与 `POST /api/posts`
@@ -71,7 +71,7 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 
 当前镜像不再内置自签名证书，而是要求在启动时挂载外部证书文件。`www.wanderlust0736.top` 会被 Nginx 统一 301 跳转到 `wanderlust0736.top`。
 
-如果你要把 `/write` 暴露到公网，必须先配置 `BLOG_WRITE_TOKEN`。后端只会对 `GET /api/write-access` 和 `POST /api/posts` 放行带正确 Bearer token 的请求；未配置时，这两个端点会直接返回 `503`。
+如果你要使用 `/admin` 管理端发布文章，必须先配置 `BLOG_WRITE_TOKEN`。前台访客不会在导航里看到这个入口；后端只会对 `GET /api/write-access` 和 `POST /api/posts` 放行带正确 Bearer token 的请求，未配置时这两个端点会直接返回 `503`。旧的 `/write` 路径会自动跳转到 `/admin`。
 
 ### 数据备份与恢复
 
@@ -223,7 +223,7 @@ crontab deploy/cron/wanderlust-cert-renew.cron
 - `BLOG_TLS_CERTS_DIR=./letsencrypt`
 - `BLOG_TLS_CERT_PATH=/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem`
 - `BLOG_TLS_KEY_PATH=/etc/nginx/certs/live/wanderlust0736.top/privkey.pem`
-- `BLOG_WRITE_TOKEN=`：默认留空，准备公开写作入口时再填入随机令牌
+- `BLOG_WRITE_TOKEN=`：默认留空，准备启用 `/admin` 管理端写作时再填入随机令牌
 
 ### Nginx 健康检查与排障
 

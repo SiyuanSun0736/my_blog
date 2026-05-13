@@ -5,7 +5,6 @@ export function Shell() {
   const location = useLocation();
   const isHome = location.pathname === "/";
   const isArchive = location.pathname.startsWith("/archive");
-  const isWrite = location.pathname.startsWith("/write");
 
   return (
     <div className="page-shell min-h-screen text-[var(--ink)]">
@@ -16,7 +15,7 @@ export function Shell() {
               Wanderlust
             </Link>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Wanderlust 的写作、前端与部署笔记。
+              编译器、性能与系统工程笔记。
             </p>
           </div>
 
@@ -32,7 +31,7 @@ export function Shell() {
                   : "rounded-full border border-black/10 px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
               }
             >
-              首页
+              文章
             </Link>
             <Link
               to="/archive"
@@ -44,16 +43,6 @@ export function Shell() {
             >
               归档
             </Link>
-            <Link
-              to="/write"
-              className={
-                isWrite
-                  ? "rounded-full bg-[var(--ink)] px-5 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5"
-                  : "rounded-full border border-black/10 px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
-              }
-            >
-              写作入口
-            </Link>
           </div>
         </div>
       </header>
@@ -64,7 +53,7 @@ export function Shell() {
 
       <footer className="mx-auto flex max-w-6xl flex-col gap-3 px-4 pb-10 pt-2 text-sm text-[var(--muted)] sm:px-6 lg:px-8">
         <div className="h-px w-full bg-black/10" />
-        <p>Wanderlust 记录内容系统、阅读体验与部署交付的长期实践。</p>
+        <p>Wanderlust 记录编译器、性能分析、深度学习工程、构建脚本和 Kubernetes 实践。</p>
       </footer>
     </div>
   );

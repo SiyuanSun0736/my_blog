@@ -27,3 +27,7 @@ type CreatePostInput struct {
 	Accent      string   `json:"accent"`
 	Body        string   `json:"body"`
 }
+
+type SetPostFeaturedInput struct {
+	Featured *bool `json:"featured"`
+}
