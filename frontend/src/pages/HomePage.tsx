@@ -295,8 +295,8 @@ export function HomePage() {
                   <div className="flex flex-wrap gap-2">
                     <Chip color="secondary" variant="flat">Compiler</Chip>
                     <Chip color="warning" variant="flat">Perf</Chip>
-                    <Chip variant="bordered">Deep Learning</Chip>
-                    <Chip variant="bordered">Kubernetes</Chip>
+                    <Chip color="primary" variant="flat">Deep Learning</Chip>
+                    <Chip color="success" variant="flat">Kubernetes</Chip>
                   </div>
                 </div>
               </div>
