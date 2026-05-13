@@ -118,6 +118,151 @@ curl -k -I https://127.0.0.1 -H 'Host: www.wanderlust0736.top'
 - `nginx-healthz` 返回的 `certificate` 路径是 `/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem`
 - `www.wanderlust0736.top` 返回 `301` 并跳到 `https://wanderlust0736.top/`
 
+## 线上 Smoke Test 清单
+
+这组检查只验证三件事：管理端上传接口可用、Nginx 能直接把图片从 `/media/...` 对外提供、Redis 去重键能命中相同文件。
+
+建议在仓库根目录执行，默认使用 `.env.deploy`。为了避免在线上残留大文件，下面示例会生成一张 1x1 PNG 作为测试图片。
+
+### 0. 准备环境变量和测试图片
+
+```bash
+cd /你的仓库目录
+
+set -a
+. ./.env.deploy
+set +a
+
+# 如果 .env.deploy 里还没填 BLOG_WRITE_TOKEN，这里手动补一个当前有效值
+export BLOG_WRITE_TOKEN='替换成当前可用的管理端 token'
+
+tmp_dir=$(mktemp -d)
+cat <<'EOF' | base64 -d > "$tmp_dir/wanderlust-smoke.png"
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9kAAAAASUVORK5CYII=
+EOF
+
+sha256=$(sha256sum "$tmp_dir/wanderlust-smoke.png" | awk '{print $1}')
+printf 'local sha256: %s\n' "$sha256"
+```
+
+预期结果：能生成 `wanderlust-smoke.png`，并打印一条本地文件 sha256。
+
+### 1. 第一次上传，验证上传接口
+
+```bash
+status_1=$(curl -sk \
+	-o "$tmp_dir/upload-1.json" \
+	-w '%{http_code}' \
+	"https://127.0.0.1/api/admin/uploads/images" \
+	-H "Host: $BLOG_PRIMARY_DOMAIN" \
+	-H "Authorization: Bearer $BLOG_WRITE_TOKEN" \
+	-F "file=@$tmp_dir/wanderlust-smoke.png;type=image/png")
+
+cat "$tmp_dir/upload-1.json"
+printf 'upload status #1: %s\n' "$status_1"
+
+media_path_1=$(sed -n 's/.*"path":"\([^"]*\)".*/\1/p' "$tmp_dir/upload-1.json")
+cached_1=$(sed -n 's/.*"cached":\([^,}]*\).*/\1/p' "$tmp_dir/upload-1.json")
+
+printf 'media path #1: %s\n' "$media_path_1"
+printf 'cached flag #1: %s\n' "$cached_1"
+```
+
+预期结果：
+
+- `upload status #1` 是 `201`
+- 返回 JSON 里有 `/media/YYYY/MM/<sha256>.png` 形式的 `path`
+- `cached flag #1` 是 `false`
+
+### 2. 验证 Nginx 直出 `/media/...`
+
+```bash
+curl -skI "https://127.0.0.1${media_path_1}" -H "Host: $BLOG_PRIMARY_DOMAIN"
+
+remote_sha256=$(curl -sk "https://127.0.0.1${media_path_1}" -H "Host: $BLOG_PRIMARY_DOMAIN" | sha256sum | awk '{print $1}')
+printf 'remote sha256: %s\n' "$remote_sha256"
+
+test "$remote_sha256" = "$sha256"
+printf 'nginx media hash check: ok\n'
+```
+
+预期结果：
+
+- `HEAD` 响应是 `200 OK`
+- 头里能看到 `Content-Type: image/png`
+- 头里能看到 `Cache-Control: public, max-age=2592000, immutable`
+- `remote sha256` 与上一步本地文件 sha256 完全一致
+
+### 3. 第二次上传同一文件，验证 Redis 去重命中
+
+```bash
+status_2=$(curl -sk \
+	-o "$tmp_dir/upload-2.json" \
+	-w '%{http_code}' \
+	"https://127.0.0.1/api/admin/uploads/images" \
+	-H "Host: $BLOG_PRIMARY_DOMAIN" \
+	-H "Authorization: Bearer $BLOG_WRITE_TOKEN" \
+	-F "file=@$tmp_dir/wanderlust-smoke.png;type=image/png")
+
+cat "$tmp_dir/upload-2.json"
+printf 'upload status #2: %s\n' "$status_2"
+
+media_path_2=$(sed -n 's/.*"path":"\([^"]*\)".*/\1/p' "$tmp_dir/upload-2.json")
+cached_2=$(sed -n 's/.*"cached":\([^,}]*\).*/\1/p' "$tmp_dir/upload-2.json")
+
+printf 'media path #2: %s\n' "$media_path_2"
+printf 'cached flag #2: %s\n' "$cached_2"
+
+test "$media_path_1" = "$media_path_2"
+printf 'same media path check: ok\n'
+```
+
+预期结果：
+
+- `upload status #2` 是 `200`
+- `cached flag #2` 是 `true`
+- `media path #2` 与第一次上传得到的路径完全一致
+
+### 4. 直接检查 Redis 里的去重键
+
+```bash
+if [ -n "${REDIS_PASSWORD:-}" ]; then
+	redis_value=$(docker compose --env-file .env.deploy exec -T redis \
+		redis-cli -a "$REDIS_PASSWORD" GET "wanderlust:media:digest:$sha256")
+else
+	redis_value=$(docker compose --env-file .env.deploy exec -T redis \
+		redis-cli GET "wanderlust:media:digest:$sha256")
+fi
+
+printf 'redis value: %s\n' "$redis_value"
+
+test "$redis_value" = "$media_path_1"
+printf 'redis dedupe key check: ok\n'
+```
+
+预期结果：
+
+- Redis 返回值不为空
+- Redis 返回值与第一次上传得到的 `media path #1` 完全一致
+
+### 5. 失败时补查日志
+
+```bash
+docker logs wanderlust-api --since 10m
+docker logs wanderlust-web --since 10m
+docker logs wanderlust-redis --since 10m
+```
+
+如果上传失败，优先看 `wanderlust-api`；如果 `/media/...` 取不到文件，优先看 `wanderlust-web`；如果第二次上传没有命中去重，再看 `wanderlust-redis`。
+
+### 6. 测试完成后的清理
+
+```bash
+rm -rf "$tmp_dir"
+```
+
+说明：这个清理只会删除本机临时文件，不会删除已经写进 `blog-media` 卷里的测试图片。当前仓库还没有独立的图片删除接口，所以线上 smoke test 建议始终使用这种极小测试图。
+
 ## git pull 后更新数据库和网页
 
 当前项目已经把 MongoDB 数据放进命名卷 `mongodb-data`，上传图片放进命名卷 `blog-media`，Redis 索引放进命名卷 `redis-data`，所以日常 `git pull` 更新时，不需要先删库，也不需要重建这些数据卷。默认推荐下面这套顺序：
