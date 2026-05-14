@@ -5,15 +5,17 @@ import {
   batchPosts,
   createPost,
   deletePost,
+  exportPostPDF,
   fetchAdminPost,
   fetchAdminPosts,
+  importHTMLDocument,
   setPostFeatured,
   uploadImage,
   updatePost,
   verifyWriteAccess,
   type BatchPostsAction,
 } from "../lib/api";
-import type { Post, PostSummary } from "../types";
+import type { BodyFormat, Post, PostSummary } from "../types";
 
 interface WriteFormState {
   title: string;
@@ -24,6 +26,7 @@ interface WriteFormState {
   author: string;
   publishedAt: string;
   accent: string;
+  bodyFormat: BodyFormat;
   body: string;
   draft: boolean;
   featured: boolean;
@@ -77,6 +80,7 @@ function createEmptyFormState(): WriteFormState {
     author: "Wanderlust",
     publishedAt: new Date().toISOString().slice(0, 10),
     accent: defaultAccent,
+    bodyFormat: "markdown",
     body: defaultBody,
     draft: true,
     featured: false,
@@ -93,9 +97,24 @@ function formStateFromPost(post: Post): WriteFormState {
     author: post.author,
     publishedAt: post.publishedAt,
     accent: post.accent,
+    bodyFormat: post.bodyFormat === "html" ? "html" : "markdown",
     body: post.body,
     draft: post.draft,
     featured: post.featured,
+  };
+}
+
+function normalizeBodyFormat(value: BodyFormat | string | undefined | null): BodyFormat {
+  return value === "html" ? "html" : "markdown";
+}
+
+function normalizeWriteFormState(form: Partial<WriteFormState>): WriteFormState {
+  const defaults = createEmptyFormState();
+
+  return {
+    ...defaults,
+    ...form,
+    bodyFormat: normalizeBodyFormat(form.bodyFormat),
   };
 }
 
@@ -238,8 +257,20 @@ function stripMarkdownExtension(fileName: string) {
   return fileName.replace(/\.(md|markdown)$/i, "");
 }
 
+function stripHTMLDocumentExtension(fileName: string) {
+  return fileName.replace(/\.(html?|xhtml)$/i, "");
+}
+
 function escapeMarkdownAltText(value: string) {
   return value.replace(/[\[\]]/g, "\\$&");
+}
+
+function escapeHTMLAttribute(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/\"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function inferImageAltText(value: string) {
@@ -256,6 +287,28 @@ function inferImageAltText(value: string) {
 
 function buildImageMarkdown(source: string, altText: string) {
   return `![${escapeMarkdownAltText(altText)}](${source})`;
+}
+
+function buildImageHTML(source: string, altText: string) {
+  return `<figure>\n  <img src="${escapeHTMLAttribute(source)}" alt="${escapeHTMLAttribute(altText)}" />\n</figure>`;
+}
+
+function buildImageSnippet(source: string, altText: string, bodyFormat: BodyFormat) {
+  return bodyFormat === "html" ? buildImageHTML(source, altText) : buildImageMarkdown(source, altText);
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const objectURL = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectURL;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(objectURL);
+  }, 1000);
 }
 
 function formatFileSize(bytes: number) {
@@ -409,6 +462,7 @@ function formSignature(form: WriteFormState) {
     author: form.author.trim(),
     publishedAt: form.publishedAt.trim(),
     accent: form.accent.trim(),
+    bodyFormat: normalizeBodyFormat(form.bodyFormat),
     body: normalizeMarkdownLineEndings(form.body),
   });
 }
@@ -424,7 +478,11 @@ function readAutosaveSnapshot(storageKey: string): AutosaveSnapshot | null {
       return null;
     }
 
-    return JSON.parse(rawValue) as AutosaveSnapshot;
+    const snapshot = JSON.parse(rawValue) as AutosaveSnapshot;
+    return {
+      ...snapshot,
+      form: normalizeWriteFormState(snapshot.form),
+    };
   } catch {
     return null;
   }
@@ -471,6 +529,7 @@ function buildMetadataChanges(originalPost: Post, form: WriteFormState): Metadat
     ["发布日期", originalPost.publishedAt, form.publishedAt.trim()],
     ["草稿", originalPost.draft ? "是" : "否", form.draft ? "是" : "否"],
     ["首页精选", originalPost.featured ? "是" : "否", form.featured ? "是" : "否"],
+    ["正文格式", originalPost.bodyFormat === "html" ? "HTML" : "Markdown", form.bodyFormat === "html" ? "HTML" : "Markdown"],
     ["Accent", originalPost.accent, form.accent.trim()],
   ];
 
@@ -569,6 +628,7 @@ export function WritePage() {
   const [imageAltText, setImageAltText] = useState("");
   const [imageStatus, setImageStatus] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   const isEditing = selectedSlug !== null;
   const featuredPosts = posts.filter((post) => post.featured).slice(0, 3);
@@ -639,7 +699,7 @@ export function WritePage() {
     }
 
     skipNextAutosaveCleanupRef.current = true;
-    setForm(snapshot.form);
+    setForm(normalizeWriteFormState(snapshot.form));
     setImportedFileName(snapshot.importedFileName);
     setAutosaveStatus("saved");
     setAutosaveSavedAt(snapshot.savedAt);
@@ -744,7 +804,7 @@ export function WritePage() {
 
   function insertImageMarkdown(source: string, suggestedAltText?: string) {
     const altText = imageAltText.trim() || suggestedAltText || inferImageAltText(source);
-    insertBodyBlock(buildImageMarkdown(source, altText));
+    insertBodyBlock(buildImageSnippet(source, altText, form.bodyFormat));
     setError(null);
     return altText;
   }
@@ -972,6 +1032,7 @@ export function WritePage() {
             : current.accent,
         draft: typeof frontmatter.draft === "boolean" ? frontmatter.draft : current.draft,
         featured: typeof frontmatter.featured === "boolean" ? frontmatter.featured : current.featured,
+        bodyFormat: "markdown",
         body: resolvedBody || current.body,
       }));
       setImportedFileName(file.name);
@@ -979,6 +1040,66 @@ export function WritePage() {
       setSuccessMessage(null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "本地 Markdown 导入失败。");
+    }
+  }
+
+  async function handleHTMLImport(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setSuccessMessage(null);
+      const imported = await importHTMLDocument(file, writeToken.trim());
+      setForm((current) => ({
+        ...current,
+        title: imported.title || current.title,
+        slug: imported.slug || current.slug || stripHTMLDocumentExtension(file.name),
+        summary: imported.summary || current.summary,
+        tags: imported.tags.length > 0 ? imported.tags.join(", ") : current.tags,
+        author: imported.author || current.author,
+        publishedAt: imported.publishedAt || current.publishedAt,
+        bodyFormat: normalizeBodyFormat(imported.bodyFormat),
+        body: imported.body || current.body,
+      }));
+      setImportedFileName(file.name);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "HTML 导入失败。");
+    }
+  }
+
+  async function handleExportPDF() {
+    if (exportingPDF) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setSuccessMessage(null);
+      setExportingPDF(true);
+      const { blob, fileName } = await exportPostPDF({
+        title: form.title.trim(),
+        summary: form.summary.trim(),
+        category: form.category.trim(),
+        tags: form.tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+        author: form.author.trim(),
+        publishedAt: form.publishedAt.trim(),
+        accent: form.accent.trim(),
+        bodyFormat: form.bodyFormat,
+        body: form.body,
+      }, writeToken.trim());
+      downloadBlob(blob, fileName);
+      setSuccessMessage(`已下载 ${fileName}。`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "PDF 导出失败。");
+    } finally {
+      setExportingPDF(false);
     }
   }
 
@@ -1134,6 +1255,7 @@ export function WritePage() {
         draft: form.draft,
         featured: form.featured,
         accent: form.accent || undefined,
+        bodyFormat: form.bodyFormat,
         body: form.body,
       };
 
@@ -1169,7 +1291,7 @@ export function WritePage() {
                 这是管理端入口，不对访客显示。
               </h1>
               <p className="text-base leading-8 text-[var(--muted)] sm:text-lg">
-                公开页面只保留文章、归档和详情阅读。输入服务端的 BLOG_WRITE_TOKEN 验证当前会话后，才会加载文章列表、编辑、删除、置顶和导入 Markdown 的后台操作面板。
+                公开页面只保留文章、归档和详情阅读。输入服务端的 BLOG_WRITE_TOKEN 验证当前会话后，才会加载文章列表、编辑、删除、置顶和导入 Markdown/HTML 的后台操作面板。
               </p>
             </div>
           </CardHeader>
@@ -1303,6 +1425,17 @@ export function WritePage() {
                     预览正文
                   </Link>
                 ) : null}
+                <Button
+                  type="button"
+                  radius="full"
+                  variant="bordered"
+                  isDisabled={exportingPDF || form.title.trim().length === 0 || form.body.trim().length === 0}
+                  onPress={() => {
+                    void handleExportPDF();
+                  }}
+                >
+                  {exportingPDF ? "导出中..." : "导出 PDF"}
+                </Button>
                 {selectedSlug && form.draft ? <Chip color="warning" variant="flat">草稿仅管理端可见</Chip> : null}
                 <Button type="button" radius="full" variant="light" onPress={clearWriteAccess}>
                   退出管理端
@@ -1469,10 +1602,19 @@ export function WritePage() {
                       onChange={handleMarkdownImport}
                     />
                   </label>
+                  <label className="inline-flex cursor-pointer rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90">
+                    导入本地 html
+                    <input
+                      type="file"
+                      accept=".html,.htm,text/html"
+                      className="hidden"
+                      onChange={handleHTMLImport}
+                    />
+                  </label>
                   <span>
                     {importedFileName
-                      ? `已导入 ${importedFileName}，frontmatter 与正文已同步到表单。`
-                      : "支持直接导入本地 Markdown，把实验记录或 runbook 拉进来继续写。"}
+                      ? `已导入 ${importedFileName}，内容已同步到当前表单。`
+                      : "Markdown 会直接读 frontmatter；HTML 会走服务端导入接口并按 HTML 正文保存。"}
                   </span>
                 </div>
               </div>
@@ -1483,7 +1625,7 @@ export function WritePage() {
                     <div>
                       <p className="font-medium text-[var(--ink)]">图片工具</p>
                       <p className="text-xs leading-6 text-[var(--muted)]">
-                        支持插入远程图片地址，也支持把本地 JPG、PNG、SVG、GIF、WebP 上传到站点的 /media 目录后自动插进 Markdown；超过 8MB 的 JPG、PNG、WebP 会先在浏览器压缩。
+                        支持插入远程图片地址，也支持把本地 JPG、PNG、SVG、GIF、WebP 上传到站点的 /media 目录后自动插进当前正文格式；超过 8MB 的 JPG、PNG、WebP 会先在浏览器压缩。
                       </p>
                     </div>
 
@@ -1536,12 +1678,44 @@ export function WritePage() {
                 </div>
               </div>
 
+              <div className="rounded-[1.5rem] border border-black/10 bg-white/70 p-4 text-sm leading-7 text-[var(--muted)]">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="font-medium text-[var(--ink)]">正文格式</p>
+                    <p className="text-xs leading-6 text-[var(--muted)]">
+                      Markdown 继续沿用站内渲染链路；HTML 会原样保存为 HTML 正文，并在服务端清洗脚本、事件和危险属性。
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      radius="full"
+                      size="sm"
+                      variant={form.bodyFormat === "markdown" ? "solid" : "bordered"}
+                      onPress={() => updateField("bodyFormat", "markdown")}
+                    >
+                      Markdown
+                    </Button>
+                    <Button
+                      type="button"
+                      radius="full"
+                      size="sm"
+                      variant={form.bodyFormat === "html" ? "solid" : "bordered"}
+                      onPress={() => updateField("bodyFormat", "html")}
+                    >
+                      HTML
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-[var(--ink)]">Markdown 正文</span>
+                <span className="text-sm font-medium text-[var(--ink)]">{form.bodyFormat === "html" ? "HTML 正文" : "Markdown 正文"}</span>
                 <textarea
                   ref={bodyTextareaRef}
                   className="min-h-[24rem] w-full rounded-[1.5rem] border border-black/10 bg-white/70 px-4 py-4 text-sm leading-7 text-[var(--ink)] outline-none transition focus:border-black/30 focus:bg-white"
-                  placeholder="# 标题\n\n先写背景、结论和关键数据"
+                  placeholder={form.bodyFormat === "html" ? "<article>\n  <h2>章节标题</h2>\n  <p>直接粘贴 HTML 正文。</p>\n</article>" : "# 标题\n\n先写背景、结论和关键数据"}
                   value={form.body}
                   onChange={(event) => updateField("body", event.target.value)}
                 />

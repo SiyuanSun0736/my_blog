@@ -2,6 +2,7 @@ package blog
 
 import (
 	"crypto/subtle"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -10,6 +11,8 @@ import (
 )
 
 const writeTokenEnvName = "BLOG_WRITE_TOKEN"
+
+const maxHTMLImportBytes = 4 * 1024 * 1024
 
 type Handler struct {
 	service        *Service
@@ -57,6 +60,8 @@ func (h *Handler) RegisterRoutes(router gin.IRoutes) {
 	router.GET("/admin/posts", h.requireWriteAccess, h.listAdminPosts)
 	router.GET("/admin/posts/:slug", h.requireWriteAccess, h.getAdminPost)
 	router.POST("/admin/posts/batch", h.requireWriteAccess, h.batchPosts)
+	router.POST("/admin/exports/pdf", h.requireWriteAccess, h.exportPDF)
+	router.POST("/admin/imports/html", h.requireWriteAccess, h.importHTMLDocument)
 	router.POST("/admin/uploads/images", h.requireWriteAccess, h.uploadImage)
 	router.GET("/write-access", h.requireWriteAccess, h.confirmWriteAccess)
 	router.POST("/posts", h.requireWriteAccess, h.createPost)
@@ -250,6 +255,77 @@ func (h *Handler) batchPosts(c *gin.Context) {
 		"message":  "batch operation applied",
 		"affected": affected,
 	})
+}
+
+func (h *Handler) exportPDF(c *gin.Context) {
+	var request PDFExportInput
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid pdf export payload"})
+		return
+	}
+
+	pdfBytes, fileName, err := buildPostPDF(request, PDFRenderOptions{
+		MediaDir:     h.mediaDir,
+		MediaURLPath: h.mediaURLPath,
+	})
+	if err != nil {
+		if err == ErrInvalidPost {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "title, body or publishedAt is invalid"})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to export pdf"})
+		return
+	}
+
+	c.Header("Cache-Control", "no-store")
+	c.Header("Content-Disposition", pdfContentDisposition(fileName))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+func (h *Handler) importHTMLDocument(c *gin.Context) {
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "html file is required"})
+		return
+	}
+
+	if !isHTMLDocumentFileName(fileHeader.Filename) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "only .html or .htm files are supported"})
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to open html file"})
+		return
+	}
+	defer file.Close()
+
+	contents, err := io.ReadAll(io.LimitReader(file, maxHTMLImportBytes+1))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to read html file"})
+		return
+	}
+
+	if len(contents) > maxHTMLImportBytes {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"message": "html file is too large"})
+		return
+	}
+
+	imported, err := parseHTMLImportDocument(fileHeader.Filename, string(contents))
+	if err != nil {
+		if err == ErrInvalidPost {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "html content is empty or invalid"})
+			return
+		}
+
+		c.JSON(http.StatusBadRequest, gin.H{"message": "failed to import html file"})
+		return
+	}
+
+	c.JSON(http.StatusOK, imported)
 }
 
 func (h *Handler) deletePost(c *gin.Context) {

@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -118,7 +116,7 @@ func (s *Service) listPosts(ctx context.Context, includeDrafts bool) ([]Post, er
 			return nil, err
 		}
 
-		posts = append(posts, post)
+		posts = append(posts, normalizeStoredPost(post))
 	}
 
 	return posts, cursor.Err()
@@ -148,7 +146,7 @@ func (s *Service) getPostBySlug(ctx context.Context, slug string, includeDrafts 
 		return Post{}, false, err
 	}
 
-	return post, true, nil
+	return normalizeStoredPost(post), true, nil
 }
 
 func (s *Service) CreatePost(ctx context.Context, input CreatePostInput) (Post, error) {
@@ -176,10 +174,11 @@ func (s *Service) CreatePost(ctx context.Context, input CreatePostInput) (Post, 
 		Tags:        normalized.Tags,
 		Author:      normalized.Author,
 		PublishedAt: normalized.PublishedAt,
-		ReadMinutes: estimateReadMinutes(normalized.Body),
+		ReadMinutes: estimateReadMinutesForBody(normalized.Body, normalized.BodyFormat),
 		Draft:       normalized.Draft,
 		Featured:    normalized.Featured,
 		Accent:      normalized.Accent,
+		BodyFormat:  normalized.BodyFormat,
 		Body:        normalized.Body,
 	}
 
@@ -225,10 +224,11 @@ func (s *Service) UpdatePost(ctx context.Context, currentSlug string, input Crea
 		Tags:        normalized.Tags,
 		Author:      normalized.Author,
 		PublishedAt: normalized.PublishedAt,
-		ReadMinutes: estimateReadMinutes(normalized.Body),
+		ReadMinutes: estimateReadMinutesForBody(normalized.Body, normalized.BodyFormat),
 		Draft:       normalized.Draft,
 		Featured:    normalized.Featured,
 		Accent:      normalized.Accent,
+		BodyFormat:  normalized.BodyFormat,
 		Body:        normalized.Body,
 	}
 
@@ -466,7 +466,8 @@ func (s *Service) ensureFeaturedPostCapacity(ctx context.Context, keepID int) er
 
 func normalizeCreatePostInput(input CreatePostInput) (CreatePostInput, error) {
 	title := strings.TrimSpace(input.Title)
-	body := strings.TrimSpace(input.Body)
+	bodyFormat := normalizeBodyFormat(input.BodyFormat)
+	body := sanitizeBodyContent(input.Body, bodyFormat)
 	if title == "" || body == "" {
 		return CreatePostInput{}, ErrInvalidPost
 	}
@@ -496,7 +497,7 @@ func normalizeCreatePostInput(input CreatePostInput) (CreatePostInput, error) {
 
 	summary := strings.TrimSpace(input.Summary)
 	if summary == "" {
-		summary = summarizeMarkdown(body)
+		summary = summarizeBody(body, bodyFormat)
 	}
 
 	return CreatePostInput{
@@ -510,6 +511,7 @@ func normalizeCreatePostInput(input CreatePostInput) (CreatePostInput, error) {
 		Draft:       input.Draft,
 		Featured:    input.Featured && !input.Draft,
 		Accent:      fallback(strings.TrimSpace(input.Accent), "linear-gradient(135deg, #0f766e 0%, #f59e0b 100%)"),
+		BodyFormat:  bodyFormat,
 		Body:        body,
 	}, nil
 }
@@ -538,39 +540,6 @@ func normalizeSlug(rawSlug string, fallbackTitle string) string {
 	return strings.Trim(builder.String(), "-")
 }
 
-func summarizeMarkdown(markdown string) string {
-	plain := markdownPlainText(markdown)
-	if plain == "" {
-		return ""
-	}
-
-	runes := []rune(plain)
-	if len(runes) <= 80 {
-		return plain
-	}
-
-	return strings.TrimSpace(string(runes[:80])) + "..."
-}
-
-func estimateReadMinutes(markdown string) int {
-	plain := markdownPlainText(markdown)
-	runeCount := utf8.RuneCountInString(plain)
-	if runeCount <= 320 {
-		return 1
-	}
-
-	minutes := runeCount / 320
-	if runeCount%320 != 0 {
-		minutes++
-	}
-
-	if minutes < 1 {
-		return 1
-	}
-
-	return minutes
-}
-
 func markdownPlainText(markdown string) string {
 	plain := strings.TrimSpace(markdown)
 	if plain == "" {
@@ -588,10 +557,8 @@ func markdownPlainText(markdown string) string {
 		"-", " ",
 	)
 	plain = replacer.Replace(plain)
-	linkPattern := regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
-	plain = linkPattern.ReplaceAllString(plain, "$1")
-	spacePattern := regexp.MustCompile(`\s+`)
 	plain = spacePattern.ReplaceAllString(strings.TrimSpace(plain), " ")
+	plain = markdownLinkPattern.ReplaceAllString(plain, "$1")
 
 	return plain
 }

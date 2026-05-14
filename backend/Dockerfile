@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM alpine:3.21
 
-RUN apk add --no-cache su-exec \
+RUN apk add --no-cache font-droid-nonlatin su-exec \
 	&& adduser -D -u 10001 appuser \
 	&& mkdir -p /app/media \
 	&& chown -R appuser:appuser /app

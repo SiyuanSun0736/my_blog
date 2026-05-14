@@ -1,10 +1,7 @@
 import { Avatar, Card, CardBody, Chip, Divider, Spinner } from "../components/ui";
 import { useEffect, useState } from "react";
-import rehypeKatex from "rehype-katex";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
 import { Link, useParams } from "react-router-dom";
+import { PostContent } from "../components/PostContent";
 import { fetchPost, fetchPosts } from "../lib/api";
 import type { Post, PostSummary } from "../types";
 
@@ -192,11 +189,7 @@ export function PostPage() {
       <div className="grid gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
           <CardBody className="space-y-7 p-4 sm:space-y-8 sm:p-8 lg:p-10">
-            <div className="story-prose">
-              <ReactMarkdown rehypePlugins={[rehypeKatex]} remarkPlugins={[remarkMath, remarkGfm]}>
-                {post.body}
-              </ReactMarkdown>
-            </div>
+            <PostContent body={post.body} bodyFormat={post.bodyFormat} />
 
             <Divider />
 

@@ -1,3 +1,5 @@
+export type BodyFormat = "markdown" | "html";
+
 export interface PostSummary {
   id: number;
   slug: string;
@@ -11,6 +13,7 @@ export interface PostSummary {
   draft: boolean;
   featured: boolean;
   accent: string;
+  bodyFormat: BodyFormat;
 }
 
 export interface Post extends PostSummary {
