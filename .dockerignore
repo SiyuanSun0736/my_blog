@@ -1,6 +1,7 @@
 .git/
 .gitignore
 frontend/node_modules/
+backend/node_modules/
 frontend/dist/
 backend/bin/
 certs/

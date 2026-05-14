@@ -2,7 +2,6 @@ package blog
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"image"
 	"image/color"
@@ -13,10 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
 	htmlnode "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -39,6 +35,30 @@ func requireChromiumForPDFTests(t *testing.T) {
 
 	if _, err := resolvePDFChromiumExecutable(); err != nil {
 		t.Skipf("skip pdf export test without chromium: %v", err)
+	}
+}
+
+func requireMathJaxForPDFTests(t *testing.T) {
+	t.Helper()
+
+	if _, err := resolvePDFNodeExecutable(); err != nil {
+		t.Skipf("skip pdf export test without node: %v", err)
+	}
+
+	if _, err := resolvePDFMathJaxDir(); err != nil {
+		t.Skipf("skip pdf export test without MathJax assets: %v", err)
+	}
+
+	if _, err := resolvePDFMathJaxScriptPath(); err != nil {
+		t.Skipf("skip pdf export test without MathJax renderer script: %v", err)
+	}
+}
+
+func requirePDFFontForPDFTests(t *testing.T) {
+	t.Helper()
+
+	if _, err := resolvePDFFontPath(); err != nil {
+		t.Skipf("skip pdf export test without configured pdf font: %v", err)
 	}
 }
 
@@ -219,10 +239,6 @@ func TestRenderPostBodyHTMLConvertsLatexOutsideCodeBlocks(t *testing.T) {
 		t.Fatalf("expected block math to be converted in html, got %q", bodyHTML)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-browser="math"`) {
-		t.Fatalf("expected math content to be marked for browser rendering, got %q", bodyHTML)
-	}
-
 	if !strings.Contains(bodyHTML, `data-pdf-math-expression="E=mc^2"`) {
 		t.Fatalf("expected inline math placeholder expression, got %q", bodyHTML)
 	}
@@ -265,11 +281,11 @@ func TestRenderPostBodyHTMLMarksStandaloneLatexParagraphs(t *testing.T) {
 		t.Fatalf("renderPostBodyHTML returned error: %v", err)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-math-expression="S_q = log(\frac{T_{00}}{T_q})"`) {
+	if !strings.Contains(bodyHTML, `data-pdf-math-expression="S_q = log(\frac{T_00}{T_q})"`) {
 		t.Fatalf("expected standalone score formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat{r}^{\mathrm{gated}}_{q,k} = \hat{r}^{\mathrm{cal}}_{q,k} \cdot (1 - p_{\mathrm{tie}})^\gamma"`) {
+	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma"`) {
 		t.Fatalf("expected standalone gated formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 }
@@ -282,13 +298,14 @@ func TestRenderPostBodyHTMLMarksStandalonePairwiseFormulaLine(t *testing.T) {
 		t.Fatalf("renderPostBodyHTML returned error: %v", err)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat{r}_{q,k} = model(q, a_k)"`) {
+	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat r_q,k = model(q, a_k)"`) {
 		t.Fatalf("expected standalone pairwise formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 }
 
-func TestBuildPostPDFRendersStandaloneLatexParagraphsAsBrowserFragments(t *testing.T) {
-	requireChromiumForPDFTests(t)
+func TestBuildPostPDFRendersStandaloneLatexParagraphsAsEmbeddedImages(t *testing.T) {
+	requirePDFFontForPDFTests(t)
+	requireMathJaxForPDFTests(t)
 
 	pdfBytes, _, err := buildPostPDF(PDFExportInput{
 		Title:      "Formula report",
@@ -316,7 +333,7 @@ func TestRenderPostBodyHTMLHandlesDualTowerArchitectureFixture(t *testing.T) {
 		t.Fatalf("expected pairwise objective formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat{S}_x^{(k)} = S_k + \hat{r}_{x,k}"`) {
+	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat S_x^{(k)} = S_k + \hat r_{x,k}"`) {
 		t.Fatalf("expected anchor score formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 
@@ -332,7 +349,7 @@ func TestRenderPostBodyHTMLHandlesDualTowerArchitectureFixture(t *testing.T) {
 		t.Fatalf("expected fixture svg image reference to remain in rendered html, got %q", bodyHTML)
 	}
 
-	if strings.Contains(bodyHTML, `<p data-pdf-browser="math"><a href="../scripts/build_run_features.py">`) {
+	if strings.Contains(bodyHTML, `data-pdf-math-expression="build_run_features.py"`) {
 		t.Fatalf("expected snake_case file references in prose not to be marked as raw math, got %q", bodyHTML)
 	}
 }
@@ -362,340 +379,65 @@ func TestBuildPostPDFHandlesDualTowerArchitectureFixture(t *testing.T) {
 	}
 }
 
-func TestBuildPDFFragmentDocumentHTMLUsesLocalKaTeXAssets(t *testing.T) {
+func TestBuildPDFFragmentDocumentHTMLKeepsFragmentMarkup(t *testing.T) {
 	t.Parallel()
 
-	documentHTML := buildPDFFragmentDocumentHTML(`<p><span class="pdf-math-fragment" data-pdf-math-expression="E=mc^2" data-pdf-math-display="false">E=mc^2</span></p>`, 640, 592, pdfKaTeXAssets{
-		cssDataURL: "data:text/css;base64,YQ==",
-		jsDataURL:  "data:text/javascript;base64,Yg==",
-	})
+	documentHTML := buildPDFFragmentDocumentHTML(`<table><tr><td>stable</td></tr></table>`, 640, 592)
 
 	if strings.Contains(documentHTML, "cdn.jsdelivr.net") {
 		t.Fatalf("expected fragment html not to depend on external cdn, got %q", documentHTML)
 	}
 
-	if !strings.Contains(documentHTML, "data:text/css;base64,YQ==") {
-		t.Fatalf("expected embedded katex stylesheet, got %q", documentHTML)
+	if strings.Contains(documentHTML, "katex") {
+		t.Fatalf("expected fragment html not to embed legacy katex runtime, got %q", documentHTML)
 	}
 
-	if !strings.Contains(documentHTML, "data:text/javascript;base64,Yg==") {
-		t.Fatalf("expected embedded katex script, got %q", documentHTML)
-	}
-}
-
-func TestPDFFragmentDocumentRendersKaTeXWithChromium(t *testing.T) {
-	requireChromiumForPDFTests(t)
-
-	assets := loadPDFKaTeXAssets()
-	if assets.cssDataURL == "" || assets.jsDataURL == "" {
-		t.Skip("skip chromium katex render test without local katex assets")
-	}
-
-	documentHTML := buildPDFFragmentDocumentHTML(`<p><span class="pdf-math-fragment" data-pdf-math-expression="E=mc^2" data-pdf-math-display="false">E=mc^2</span></p>`, 640, 592, assets)
-	executablePath, err := resolvePDFChromiumExecutable()
-	if err != nil {
-		t.Fatalf("resolvePDFChromiumExecutable returned error: %v", err)
-	}
-
-	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(executablePath),
-		chromedp.Headless,
-		chromedp.DisableGPU,
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-setuid-sandbox", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("hide-scrollbars", true),
-	)
-
-	allocatorContext, cancelAllocator := chromedp.NewExecAllocator(context.Background(), allocatorOptions...)
-	defer cancelAllocator()
-
-	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
-	defer cancelBrowser()
-
-	timeoutContext, cancelTimeout := context.WithTimeout(browserContext, 20*time.Second)
-	defer cancelTimeout()
-
-	var renderedHTML string
-	err = chromedp.Run(timeoutContext,
-		chromedp.EmulateViewport(640, 480),
-		chromedp.Navigate("about:blank"),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			frameTree, err := page.GetFrameTree().Do(ctx)
-			if err != nil {
-				return err
-			}
-
-			return page.SetDocumentContent(frameTree.Frame.ID, documentHTML).Do(ctx)
-		}),
-		chromedp.WaitReady("body[data-ready='true']", chromedp.ByQuery),
-		chromedp.InnerHTML(".pdf-math-fragment", &renderedHTML, chromedp.ByQuery),
-	)
-	if err != nil {
-		t.Fatalf("expected chromium to render math fragment, got error: %v", err)
-	}
-
-	if !strings.Contains(renderedHTML, "katex") {
-		t.Fatalf("expected katex markup after chromium render, got %q", renderedHTML)
+	if !strings.Contains(documentHTML, `<div id="pdf-fragment"><table><tr><td>stable</td></tr></table></div>`) {
+		t.Fatalf("expected fragment html to keep markup payload, got %q", documentHTML)
 	}
 }
 
-func TestPDFFragmentDocumentRendersCommonScriptShorthand(t *testing.T) {
-	requireChromiumForPDFTests(t)
+func TestPDFMathRendererRendersStandaloneFormula(t *testing.T) {
+	requireMathJaxForPDFTests(t)
 
-	assets := loadPDFKaTeXAssets()
-	if assets.cssDataURL == "" || assets.jsDataURL == "" {
-		t.Skip("skip chromium katex shorthand test without local katex assets")
-	}
-
-	documentHTML := buildPDFFragmentDocumentHTML(`<p><span class="pdf-math-fragment" data-pdf-math-expression="`+normalizePDFMathExpressionForRenderer(`\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma`)+`" data-pdf-math-display="true">placeholder</span></p>`, 640, 592, assets)
-	executablePath, err := resolvePDFChromiumExecutable()
+	renderer, err := newPDFMathRenderer()
 	if err != nil {
-		t.Fatalf("resolvePDFChromiumExecutable returned error: %v", err)
+		t.Fatalf("newPDFMathRenderer returned error: %v", err)
 	}
 
-	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(executablePath),
-		chromedp.Headless,
-		chromedp.DisableGPU,
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-setuid-sandbox", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("hide-scrollbars", true),
-	)
-
-	allocatorContext, cancelAllocator := chromedp.NewExecAllocator(context.Background(), allocatorOptions...)
-	defer cancelAllocator()
-
-	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
-	defer cancelBrowser()
-
-	timeoutContext, cancelTimeout := context.WithTimeout(browserContext, 20*time.Second)
-	defer cancelTimeout()
-
-	var renderedHTML string
-	err = chromedp.Run(timeoutContext,
-		chromedp.EmulateViewport(640, 480),
-		chromedp.Navigate("about:blank"),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			frameTree, err := page.GetFrameTree().Do(ctx)
-			if err != nil {
-				return err
-			}
-
-			return page.SetDocumentContent(frameTree.Frame.ID, documentHTML).Do(ctx)
-		}),
-		chromedp.WaitReady("body[data-ready='true']", chromedp.ByQuery),
-		chromedp.OuterHTML(".pdf-math-fragment", &renderedHTML, chromedp.ByQuery),
-	)
+	asset, err := renderer.render(`E=mc^2`, false)
 	if err != nil {
-		t.Fatalf("expected chromium to render shorthand math fragment, got error: %v", err)
+		t.Fatalf("renderer.render returned error: %v", err)
 	}
 
-	if strings.Contains(renderedHTML, "katex-error") || strings.Contains(renderedHTML, `\hat r`) {
-		t.Fatalf("expected shorthand math to avoid raw katex error output, got %q", renderedHTML)
+	if asset == nil || len(asset.data) == 0 {
+		t.Fatal("expected non-empty math asset")
+	}
+
+	if asset.imageType != "PNG" {
+		t.Fatalf("expected math asset to be rasterized as PNG, got %q", asset.imageType)
+	}
+
+	if _, _, err := image.DecodeConfig(bytes.NewReader(asset.data)); err != nil {
+		t.Fatalf("expected rendered math asset to be a decodable image, got %v", err)
 	}
 }
 
-func TestPDFFragmentDocumentRendersRawSlashMathNodeWithChromium(t *testing.T) {
-	requireChromiumForPDFTests(t)
+func TestPDFMathRendererHandlesCommonScriptShorthand(t *testing.T) {
+	requireMathJaxForPDFTests(t)
 
-	assets := loadPDFKaTeXAssets()
-	if assets.cssDataURL == "" || assets.jsDataURL == "" {
-		t.Skip("skip chromium raw math render test without local katex assets")
-	}
-
-	documentHTML := buildPDFFragmentDocumentHTML(`<p data-pdf-browser="math">\hat r_q,k = model(q, a_k)</p>`, 640, 592, assets)
-	executablePath, err := resolvePDFChromiumExecutable()
+	renderer, err := newPDFMathRenderer()
 	if err != nil {
-		t.Fatalf("resolvePDFChromiumExecutable returned error: %v", err)
+		t.Fatalf("newPDFMathRenderer returned error: %v", err)
 	}
 
-	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(executablePath),
-		chromedp.Headless,
-		chromedp.DisableGPU,
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-setuid-sandbox", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("hide-scrollbars", true),
-	)
-
-	allocatorContext, cancelAllocator := chromedp.NewExecAllocator(context.Background(), allocatorOptions...)
-	defer cancelAllocator()
-
-	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
-	defer cancelBrowser()
-
-	timeoutContext, cancelTimeout := context.WithTimeout(browserContext, 20*time.Second)
-	defer cancelTimeout()
-
-	var renderedHTML string
-	err = chromedp.Run(timeoutContext,
-		chromedp.EmulateViewport(640, 480),
-		chromedp.Navigate("about:blank"),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			frameTree, err := page.GetFrameTree().Do(ctx)
-			if err != nil {
-				return err
-			}
-
-			return page.SetDocumentContent(frameTree.Frame.ID, documentHTML).Do(ctx)
-		}),
-		chromedp.WaitReady("body[data-ready='true']", chromedp.ByQuery),
-		chromedp.InnerHTML("[data-pdf-browser='math']", &renderedHTML, chromedp.ByQuery),
-	)
+	asset, err := renderer.render(`\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma`, true)
 	if err != nil {
-		t.Fatalf("expected chromium to render raw slash math node, got error: %v", err)
+		t.Fatalf("renderer.render returned error: %v", err)
 	}
 
-	if !strings.Contains(renderedHTML, "katex") {
-		t.Fatalf("expected raw slash math node to be rendered by katex, got %q", renderedHTML)
-	}
-}
-
-func TestContainsRawPDFMathHintRecognizesUnderscoreAndSymbols(t *testing.T) {
-	t.Parallel()
-
-	for _, sample := range []string{
-		"S_a_k + r_q,k",
-		"x^2 + y_1",
-		"A ∧ B",
-		"score ≥ threshold",
-	} {
-		if !containsRawPDFMathHint(sample) {
-			t.Fatalf("expected raw math hint for %q", sample)
-		}
-	}
-
-	if containsRawPDFMathHint("说明：这是中文段落") {
-		t.Fatalf("expected plain chinese text not to be treated as raw math hint")
-	}
-
-	for _, sample := range []string{
-		"window_metrics.jsonl",
-		"run_features_zscore.parquet",
-		"score_program.py",
-		"anchor_quality",
-		"说明：score_gt 用于打分",
-	} {
-		if containsRawPDFMathHint(sample) {
-			t.Fatalf("expected prose or file identifier %q not to be treated as raw math hint", sample)
-		}
-	}
-}
-
-func TestPDFFragmentDocumentRendersRawUnderscoreMathNodeWithChromium(t *testing.T) {
-	requireChromiumForPDFTests(t)
-
-	assets := loadPDFKaTeXAssets()
-	if assets.cssDataURL == "" || assets.jsDataURL == "" {
-		t.Skip("skip chromium raw underscore math test without local katex assets")
-	}
-
-	documentHTML := buildPDFFragmentDocumentHTML(`<p data-pdf-browser="math">x^2 + y_1</p>`, 640, 592, assets)
-	executablePath, err := resolvePDFChromiumExecutable()
-	if err != nil {
-		t.Fatalf("resolvePDFChromiumExecutable returned error: %v", err)
-	}
-
-	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(executablePath),
-		chromedp.Headless,
-		chromedp.DisableGPU,
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-setuid-sandbox", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("hide-scrollbars", true),
-	)
-
-	allocatorContext, cancelAllocator := chromedp.NewExecAllocator(context.Background(), allocatorOptions...)
-	defer cancelAllocator()
-
-	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
-	defer cancelBrowser()
-
-	timeoutContext, cancelTimeout := context.WithTimeout(browserContext, 20*time.Second)
-	defer cancelTimeout()
-
-	var renderedHTML string
-	err = chromedp.Run(timeoutContext,
-		chromedp.EmulateViewport(640, 480),
-		chromedp.Navigate("about:blank"),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			frameTree, err := page.GetFrameTree().Do(ctx)
-			if err != nil {
-				return err
-			}
-
-			return page.SetDocumentContent(frameTree.Frame.ID, documentHTML).Do(ctx)
-		}),
-		chromedp.WaitReady("body[data-ready='true']", chromedp.ByQuery),
-		chromedp.InnerHTML("[data-pdf-browser='math']", &renderedHTML, chromedp.ByQuery),
-	)
-	if err != nil {
-		t.Fatalf("expected chromium to render raw underscore math node, got error: %v", err)
-	}
-
-	if !strings.Contains(renderedHTML, "katex") {
-		t.Fatalf("expected raw underscore math node to be rendered by katex, got %q", renderedHTML)
-	}
-}
-
-func TestPDFFragmentDocumentSkipsNonEnglishRawSlashNodeWithChromium(t *testing.T) {
-	requireChromiumForPDFTests(t)
-
-	assets := loadPDFKaTeXAssets()
-	if assets.cssDataURL == "" || assets.jsDataURL == "" {
-		t.Skip("skip chromium non-english raw math test without local katex assets")
-	}
-
-	documentHTML := buildPDFFragmentDocumentHTML(`<p data-pdf-browser="math">说明：\hat r_q,k = model(q, a_k)</p>`, 640, 592, assets)
-	executablePath, err := resolvePDFChromiumExecutable()
-	if err != nil {
-		t.Fatalf("resolvePDFChromiumExecutable returned error: %v", err)
-	}
-
-	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(executablePath),
-		chromedp.Headless,
-		chromedp.DisableGPU,
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-setuid-sandbox", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("hide-scrollbars", true),
-	)
-
-	allocatorContext, cancelAllocator := chromedp.NewExecAllocator(context.Background(), allocatorOptions...)
-	defer cancelAllocator()
-
-	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
-	defer cancelBrowser()
-
-	timeoutContext, cancelTimeout := context.WithTimeout(browserContext, 20*time.Second)
-	defer cancelTimeout()
-
-	var renderedHTML string
-	err = chromedp.Run(timeoutContext,
-		chromedp.EmulateViewport(640, 480),
-		chromedp.Navigate("about:blank"),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			frameTree, err := page.GetFrameTree().Do(ctx)
-			if err != nil {
-				return err
-			}
-
-			return page.SetDocumentContent(frameTree.Frame.ID, documentHTML).Do(ctx)
-		}),
-		chromedp.WaitReady("body[data-ready='true']", chromedp.ByQuery),
-		chromedp.InnerHTML("[data-pdf-browser='math']", &renderedHTML, chromedp.ByQuery),
-	)
-	if err != nil {
-		t.Fatalf("expected chromium to skip non-english raw slash node without error, got: %v", err)
-	}
-
-	if strings.Contains(renderedHTML, "katex") {
-		t.Fatalf("expected non-english raw slash node to stay unrendered, got %q", renderedHTML)
+	if asset == nil || len(asset.data) == 0 {
+		t.Fatal("expected rendered shorthand math asset")
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"html/template"
@@ -15,7 +14,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -55,6 +53,7 @@ type pdfRenderer struct {
 	leftMargin   float64
 	rightMargin  float64
 	browser      *pdfFragmentBrowserRenderer
+	math         *pdfMathRenderer
 }
 
 type printablePDFDocument struct {
@@ -76,11 +75,6 @@ type pdfRenderProfile struct {
 	localImageBytes    int64
 }
 
-type pdfKaTeXAssets struct {
-	cssDataURL string
-	jsDataURL  string
-}
-
 type pdfTableCell struct {
 	text     string
 	isHeader bool
@@ -91,7 +85,6 @@ type pdfTableRow struct {
 }
 
 type pdfFragmentBrowserRenderer struct {
-	assets          pdfKaTeXAssets
 	allocatorCtx    context.Context
 	cancelAllocator context.CancelFunc
 	browserCtx      context.Context
@@ -101,11 +94,8 @@ type pdfFragmentBrowserRenderer struct {
 var ErrPDFTooLarge = errors.New("pdf export too large")
 
 const (
-	pdfBrowserRenderAttrName  = "data-pdf-browser"
-	pdfBrowserRenderMathValue = "math"
 	pdfMathExpressionAttrName = "data-pdf-math-expression"
 	pdfMathDisplayAttrName    = "data-pdf-math-display"
-	pdfKaTeXVersion           = "0.16.45"
 )
 
 var (
@@ -125,7 +115,6 @@ var (
 	pdfLatexFractionPattern                  = regexp.MustCompile(`\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}`)
 	pdfLatexSqrtPattern                      = regexp.MustCompile(`\\sqrt\s*\{([^{}]+)\}`)
 	pdfLatexTextPattern                      = regexp.MustCompile(`\\(?:text|mathrm|mathbf|operatorname)\s*\{([^{}]+)\}`)
-	pdfRawMathSymbolPattern                  = regexp.MustCompile(`[∧∨≤≥≈≠→←±×÷]`)
 	pdfChromiumCandidates                    = []string{
 		"chromium",
 		"chromium-browser",
@@ -139,12 +128,6 @@ var (
 		"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
 		"/usr/share/fonts/droid-nonlatin/DroidSansFallback.ttf",
 		"/usr/share/fonts/truetype/droid/DroidSansFallback.ttf",
-	}
-	pdfKaTeXAssetDirCandidates = []string{
-		"/usr/local/share/blog-api/pdf-assets",
-		"/app/pdf-assets",
-		"../frontend/node_modules/katex/dist",
-		"frontend/node_modules/katex/dist",
 	}
 	pdfLaTeXSymbolReplacer = strings.NewReplacer(
 		`\times`, `×`,
@@ -187,8 +170,6 @@ var (
 		`\!`, ``,
 		`\\`, ` `,
 	)
-	pdfKaTeXAssetsOnce       sync.Once
-	cachedPDFKaTeXAssets     pdfKaTeXAssets
 	pdfPrintDocumentTemplate = template.Must(template.New("post-pdf").Parse(`<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -920,67 +901,6 @@ func resolvePDFFontPath() (string, error) {
 	return "", fmt.Errorf("pdf font not found; set BLOG_PDF_FONT_PATH or install a supported font")
 }
 
-func loadPDFKaTeXAssets() pdfKaTeXAssets {
-	pdfKaTeXAssetsOnce.Do(func() {
-		cachedPDFKaTeXAssets = pdfKaTeXAssets{
-			cssDataURL: loadPDFKaTeXAssetDataURL("katex.min.css", "text/css"),
-			jsDataURL:  loadPDFKaTeXAssetDataURL("katex.min.js", "text/javascript"),
-		}
-	})
-
-	return cachedPDFKaTeXAssets
-}
-
-func loadPDFKaTeXAssetDataURL(fileName string, mimeType string) string {
-	for _, assetPath := range pdfKaTeXAssetPaths(fileName) {
-		assetBytes, err := os.ReadFile(assetPath)
-		if err != nil || len(assetBytes) == 0 {
-			continue
-		}
-
-		return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(assetBytes)
-	}
-
-	return ""
-}
-
-func pdfKaTeXAssetPaths(fileName string) []string {
-	if strings.TrimSpace(fileName) == "" {
-		return nil
-	}
-
-	seenPaths := make(map[string]struct{})
-	paths := make([]string, 0, len(pdfKaTeXAssetDirCandidates)+2)
-	appendPath := func(path string) {
-		cleanedPath := filepath.Clean(strings.TrimSpace(path))
-		if cleanedPath == "" {
-			return
-		}
-
-		if _, exists := seenPaths[cleanedPath]; exists {
-			return
-		}
-
-		seenPaths[cleanedPath] = struct{}{}
-		paths = append(paths, cleanedPath)
-	}
-
-	if configuredDir := strings.TrimSpace(os.Getenv("BLOG_PDF_KATEX_DIR")); configuredDir != "" {
-		appendPath(filepath.Join(configuredDir, fileName))
-	}
-
-	if executablePath, err := os.Executable(); err == nil {
-		executableDir := filepath.Dir(executablePath)
-		appendPath(filepath.Join(executableDir, "..", "share", "blog-api", "pdf-assets", fileName))
-	}
-
-	for _, candidateDir := range pdfKaTeXAssetDirCandidates {
-		appendPath(filepath.Join(candidateDir, fileName))
-	}
-
-	return paths
-}
-
 func renderPostBodyHTML(title string, body string, bodyFormat BodyFormat) (string, error) {
 	normalizedTitle := normalizeWhitespace(title)
 	var bodyHTML string
@@ -1057,7 +977,6 @@ func rewritePDFMathTextNode(node *htmlnode.Node) {
 	}
 
 	if containsPDFMathSyntax(node.Data) {
-		markPDFMathRenderNode(node)
 		segments := splitPDFMathTextSegments(node.Data)
 		if len(segments) == 0 {
 			node.Data = normalizePDFTextNodeValue(node.Data)
@@ -1091,17 +1010,12 @@ func rewritePDFMathTextNode(node *htmlnode.Node) {
 	}
 
 	if expression, display := extractStandalonePDFMathExpression(node); expression != "" {
-		markPDFMathRenderNode(node)
 		placeholderNode := newPDFMathPlaceholderNode(expression, display)
 		if placeholderNode != nil {
 			insertHTMLNodeBefore(node, placeholderNode)
 			detachHTMLNode(node)
 			return
 		}
-	}
-
-	if containsRawPDFMathHint(node.Data) {
-		markPDFMathRenderNode(node)
 	}
 
 	node.Data = normalizePDFTextNodeValue(node.Data)
@@ -1171,95 +1085,6 @@ func looksLikeStandalonePDFMathExpression(value string) bool {
 	}
 
 	return true
-}
-
-func containsRawPDFMathHint(value string) bool {
-	trimmedValue := normalizeWhitespace(value)
-	if trimmedValue == "" {
-		return false
-	}
-
-	for _, currentRune := range trimmedValue {
-		if unicode.Is(unicode.Han, currentRune) {
-			return false
-		}
-	}
-
-	if strings.Contains(trimmedValue, `\`) {
-		return true
-	}
-
-	if pdfRawMathSymbolPattern.MatchString(trimmedValue) {
-		return true
-	}
-
-	if !strings.ContainsAny(trimmedValue, "_^") {
-		return false
-	}
-
-	for _, token := range strings.Fields(trimmedValue) {
-		if looksLikeRawPDFMathToken(token) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func looksLikeRawPDFMathToken(value string) bool {
-	token := strings.TrimSpace(value)
-	token = strings.Trim(token, "\"'[]()<>")
-	token = strings.Trim(token, ".,;:!?")
-	if token == "" || !strings.ContainsAny(token, "_^") {
-		return false
-	}
-
-	if strings.ContainsAny(token, `/\\.`) {
-		return false
-	}
-
-	if len([]rune(token)) > 32 {
-		return false
-	}
-
-	fragments := strings.FieldsFunc(token, func(currentRune rune) bool {
-		return currentRune == '_' || currentRune == '^'
-	})
-	if len(fragments) < 2 {
-		return false
-	}
-
-	hasShortFragment := false
-	for _, fragment := range fragments {
-		cleanedFragment := strings.NewReplacer("{", "", "}", "", "(", "", ")", "", ",", "").Replace(fragment)
-		if cleanedFragment == "" {
-			return false
-		}
-
-		fragmentLength := 0
-		hasAlphaNumeric := false
-		for _, currentRune := range cleanedFragment {
-			switch {
-			case unicode.IsLetter(currentRune), unicode.IsDigit(currentRune):
-				hasAlphaNumeric = true
-				fragmentLength++
-			case currentRune == '+' || currentRune == '-' || currentRune == '*':
-				fragmentLength++
-			default:
-				return false
-			}
-		}
-
-		if !hasAlphaNumeric || fragmentLength > 4 {
-			return false
-		}
-
-		if fragmentLength <= 2 {
-			hasShortFragment = true
-		}
-	}
-
-	return hasShortFragment
 }
 
 func splitPDFMathTextSegments(value string) []pdfMathTextSegment {
@@ -1574,18 +1399,13 @@ func newPDFMathPlaceholderNode(expression string, display bool) *htmlnode.Node {
 		return nil
 	}
 
-	normalizedExpression := normalizePDFMathExpressionForRenderer(trimmedExpression)
-	if normalizedExpression == "" {
-		normalizedExpression = trimmedExpression
-	}
-
 	placeholderNode := &htmlnode.Node{
 		Type:     htmlnode.ElementNode,
 		DataAtom: atom.Span,
 		Data:     atom.Span.String(),
 		Attr: []htmlnode.Attribute{
 			{Key: "class", Val: "pdf-math-fragment"},
-			{Key: pdfMathExpressionAttrName, Val: normalizedExpression},
+			{Key: pdfMathExpressionAttrName, Val: trimmedExpression},
 			{Key: pdfMathDisplayAttrName, Val: strconv.FormatBool(display)},
 		},
 	}
@@ -1624,80 +1444,6 @@ func containsPDFMathSyntax(value string) bool {
 	}
 
 	return pdfBlockMathPattern.MatchString(value) || pdfInlineMathPattern.MatchString(value)
-}
-
-func markPDFMathRenderNode(node *htmlnode.Node) {
-	var tableCandidate *htmlnode.Node
-	var listCandidate *htmlnode.Node
-	var blockCandidate *htmlnode.Node
-
-	for current := node.Parent; current != nil; current = current.Parent {
-		if current.Type != htmlnode.ElementNode {
-			continue
-		}
-
-		switch current.DataAtom {
-		case atom.Pre, atom.Code, atom.Script, atom.Style:
-			return
-		case atom.Table:
-			tableCandidate = current
-		case atom.Li:
-			if listCandidate == nil {
-				listCandidate = current
-			}
-		case atom.Ul, atom.Ol:
-			if listCandidate == nil {
-				listCandidate = current
-			}
-		case atom.P, atom.Blockquote, atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6, atom.Div:
-			if blockCandidate == nil {
-				blockCandidate = current
-			}
-		}
-	}
-
-	if tableCandidate != nil {
-		setPDFBrowserRenderAttr(tableCandidate, pdfBrowserRenderMathValue)
-		return
-	}
-
-	if listCandidate != nil {
-		setPDFBrowserRenderAttr(listCandidate, pdfBrowserRenderMathValue)
-		return
-	}
-
-	if blockCandidate != nil {
-		setPDFBrowserRenderAttr(blockCandidate, pdfBrowserRenderMathValue)
-	}
-}
-
-func setPDFBrowserRenderAttr(node *htmlnode.Node, value string) {
-	if node == nil || node.Type != htmlnode.ElementNode {
-		return
-	}
-
-	for index, attribute := range node.Attr {
-		if attribute.Key == pdfBrowserRenderAttrName {
-			node.Attr[index].Val = value
-			return
-		}
-	}
-
-	node.Attr = append(node.Attr, htmlnode.Attribute{Key: pdfBrowserRenderAttrName, Val: value})
-}
-
-func hasPDFBrowserRenderAttr(node *htmlnode.Node, value string) bool {
-	if node == nil || node.Type != htmlnode.ElementNode {
-		return false
-	}
-
-	for _, attribute := range node.Attr {
-		if attribute.Key == pdfBrowserRenderAttrName && attribute.Val == value {
-			return true
-		}
-	}
-
-	return false
 }
 
 func normalizePDFTextNodeValue(value string) string {
@@ -1818,7 +1564,11 @@ func (r *pdfRenderer) renderNode(node *htmlnode.Node, indentLevel int) {
 		return
 	}
 
-	if (hasPDFBrowserRenderAttr(node, pdfBrowserRenderMathValue) && node.DataAtom != atom.Li) || node.DataAtom == atom.Table {
+	if r.renderMathOnlyBlock(node, indentLevel) {
+		return
+	}
+
+	if node.DataAtom == atom.Table {
 		if r.renderBrowserHTMLNode(node, indentLevel) {
 			return
 		}
@@ -1904,12 +1654,6 @@ func (r *pdfRenderer) renderList(node *htmlnode.Node, ordered bool, indentLevel 
 		currentItemIndex := itemIndex
 		if ordered {
 			itemIndex++
-		}
-
-		if hasPDFBrowserRenderAttr(child, pdfBrowserRenderMathValue) {
-			if r.renderBrowserListItem(child, ordered, currentItemIndex, indentLevel) {
-				continue
-			}
 		}
 
 		prefix := "•"
@@ -2114,20 +1858,6 @@ func (r *pdfRenderer) renderBrowserHTMLNode(node *htmlnode.Node, indentLevel int
 	return r.renderBrowserHTMLFragment(renderSingleNodeHTML(node), indentLevel)
 }
 
-func (r *pdfRenderer) renderBrowserListItem(node *htmlnode.Node, ordered bool, itemIndex int, indentLevel int) bool {
-	listItemHTML := renderSingleNodeHTML(node)
-	if listItemHTML == "" {
-		return false
-	}
-
-	listHTML := fmt.Sprintf("<ul>%s</ul>", listItemHTML)
-	if ordered {
-		listHTML = fmt.Sprintf("<ol start=\"%d\">%s</ol>", itemIndex, listItemHTML)
-	}
-
-	return r.renderBrowserHTMLFragment(listHTML, indentLevel)
-}
-
 func (r *pdfRenderer) renderBrowserHTMLFragment(fragmentHTML string, indentLevel int) bool {
 	trimmedFragmentHTML := strings.TrimSpace(fragmentHTML)
 	if trimmedFragmentHTML == "" {
@@ -2184,22 +1914,12 @@ func renderSingleNodeHTML(node *htmlnode.Node) string {
 	return buffer.String()
 }
 
-func buildPDFFragmentDocumentHTML(fragmentHTML string, viewportWidth int, contentWidthPx int, assets pdfKaTeXAssets) string {
-	katexStylesheet := ""
-	if assets.cssDataURL != "" {
-		katexStylesheet = fmt.Sprintf("  <link rel=\"stylesheet\" href=\"%s\" />\n", template.HTMLEscapeString(assets.cssDataURL))
-	}
-
-	katexScript := ""
-	if assets.jsDataURL != "" {
-		katexScript = fmt.Sprintf("  <script defer src=\"%s\"></script>\n", template.HTMLEscapeString(assets.jsDataURL))
-	}
-
+func buildPDFFragmentDocumentHTML(fragmentHTML string, viewportWidth int, contentWidthPx int) string {
 	return fmt.Sprintf(`<!doctype html>
 <html lang="zh-CN">
 <head>
 	<meta charset="utf-8" />
-%s  <style>
+	<style>
 		:root {
 			color-scheme: light;
 			--ink: #24180f;
@@ -2296,132 +2016,14 @@ func buildPDFFragmentDocumentHTML(fragmentHTML string, viewportWidth int, conten
 			max-width: 100%%;
 			display: block;
 		}
-
-		#pdf-fragment .pdf-math-fragment[data-pdf-math-display="true"] {
-			display: block;
-			margin: 0.55rem 0;
-		}
-
-		#pdf-fragment .pdf-math-fragment[data-pdf-math-display="false"] {
-			display: inline-block;
-			vertical-align: middle;
-		}
 	</style>
-%s  <script>
+	<script>
 		window.addEventListener("load", function () {
-			var containsHanCharacter = function (expression) {
-				return /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/.test(expression);
-			};
-
-			var isCompactMathToken = function (token) {
-				var normalized = (token || "")
-					.trim()
-					.replace(/^["'\[\]()<>]+|["'\[\]()<>]+$/g, "")
-					.replace(/^[.,;:!?]+|[.,;:!?]+$/g, "");
-				if (!normalized || !/[_^]/.test(normalized) || /[\/\\.]/.test(normalized) || normalized.length > 32) {
-					return false;
-				}
-
-				var fragments = normalized.split(/[_^]+/);
-				if (fragments.length < 2) {
-					return false;
-				}
-
-				var hasShortFragment = false;
-				var valid = fragments.every(function (fragment) {
-					var cleaned = fragment.replace(/[{}(),]/g, "");
-					if (!cleaned || /[^A-Za-z0-9+\-*]/.test(cleaned) || cleaned.length > 4 || !/[A-Za-z0-9]/.test(cleaned)) {
-						return false;
-					}
-
-					if (cleaned.length <= 2) {
-						hasShortFragment = true;
-					}
-
-					return true;
-				});
-
-				return valid && hasShortFragment;
-			};
-
-			var containsRawMathHint = function (expression) {
-				if (expression.indexOf("\\") >= 0 || /[∧∨≤≥≈≠→←±×÷]/.test(expression)) {
-					return true;
-				}
-
-				if (!/[_^]/.test(expression)) {
-					return false;
-				}
-
-				return expression.split(/\s+/).some(isCompactMathToken);
-			};
-
-			var isEnglishMathCandidate = function (expression) {
-				return !containsHanCharacter(expression);
-			};
-
-			var canAttemptRawMathRender = function (node) {
-				if (!node || node.querySelector("[data-pdf-math-expression]")) {
-					return false;
-				}
-
-				if (node.children && node.children.length > 0) {
-					return false;
-				}
-
-				var expression = (node.textContent || "").replace(/\u00a0/g, " ").trim();
-				return containsRawMathHint(expression) && isEnglishMathCandidate(expression);
-			};
-
-			var renderRawMathNodes = function () {
-				document.querySelectorAll('[data-pdf-browser="math"]').forEach(function (node) {
-					if (!canAttemptRawMathRender(node)) {
-						return;
-					}
-
-					var originalText = (node.textContent || "").replace(/\u00a0/g, " ").trim();
-					if (!originalText) {
-						return;
-					}
-
-					var displayMode = node.tagName !== "SPAN";
-					try {
-						window.katex.render(originalText, node, { displayMode: displayMode, throwOnError: true });
-					} catch (error) {
-						node.textContent = originalText;
-					}
-				});
-			};
-
-			var renderMath = function () {
-				if (!window.katex) {
-					document.body.dataset.ready = "true";
-					return;
-				}
-
-				document.querySelectorAll("[data-pdf-math-expression]").forEach(function (node) {
-					var expression = node.getAttribute("data-pdf-math-expression") || "";
-					var displayMode = node.getAttribute("data-pdf-math-display") === "true";
-
-					if (!expression) {
-						return;
-					}
-
-					try {
-						window.katex.render(expression, node, { displayMode: displayMode, throwOnError: true });
-					} catch (error) {
-						node.textContent = node.textContent || expression;
-					}
-				});
-
-					renderRawMathNodes();
-
-				document.body.dataset.ready = "true";
-			};
-
 			var done = function () {
 				window.requestAnimationFrame(function () {
-					renderMath();
+					window.requestAnimationFrame(function () {
+						document.body.dataset.ready = "true";
+					});
 				});
 			};
 
@@ -2436,7 +2038,7 @@ func buildPDFFragmentDocumentHTML(fragmentHTML string, viewportWidth int, conten
 <body data-ready="loading">
 	<div id="pdf-fragment">%s</div>
 </body>
-</html>`, katexStylesheet, viewportWidth, contentWidthPx, katexScript, fragmentHTML)
+</html>`, viewportWidth, contentWidthPx, fragmentHTML)
 }
 
 func newPDFFragmentBrowserRenderer() (*pdfFragmentBrowserRenderer, error) {
@@ -2460,7 +2062,6 @@ func newPDFFragmentBrowserRenderer() (*pdfFragmentBrowserRenderer, error) {
 	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
 
 	return &pdfFragmentBrowserRenderer{
-		assets:          loadPDFKaTeXAssets(),
 		allocatorCtx:    allocatorContext,
 		cancelAllocator: cancelAllocator,
 		browserCtx:      browserContext,
@@ -2495,7 +2096,7 @@ func (r *pdfFragmentBrowserRenderer) rasterize(fragmentHTML string, contentWidth
 	}
 
 	viewportWidth := contentWidthPx + 48
-	documentHTML := buildPDFFragmentDocumentHTML(fragmentHTML, viewportWidth, contentWidthPx, r.assets)
+	documentHTML := buildPDFFragmentDocumentHTML(fragmentHTML, viewportWidth, contentWidthPx)
 
 	timeoutContext, cancelTimeout := context.WithTimeout(r.browserCtx, 20*time.Second)
 	defer cancelTimeout()
