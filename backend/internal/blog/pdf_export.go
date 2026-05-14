@@ -46,14 +46,60 @@ type pdfRenderer struct {
 }
 
 var (
-	pdfAccentHexPattern = regexp.MustCompile(`#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})`)
-	markdownToHTML      = goldmark.New(goldmark.WithExtensions(extension.GFM))
-	pdfFontCandidates   = []string{
+	pdfAccentHexPattern     = regexp.MustCompile(`#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})`)
+	markdownToHTML          = goldmark.New(goldmark.WithExtensions(extension.GFM))
+	pdfBlockMathPattern     = regexp.MustCompile(`(?s)(\$\$(.+?)\$\$|\\\[(.+?)\\\])`)
+	pdfInlineMathPattern    = regexp.MustCompile(`(\\\((.+?)\\\)|\$([^$\n]+?)\$)`)
+	pdfLatexFractionPattern = regexp.MustCompile(`\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}`)
+	pdfLatexSqrtPattern     = regexp.MustCompile(`\\sqrt\s*\{([^{}]+)\}`)
+	pdfLatexTextPattern     = regexp.MustCompile(`\\(?:text|mathrm|mathbf|operatorname)\s*\{([^{}]+)\}`)
+	pdfFontCandidates       = []string{
 		"/usr/share/fonts/droid-nonlatin/DroidSansFallbackFull.ttf",
 		"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
 		"/usr/share/fonts/droid-nonlatin/DroidSansFallback.ttf",
 		"/usr/share/fonts/truetype/droid/DroidSansFallback.ttf",
 	}
+	pdfLaTeXSymbolReplacer = strings.NewReplacer(
+		`\times`, `×`,
+		`\cdot`, `·`,
+		`\pm`, `±`,
+		`\leq`, `≤`,
+		`\geq`, `≥`,
+		`\neq`, `≠`,
+		`\approx`, `≈`,
+		`\rightarrow`, `→`,
+		`\to`, `→`,
+		`\leftarrow`, `←`,
+		`\leftrightarrow`, `↔`,
+		`\infty`, `∞`,
+		`\sum`, `∑`,
+		`\prod`, `∏`,
+		`\int`, `∫`,
+		`\partial`, `∂`,
+		`\nabla`, `∇`,
+		`\alpha`, `α`,
+		`\beta`, `β`,
+		`\gamma`, `γ`,
+		`\delta`, `δ`,
+		`\Delta`, `Δ`,
+		`\theta`, `θ`,
+		`\lambda`, `λ`,
+		`\mu`, `μ`,
+		`\pi`, `π`,
+		`\sigma`, `σ`,
+		`\phi`, `φ`,
+		`\omega`, `ω`,
+		`\Omega`, `Ω`,
+		`\log`, `log`,
+		`\ln`, `ln`,
+		`\left`, ``,
+		`\right`, ``,
+		`\,`, ` `,
+		`\;`, ` `,
+		`\:`, ` `,
+		`\!`, ``,
+		`\\`, ` `,
+	)
 )
 
 func buildPostPDF(input PDFExportInput, options PDFRenderOptions) ([]byte, string, error) {
@@ -272,8 +318,7 @@ func (r *pdfRenderer) renderNode(node *htmlnode.Node, indentLevel int) {
 	case atom.H4, atom.H5, atom.H6:
 		r.renderHeading(extractNodeText(node), 13, indentLevel)
 	case atom.P:
-		r.pdf.SetFont(r.fontFamily, "", 12)
-		r.writeTextBlock(collectInlineText(node), 6.8, indentLevel)
+		r.renderParagraph(node, indentLevel)
 	case atom.Blockquote:
 		r.pdf.SetTextColor(88, 97, 104)
 		r.pdf.SetFont(r.fontFamily, "", 11.5)
@@ -289,6 +334,8 @@ func (r *pdfRenderer) renderNode(node *htmlnode.Node, indentLevel int) {
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
 			r.renderNode(child, indentLevel)
 		}
+	case atom.Picture:
+		r.renderPicture(node, indentLevel)
 	case atom.Img:
 		r.renderImage(node, indentLevel)
 	case atom.Figcaption:
@@ -359,27 +406,51 @@ func (r *pdfRenderer) renderList(node *htmlnode.Node, ordered bool, indentLevel 
 }
 
 func (r *pdfRenderer) renderCodeBlock(node *htmlnode.Node, indentLevel int) {
-	codeText := strings.TrimSpace(extractNodeRawText(node))
+	codeText := normalizeCodeBlockText(extractNodeRawText(node))
 	if codeText == "" {
 		return
 	}
 
 	x := r.contentX(indentLevel)
 	width := r.contentWidth(indentLevel)
-	y := r.pdf.GetY()
 	r.pdf.SetFillColor(251, 247, 240)
 	r.pdf.SetDrawColor(221, 212, 199)
 	r.pdf.SetFont(r.fontFamily, "", 10.5)
-	heightEstimate := codeBlockHeightEstimate(codeText, width)
-	r.pdf.Rect(x, y, width, heightEstimate, "FD")
-	r.pdf.SetXY(x+2.5, y+2.2)
-	r.pdf.MultiCell(width-5, 5.2, codeText, "", "L", false)
-	r.pdf.SetY(maxFloat(r.pdf.GetY()+2, y+heightEstimate+2))
+	paddingX := 2.5
+	lineHeight := 5.2
+	verticalGap := 0.6
+	wrappedLines := splitCodeBlockLines(r.pdf, codeText, width-(paddingX*2))
+	if len(wrappedLines) == 0 {
+		return
+	}
+
+	r.pdf.Ln(1)
+	for _, line := range wrappedLines {
+		requiredHeight := lineHeight + verticalGap + 0.8
+		if r.remainingPageHeight() < requiredHeight {
+			r.pdf.AddPage()
+		}
+
+		y := r.pdf.GetY()
+		r.pdf.Rect(x, y, width, lineHeight+0.8, "F")
+		r.pdf.SetXY(x+paddingX, y+0.35)
+		r.pdf.CellFormat(width-(paddingX*2), lineHeight, preservePrintableCodeLine(line), "", 0, "L", false, 0, "")
+		r.pdf.SetY(y + lineHeight + verticalGap)
+	}
+
+	r.pdf.Ln(1.4)
 }
 
 func (r *pdfRenderer) renderImage(node *htmlnode.Node, indentLevel int) {
-	imageSource := htmlAttribute(node, "src")
-	imageAlt := htmlAttribute(node, "alt")
+	r.renderImageSource(htmlAttribute(node, "src"), htmlAttribute(node, "alt"), indentLevel)
+}
+
+func (r *pdfRenderer) renderPicture(node *htmlnode.Node, indentLevel int) {
+	imageSource, imageAlt := pictureImageSource(node)
+	r.renderImageSource(imageSource, imageAlt, indentLevel)
+}
+
+func (r *pdfRenderer) renderImageSource(imageSource string, imageAlt string, indentLevel int) {
 	if imageSource == "" {
 		return
 	}
@@ -418,6 +489,43 @@ func (r *pdfRenderer) renderImage(node *htmlnode.Node, indentLevel int) {
 	}
 }
 
+func (r *pdfRenderer) renderParagraph(node *htmlnode.Node, indentLevel int) {
+	if node == nil {
+		return
+	}
+
+	if !paragraphHasRenderableMedia(node) {
+		r.pdf.SetFont(r.fontFamily, "", 12)
+		r.writeTextBlock(collectInlineText(node), 6.8, indentLevel)
+		return
+	}
+
+	fragments := make([]string, 0)
+	flushText := func() {
+		if len(fragments) == 0 {
+			return
+		}
+
+		r.pdf.SetFont(r.fontFamily, "", 12)
+		r.writeTextBlock(strings.Join(fragments, " "), 6.8, indentLevel)
+		fragments = fragments[:0]
+	}
+
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if isRenderableMediaNode(child) {
+			flushText()
+			r.renderNode(child, indentLevel)
+			continue
+		}
+
+		if text := collectInlineText(child); text != "" {
+			fragments = append(fragments, text)
+		}
+	}
+
+	flushText()
+}
+
 func (r *pdfRenderer) renderTable(node *htmlnode.Node, indentLevel int) {
 	rows := extractTableRows(node)
 	if len(rows) == 0 {
@@ -431,7 +539,7 @@ func (r *pdfRenderer) renderTable(node *htmlnode.Node, indentLevel int) {
 }
 
 func (r *pdfRenderer) writeTextBlock(text string, lineHeight float64, indentLevel int) {
-	normalizedText := strings.TrimSpace(text)
+	normalizedText := normalizePDFText(strings.TrimSpace(text))
 	if normalizedText == "" {
 		return
 	}
@@ -452,6 +560,12 @@ func (r *pdfRenderer) contentWidth(indentLevel int) float64 {
 	}
 
 	return width
+}
+
+func (r *pdfRenderer) remainingPageHeight() float64 {
+	_, pageHeight := r.pdf.GetPageSize()
+	_, _, _, bottomMargin := r.pdf.GetMargins()
+	return pageHeight - bottomMargin - r.pdf.GetY()
 }
 
 func normalizePDFSummary(title string, summary string) string {
@@ -570,6 +684,61 @@ func collectInlineText(node *htmlnode.Node) string {
 
 	walk(node)
 	return normalizeInlineText(builder.String())
+}
+
+func isRenderableMediaNode(node *htmlnode.Node) bool {
+	if node == nil || node.Type != htmlnode.ElementNode {
+		return false
+	}
+
+	return node.DataAtom == atom.Img || node.DataAtom == atom.Picture
+}
+
+func paragraphHasRenderableMedia(node *htmlnode.Node) bool {
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if isRenderableMediaNode(child) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func pictureImageSource(node *htmlnode.Node) (string, string) {
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type != htmlnode.ElementNode {
+			continue
+		}
+
+		if child.DataAtom == atom.Img {
+			return htmlAttribute(child, "src"), htmlAttribute(child, "alt")
+		}
+
+		if child.DataAtom == atom.Source {
+			source := firstSourceSetURL(htmlAttribute(child, "srcset"))
+			if source != "" {
+				return source, htmlAttribute(child, "alt")
+			}
+		}
+	}
+
+	return "", ""
+}
+
+func firstSourceSetURL(srcSet string) string {
+	for _, candidate := range strings.Split(srcSet, ",") {
+		trimmedCandidate := strings.TrimSpace(candidate)
+		if trimmedCandidate == "" {
+			continue
+		}
+
+		parts := strings.Fields(trimmedCandidate)
+		if len(parts) > 0 {
+			return parts[0]
+		}
+	}
+
+	return ""
 }
 
 func (r *pdfRenderer) renderImageFallback(imageAlt string, indentLevel int) {
@@ -747,6 +916,148 @@ func normalizeInlineText(value string) string {
 	}
 
 	return strings.Join(normalizedLines, "\n")
+}
+
+func normalizePDFText(value string) string {
+	normalizedValue := strings.TrimSpace(strings.ReplaceAll(value, "\u00a0", " "))
+	if normalizedValue == "" {
+		return ""
+	}
+
+	normalizedValue = replacePDFBlockMath(normalizedValue)
+	normalizedValue = replacePDFInlineMath(normalizedValue)
+	return normalizedValue
+}
+
+func replacePDFBlockMath(value string) string {
+	return pdfBlockMathPattern.ReplaceAllStringFunc(value, func(match string) string {
+		expression := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(match, "$$"), "$$"))
+		if strings.HasPrefix(match, `\[`) && strings.HasSuffix(match, `\]`) {
+			expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(match, `\[`), `\]`))
+		}
+
+		return renderPDFMathExpression(expression)
+	})
+}
+
+func replacePDFInlineMath(value string) string {
+	return pdfInlineMathPattern.ReplaceAllStringFunc(value, func(match string) string {
+		expression := strings.TrimSpace(match)
+		switch {
+		case strings.HasPrefix(expression, `\(`) && strings.HasSuffix(expression, `\)`):
+			expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(expression, `\(`), `\)`))
+		case strings.HasPrefix(expression, "$") && strings.HasSuffix(expression, "$"):
+			expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(expression, "$"), "$"))
+		}
+
+		if !looksLikePDFMathExpression(expression) {
+			return match
+		}
+
+		return renderPDFMathExpression(expression)
+	})
+}
+
+func looksLikePDFMathExpression(expression string) bool {
+	trimmedExpression := strings.TrimSpace(expression)
+	if trimmedExpression == "" {
+		return false
+	}
+
+	if strings.ContainsAny(trimmedExpression, `\\^_=+-*/()[]<>`) {
+		return true
+	}
+
+	return len([]rune(trimmedExpression)) <= 8
+}
+
+func renderPDFMathExpression(expression string) string {
+	normalizedExpression := strings.TrimSpace(strings.ReplaceAll(expression, "\r", ""))
+	if normalizedExpression == "" {
+		return ""
+	}
+
+	for {
+		previousExpression := normalizedExpression
+		normalizedExpression = pdfLatexFractionPattern.ReplaceAllString(normalizedExpression, "($1)/($2)")
+		normalizedExpression = pdfLatexSqrtPattern.ReplaceAllString(normalizedExpression, "√($1)")
+		normalizedExpression = pdfLatexTextPattern.ReplaceAllString(normalizedExpression, "$1")
+		if normalizedExpression == previousExpression {
+			break
+		}
+	}
+
+	normalizedExpression = pdfLaTeXSymbolReplacer.Replace(normalizedExpression)
+	normalizedExpression = strings.NewReplacer("{", "", "}", "").Replace(normalizedExpression)
+	return normalizeWhitespace(normalizedExpression)
+}
+
+func normalizeCodeBlockText(value string) string {
+	normalizedValue := strings.ReplaceAll(strings.ReplaceAll(value, "\r", ""), "\u00a0", " ")
+	normalizedValue = strings.Trim(normalizedValue, "\n")
+	if normalizedValue == "" {
+		return ""
+	}
+
+	lines := strings.Split(normalizedValue, "\n")
+	for index, line := range lines {
+		lines[index] = expandCodeTabs(line, 4)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func expandCodeTabs(value string, tabWidth int) string {
+	if !strings.Contains(value, "\t") || tabWidth <= 0 {
+		return value
+	}
+
+	var builder strings.Builder
+	column := 0
+	for _, currentRune := range value {
+		if currentRune != '\t' {
+			builder.WriteRune(currentRune)
+			column++
+			continue
+		}
+
+		padding := tabWidth - (column % tabWidth)
+		if padding == 0 {
+			padding = tabWidth
+		}
+		builder.WriteString(strings.Repeat(" ", padding))
+		column += padding
+	}
+
+	return builder.String()
+}
+
+func splitCodeBlockLines(pdf *gofpdf.Fpdf, code string, width float64) []string {
+	if pdf == nil {
+		return nil
+	}
+
+	logicalLines := strings.Split(code, "\n")
+	wrappedLines := make([]string, 0, len(logicalLines))
+	for _, line := range logicalLines {
+		segments := pdf.SplitText(line, width)
+		if len(segments) == 0 {
+			wrappedLines = append(wrappedLines, "")
+			continue
+		}
+
+		wrappedLines = append(wrappedLines, segments...)
+	}
+
+	return wrappedLines
+}
+
+func preservePrintableCodeLine(line string) string {
+	if line == "" {
+		return " "
+	}
+
+	return strings.ReplaceAll(line, string(rune(0)), "")
 }
 
 func codeBlockHeightEstimate(code string, width float64) float64 {

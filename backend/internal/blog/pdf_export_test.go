@@ -61,6 +61,54 @@ func TestBuildPostPDFRequiresValidPostBody(t *testing.T) {
 	}
 }
 
+func TestBuildPostPDFEmbedsMarkdownImages(t *testing.T) {
+	fontPath, err := resolvePDFFontPath()
+	if err != nil {
+		t.Skipf("skip pdf export test without font: %v", err)
+	}
+
+	t.Setenv("BLOG_PDF_FONT_PATH", fontPath)
+	mediaDir := t.TempDir()
+	writePNGFixture(t, filepath.Join(mediaDir, "diagram.png"))
+
+	pdfBytes, _, err := buildPostPDF(PDFExportInput{
+		Title:      "Image report",
+		BodyFormat: BodyFormatMarkdown,
+		Body:       "![diagram](/media/diagram.png)",
+	}, PDFRenderOptions{MediaDir: mediaDir, MediaURLPath: "/media"})
+	if err != nil {
+		t.Fatalf("buildPostPDF returned error: %v", err)
+	}
+
+	if !bytes.Contains(pdfBytes, []byte("/Subtype /Image")) {
+		t.Fatalf("expected generated pdf to embed image objects")
+	}
+}
+
+func TestBuildPostPDFEmbedsHTMLPictureImages(t *testing.T) {
+	fontPath, err := resolvePDFFontPath()
+	if err != nil {
+		t.Skipf("skip pdf export test without font: %v", err)
+	}
+
+	t.Setenv("BLOG_PDF_FONT_PATH", fontPath)
+	mediaDir := t.TempDir()
+	writePNGFixture(t, filepath.Join(mediaDir, "diagram.png"))
+
+	pdfBytes, _, err := buildPostPDF(PDFExportInput{
+		Title:      "Picture report",
+		BodyFormat: BodyFormatHTML,
+		Body:       `<figure><picture><source srcset="/media/diagram.png 1x" type="image/png"><img src="/media/diagram.png" alt="diagram"></picture></figure>`,
+	}, PDFRenderOptions{MediaDir: mediaDir, MediaURLPath: "/media"})
+	if err != nil {
+		t.Fatalf("buildPostPDF returned error: %v", err)
+	}
+
+	if !bytes.Contains(pdfBytes, []byte("/Subtype /Image")) {
+		t.Fatalf("expected generated pdf to embed picture image objects")
+	}
+}
+
 func TestNormalizePDFSummaryStripsLeadingTitle(t *testing.T) {
 	t.Parallel()
 
@@ -80,6 +128,36 @@ func TestStripLeadingPDFTitleHeading(t *testing.T) {
 
 	if !strings.Contains(bodyHTML, "正文段落") {
 		t.Fatalf("expected body content to be kept, got %q", bodyHTML)
+	}
+}
+
+func TestNormalizePDFTextConvertsLatexExpressions(t *testing.T) {
+	t.Parallel()
+
+	normalized := normalizePDFText(`内联公式 $E=mc^2$ 和块公式 $$\frac{a}{b} + \sqrt{x}$$`)
+	if strings.Contains(normalized, "$") {
+		t.Fatalf("expected latex delimiters to be removed, got %q", normalized)
+	}
+
+	if !strings.Contains(normalized, `E=mc^2`) {
+		t.Fatalf("expected inline math to stay readable, got %q", normalized)
+	}
+
+	if !strings.Contains(normalized, `(a)/(b) + √(x)`) {
+		t.Fatalf("expected block math to be converted, got %q", normalized)
+	}
+}
+
+func TestNormalizeCodeBlockTextExpandsTabs(t *testing.T) {
+	t.Parallel()
+
+	normalized := normalizeCodeBlockText("\tif ready {\n\t\treturn value\n\t}")
+	if strings.ContainsRune(normalized, '\t') {
+		t.Fatalf("expected tabs to be expanded, got %q", normalized)
+	}
+
+	if !strings.Contains(normalized, "    if ready {") {
+		t.Fatalf("expected leading indentation to be preserved with spaces, got %q", normalized)
 	}
 }
 
@@ -220,6 +298,25 @@ func TestResolveImageAssetSupportsLocalSVGAndWebP(t *testing.T) {
 		if asset == nil || len(asset.data) == 0 {
 			t.Fatalf("resolveImageAsset(%q) returned empty asset", source)
 		}
+	}
+}
+
+func writePNGFixture(t *testing.T, filePath string) {
+	t.Helper()
+
+	imageBuffer := bytes.NewBuffer(nil)
+	pngImage := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			pngImage.Set(x, y, color.RGBA{R: 15, G: 118, B: 110, A: 255})
+		}
+	}
+	if err := png.Encode(imageBuffer, pngImage); err != nil {
+		t.Fatalf("failed to encode png fixture: %v", err)
+	}
+
+	if err := os.WriteFile(filePath, imageBuffer.Bytes(), 0o600); err != nil {
+		t.Fatalf("failed to write png fixture: %v", err)
 	}
 }
 
