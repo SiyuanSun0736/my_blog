@@ -8,6 +8,7 @@ DEFAULT_ENV_FILE="$ROOT_DIR/.env.deploy"
 compose_env_file="${WANDERLUST_DEPLOY_ENV_FILE:-$DEFAULT_ENV_FILE}"
 skip_backup=0
 skip_pull=0
+force_sync=0
 show_logs=0
 
 usage() {
@@ -20,6 +21,7 @@ Options:
   --env-file PATH   Use a specific compose env file.
   --skip-backup     Skip the database/media backup step.
   --skip-pull       Skip git pull and deploy the current local checkout.
+  --force-sync      Reset the current branch to its upstream before build.
   --logs            Show recent blog-api/blog-web logs after verification.
   -h, --help        Show this help message.
 
@@ -27,6 +29,7 @@ Examples:
   ./scripts/update-deploy.sh
   ./scripts/update-deploy.sh --logs
   ./scripts/update-deploy.sh --skip-pull
+  ./scripts/update-deploy.sh --force-sync
   ./scripts/update-deploy.sh --env-file /srv/wanderlust/.env.deploy --logs
 EOF
 }
@@ -49,6 +52,10 @@ while [ "$#" -gt 0 ]; do
       skip_pull=1
       shift
       ;;
+    --force-sync)
+      force_sync=1
+      shift
+      ;;
     --logs)
       show_logs=1
       shift
@@ -67,6 +74,11 @@ done
 
 if [ ! -f "$compose_env_file" ]; then
   echo "Deploy compose env file not found: $compose_env_file" >&2
+  exit 1
+fi
+
+if [ "$skip_pull" -eq 1 ] && [ "$force_sync" -eq 1 ]; then
+  echo "--force-sync cannot be used together with --skip-pull" >&2
   exit 1
 fi
 
@@ -107,6 +119,23 @@ ensure_clean_tracked_worktree() {
 }
 
 pull_latest_code() {
+  if [ "$force_sync" -eq 1 ]; then
+    upstream_ref=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)
+    if [ -z "$upstream_ref" ]; then
+      echo "Current branch has no upstream configured; cannot use --force-sync." >&2
+      return 1
+    fi
+
+    if [ -n "${GIT_SSH_COMMAND:-}" ]; then
+      GIT_TERMINAL_PROMPT=0 git fetch --prune
+    else
+      GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes" git fetch --prune
+    fi
+
+    git reset --hard "$upstream_ref"
+    return
+  fi
+
   if [ -n "${GIT_SSH_COMMAND:-}" ]; then
     GIT_TERMINAL_PROMPT=0 git pull --ff-only
     return
@@ -166,9 +195,13 @@ announce_step "Stopping running containers before deploy..."
 compose stop blog-web blog-api redis mongodb >/dev/null 2>&1 || true
 
 if [ "$skip_pull" -eq 0 ]; then
-  announce_step "Pulling latest code..."
+  if [ "$force_sync" -eq 1 ]; then
+    announce_step "Force-syncing current branch to upstream..."
+  else
+    announce_step "Pulling latest code..."
+  fi
   if ! pull_latest_code; then
-    echo "git pull failed without interactive prompts. Configure non-interactive access on the server, or rerun with --skip-pull after updating the checkout manually." >&2
+    echo "Git update failed without interactive prompts. Configure non-interactive access on the server, or rerun with --skip-pull after updating the checkout manually. If the remote branch was rebased, retry with --force-sync." >&2
     exit 1
   fi
 fi
