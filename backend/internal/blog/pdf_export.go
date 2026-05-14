@@ -125,6 +125,7 @@ var (
 	pdfLatexFractionPattern                  = regexp.MustCompile(`\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}`)
 	pdfLatexSqrtPattern                      = regexp.MustCompile(`\\sqrt\s*\{([^{}]+)\}`)
 	pdfLatexTextPattern                      = regexp.MustCompile(`\\(?:text|mathrm|mathbf|operatorname)\s*\{([^{}]+)\}`)
+	pdfRawMathSymbolPattern                  = regexp.MustCompile(`[∧∨≤≥≈≠→←±×÷]`)
 	pdfChromiumCandidates                    = []string{
 		"chromium",
 		"chromium-browser",
@@ -1178,7 +1179,87 @@ func containsRawPDFMathHint(value string) bool {
 		return false
 	}
 
-	return strings.Contains(trimmedValue, `\`)
+	for _, currentRune := range trimmedValue {
+		if unicode.Is(unicode.Han, currentRune) {
+			return false
+		}
+	}
+
+	if strings.Contains(trimmedValue, `\`) {
+		return true
+	}
+
+	if pdfRawMathSymbolPattern.MatchString(trimmedValue) {
+		return true
+	}
+
+	if !strings.ContainsAny(trimmedValue, "_^") {
+		return false
+	}
+
+	for _, token := range strings.Fields(trimmedValue) {
+		if looksLikeRawPDFMathToken(token) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func looksLikeRawPDFMathToken(value string) bool {
+	token := strings.TrimSpace(value)
+	token = strings.Trim(token, "\"'[]()<>")
+	token = strings.Trim(token, ".,;:!?")
+	if token == "" || !strings.ContainsAny(token, "_^") {
+		return false
+	}
+
+	if strings.ContainsAny(token, `/\\.`) {
+		return false
+	}
+
+	if len([]rune(token)) > 32 {
+		return false
+	}
+
+	fragments := strings.FieldsFunc(token, func(currentRune rune) bool {
+		return currentRune == '_' || currentRune == '^'
+	})
+	if len(fragments) < 2 {
+		return false
+	}
+
+	hasShortFragment := false
+	for _, fragment := range fragments {
+		cleanedFragment := strings.NewReplacer("{", "", "}", "", "(", "", ")", "", ",", "").Replace(fragment)
+		if cleanedFragment == "" {
+			return false
+		}
+
+		fragmentLength := 0
+		hasAlphaNumeric := false
+		for _, currentRune := range cleanedFragment {
+			switch {
+			case unicode.IsLetter(currentRune), unicode.IsDigit(currentRune):
+				hasAlphaNumeric = true
+				fragmentLength++
+			case currentRune == '+' || currentRune == '-' || currentRune == '*':
+				fragmentLength++
+			default:
+				return false
+			}
+		}
+
+		if !hasAlphaNumeric || fragmentLength > 4 {
+			return false
+		}
+
+		if fragmentLength <= 2 {
+			hasShortFragment = true
+		}
+	}
+
+	return hasShortFragment
 }
 
 func splitPDFMathTextSegments(value string) []pdfMathTextSegment {
@@ -1984,8 +2065,55 @@ func buildPDFFragmentDocumentHTML(fragmentHTML string, viewportWidth int, conten
 	</style>
 %s  <script>
 		window.addEventListener("load", function () {
-			var isASCIIOnlyMathCandidate = function (expression) {
-				return !(/[^\x00-\x7F]/).test(expression);
+			var containsHanCharacter = function (expression) {
+				return /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/.test(expression);
+			};
+
+			var isCompactMathToken = function (token) {
+				var normalized = (token || "")
+					.trim()
+					.replace(/^["'\[\]()<>]+|["'\[\]()<>]+$/g, "")
+					.replace(/^[.,;:!?]+|[.,;:!?]+$/g, "");
+				if (!normalized || !/[_^]/.test(normalized) || /[\/\\.]/.test(normalized) || normalized.length > 32) {
+					return false;
+				}
+
+				var fragments = normalized.split(/[_^]+/);
+				if (fragments.length < 2) {
+					return false;
+				}
+
+				var hasShortFragment = false;
+				var valid = fragments.every(function (fragment) {
+					var cleaned = fragment.replace(/[{}(),]/g, "");
+					if (!cleaned || /[^A-Za-z0-9+\-*]/.test(cleaned) || cleaned.length > 4 || !/[A-Za-z0-9]/.test(cleaned)) {
+						return false;
+					}
+
+					if (cleaned.length <= 2) {
+						hasShortFragment = true;
+					}
+
+					return true;
+				});
+
+				return valid && hasShortFragment;
+			};
+
+			var containsRawMathHint = function (expression) {
+				if (expression.indexOf("\\") >= 0 || /[∧∨≤≥≈≠→←±×÷]/.test(expression)) {
+					return true;
+				}
+
+				if (!/[_^]/.test(expression)) {
+					return false;
+				}
+
+				return expression.split(/\s+/).some(isCompactMathToken);
+			};
+
+			var isEnglishMathCandidate = function (expression) {
+				return !containsHanCharacter(expression);
 			};
 
 			var canAttemptRawMathRender = function (node) {
@@ -1998,7 +2126,7 @@ func buildPDFFragmentDocumentHTML(fragmentHTML string, viewportWidth int, conten
 				}
 
 				var expression = (node.textContent || "").replace(/\u00a0/g, " ").trim();
-				return expression.indexOf("\\") >= 0 && isASCIIOnlyMathCandidate(expression);
+				return containsRawMathHint(expression) && isEnglishMathCandidate(expression);
 			};
 
 			var renderRawMathNodes = function () {
