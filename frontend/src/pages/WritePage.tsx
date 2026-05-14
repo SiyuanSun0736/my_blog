@@ -1564,7 +1564,7 @@ export function WritePage() {
                     <span className="min-w-0 break-all">
                       {importedFileName
                         ? `已导入 ${importedFileName}，内容已同步到当前表单。`
-                        : "Markdown 会直接读 frontmatter；HTML 会走服务端导入接口并按 HTML 正文保存。"}
+                        : "Markdown 会直接读 frontmatter；HTML 文件会保存原始页面并在正文里生成一个可访问链接。"}
                     </span>
                   </div>
                 </div>
@@ -1634,7 +1634,7 @@ export function WritePage() {
                   <div>
                     <p className="font-medium text-[var(--ink)]">正文格式</p>
                     <p className="text-xs leading-6 text-[var(--muted)]">
-                      Markdown 继续沿用站内渲染链路；HTML 会原样保存为 HTML 正文，并在服务端清洗脚本、事件和危险属性。
+                      Markdown 继续沿用站内渲染链路；导入 HTML 文件时，系统会保留原始页面并在正文里生成一个预览链接，避免复杂 DOM 被站内正文渲染截断。
                     </p>
                   </div>
 

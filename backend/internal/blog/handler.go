@@ -55,6 +55,7 @@ func NewHandler(service *Service, options HandlerOptions) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(router gin.IRoutes) {
+	router.GET("/imports/html/preview", h.previewImportedHTML)
 	router.GET("/posts", h.listPosts)
 	router.GET("/posts/:slug/pdf", h.getPostPDF)
 	router.GET("/posts/:slug", h.getPost)
@@ -327,13 +328,43 @@ func (h *Handler) importHTMLDocument(c *gin.Context) {
 		return
 	}
 
-	imported, importErr := importHTMLDocumentFromFile(fileHeader)
+	imported, importErr := importHTMLDocumentFromFile(fileHeader, h.mediaDir, h.mediaURLPath, h.uploadCache)
 	if importErr != nil {
 		h.respondHTMLImportError(c, importErr)
 		return
 	}
 
 	c.JSON(http.StatusOK, imported)
+}
+
+func (h *Handler) previewImportedHTML(c *gin.Context) {
+	publicPath := normalizeReferencedMediaPath(c.Query("src"), h.mediaURLPath)
+	if publicPath == "" || !isHTMLDocumentFileName(publicPath) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "html source is invalid"})
+		return
+	}
+
+	storagePath, ok := h.mediaFilePath(publicPath)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "html source is invalid"})
+		return
+	}
+
+	contents, err := os.ReadFile(storagePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "html source not found"})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load html source"})
+		return
+	}
+
+	c.Header("Cache-Control", "public, max-age=300")
+	c.Header("Content-Security-Policy", htmlImportPreviewCSP)
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Data(http.StatusOK, htmlImportPreviewContentType, contents)
 }
 
 func (h *Handler) respondHTMLImportError(c *gin.Context, err error) {
