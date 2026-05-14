@@ -22,6 +22,7 @@
 - 前端构建使用 `FRONTEND_BUILD_MAX_OLD_SPACE_SIZE=256`，限制 Node build heap
 - Vite 关闭压缩体积统计，减少构建时额外内存开销
 - 更新脚本改为串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 同时构建把内存顶满
+- `blog-api` 镜像现已内置 Chromium、KaTeX 资源与 CJK 字体，用于 LaTeX / 表格 / SVG 的局部 PDF 渲染；相较纯 gofpdf 方案仍会多一些体积和内存，但同一份 PDF 已改为复用单个浏览器会话，已避开整页打印和逐段反复启动 Chromium 的峰值开销
 
 这些默认值已经写进根目录 `.env.deploy.example`。服务器实际部署时，复制成 `.env.deploy` 后再按机器情况覆盖。当前前端构建已经在 `256MB` Node heap 下完成验证；后端镜像构建也已经改成单并行 `go build`。如果后续页面体积再次上升，可以先回到 `320` 做对比，再根据实际构建日志微调。如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
 
@@ -60,6 +61,10 @@ export BLOG_WRITE_TOKEN=替换成一个长随机字符串
 如果你准备使用 `/admin` 管理端发布文章或上传图片，记得在首次启动前就把 `BLOG_WRITE_TOKEN` 设好；前台访客不会在导航里看到这个入口，但直接访问管理端时仍然需要令牌验证。
 
 当前上传链路是：管理端调用 `POST /api/admin/uploads/images`，`blog-api` 把图片写进共享媒体卷，Nginx 直接对外公开 `/media/...`，Redis 记录图片摘要到路径的映射，重复上传同一张图会直接复用已有地址。
+
+如果你发现容器内 Chromium 渲染 LaTeX / 表格 / SVG 片段时抓不到 `/media/...` 或站内链接资源，可以在 `.env.deploy` 里额外设置 `BLOG_PDF_BASE_URL`，把它固定到 `blog-api` 自己可访问的地址，例如 `http://127.0.0.1:8080`。
+
+如果你不是走容器部署，而是直接在宿主机启动 `blog-api`，LaTeX 局部渲染会优先读取本地 KaTeX 资源；默认会尝试使用仓库里的 `frontend/node_modules/katex/dist`，也可以通过 `BLOG_PDF_KATEX_DIR` 显式指定目录。
 
 ### 如果首次部署时漏了 `BLOG_WRITE_TOKEN`
 

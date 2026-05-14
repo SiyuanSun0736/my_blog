@@ -17,11 +17,13 @@
 - 管理端写作入口与新文章发布
 - 管理端图片上传接口与 `/media` 静态资源目录
 - MongoDB 持久化与 Markdown 正文渲染
+- Markdown 导入现在使用 YAML 解析，支持 frontmatter 多行字符串、嵌套字段和日期标量
 - Redis 持久化图片指纹索引，避免重复上传同一张图
 - 后端按固定间隔扫描文章正文里的 `/media/...` 引用，自动回收未引用图片并清理 Redis 去重键
 - MongoDB 数据卷持久化与归档备份脚本
 - Gin 提供 `/api/posts`、`/api/posts/:slug` 与 `POST /api/posts`
 - Gin 提供 `POST /api/admin/uploads/images`，管理端上传图片后可直接插入 Markdown
+- PDF 导出默认走低内存 gofpdf；LaTeX、表格和 SVG 会按需调用 Chromium 做局部渲染，并在同一份 PDF 内复用浏览器会话
 - Nginx 提供 HTTPS 入口，并将 HTTP 自动跳转到 HTTPS
 - Nginx 统一代理 `/api`，服务前端静态文件，并公开 `/media`
 - Docker Compose 一键启动
@@ -43,6 +45,10 @@ go mod tidy
 export MONGODB_URI=mongodb://localhost:27017
 export MONGODB_DATABASE=wanderlust
 export BLOG_WRITE_TOKEN=替换成一个长随机字符串
+# 可选：本地 PDF 导出如果没有走默认 PATH，可显式指定 Chromium 可执行文件
+# export BLOG_PDF_CHROMIUM_EXECUTABLE=/usr/bin/chromium
+# 可选：当反向代理地址和 blog-api 自身监听地址不一致时，覆盖 PDF 局部渲染时使用的资源基准地址
+# export BLOG_PDF_BASE_URL=http://127.0.0.1:8080
 # 如果你希望本地图片上传也启用 Redis 去重，再额外配置：
 # export REDIS_ADDR=localhost:6379
 # 可选：调整未引用图片清理间隔，默认 24h；设为 0 / off 可关闭
@@ -51,6 +57,8 @@ go run .
 ```
 
 服务默认运行在 `http://localhost:8080`，本地上传图片默认写到 `backend/uploads/`，并通过 `http://localhost:8080/media/...` 访问。
+
+如果你要测试包含 LaTeX、表格或 SVG 的 PDF 导出，本机还需要安装 Chromium 或 Chrome。LaTeX 局部渲染会优先读取本地 KaTeX 资源：开发环境默认会尝试复用 frontend/node_modules/katex/dist，也可以通过 BLOG_PDF_KATEX_DIR 显式指定；Docker 镜像已经内置这部分依赖。
 
 本地开发前请先确保 MongoDB 已启动；如果使用默认地址，可省略上述环境变量。
 
@@ -87,6 +95,8 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 管理端图片上传会把文件写进 Compose 命名卷 `blog-media`，由 `blog-api` 写入、`blog-web` 只读挂载并对外服务；Redis 会记录图片内容摘要到已存在路径的映射，重复上传同一张图时直接复用已有 `/media/...` 地址。
 
 后端默认每 `24h` 会扫描所有文章正文里的 `/media/...` 引用，删除磁盘上未被任何文章引用的媒体文件，并同步删除对应的 Redis 摘要键；如需调短、调长或关闭，可设置 `BLOG_MEDIA_CLEANUP_INTERVAL`，其中 `0`、`off`、`false` 表示禁用。
+
+当前 `blog-api` 镜像也会打包 Chromium、KaTeX 资源和 CJK 字体，用于服务端渲染 LaTeX / 表格 / SVG 片段；相较纯 gofpdf 方案，镜像体积仍会更高，但同一份 PDF 已改为复用单个浏览器会话，峰值内存低于逐段重复启动 Chromium 的方案。
 
 如果你的 VPS 只有 `1GB` 内存，当前仓库也已经提供默认低内存优化：
 

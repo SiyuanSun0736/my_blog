@@ -9,6 +9,8 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "js-yaml": "^4.1.1",
     "katex": "^0.16.45",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

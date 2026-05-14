@@ -1,5 +1,6 @@
 import { Button, Card, CardBody, CardHeader, Chip, Input, Spinner } from "../components/ui";
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { load as parseYAML } from "js-yaml";
 import { Link } from "react-router-dom";
 import {
   batchPosts,
@@ -135,36 +136,136 @@ function normalizeMarkdownLineEndings(markdown: string) {
   return markdown.replace(/\r\n?/g, "\n");
 }
 
-function stripQuotes(value: string) {
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1);
-  }
+type FrontmatterSource = Record<string, unknown>;
 
-  return value;
+function isFrontmatterSource(value: unknown): value is FrontmatterSource {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseFrontmatterValue(value: string): string | boolean | string[] {
-  const trimmedValue = stripQuotes(value.trim());
-  if (trimmedValue === "true") {
-    return true;
+function normalizeFrontmatterKey(value: string) {
+  return value.replace(/[_\-\s]+/g, "").toLowerCase();
+}
+
+function collectFrontmatterMatches(
+  source: FrontmatterSource,
+  targetKeys: string[],
+  visited = new Set<FrontmatterSource>(),
+): unknown[] {
+  if (visited.has(source)) {
+    return [];
   }
 
-  if (trimmedValue === "false") {
-    return false;
+  visited.add(source);
+  const normalizedTargets = new Set(targetKeys.map(normalizeFrontmatterKey));
+  const matches: unknown[] = [];
+
+  Object.entries(source).forEach(([key, value]) => {
+    if (normalizedTargets.has(normalizeFrontmatterKey(key))) {
+      matches.push(value);
+    }
+
+    if (isFrontmatterSource(value)) {
+      matches.push(...collectFrontmatterMatches(value, targetKeys, visited));
+    }
+  });
+
+  return matches;
+}
+
+function findFrontmatterValue(source: FrontmatterSource, keys: string[]) {
+  return collectFrontmatterMatches(source, keys).find((value) => value !== undefined && value !== null);
+}
+
+function formatFrontmatterDate(value: Date) {
+  if (Number.isNaN(value.getTime())) {
+    return undefined;
   }
 
-  if (trimmedValue.startsWith("[") && trimmedValue.endsWith("]")) {
-    return trimmedValue
-      .slice(1, -1)
-      .split(",")
-      .map((entry) => stripQuotes(entry.trim()))
+  return value.toISOString().slice(0, 10);
+}
+
+function normalizeFrontmatterText(value: unknown) {
+  if (value instanceof Date) {
+    return formatFrontmatterDate(value);
+  }
+
+  if (typeof value === "string") {
+    const normalized = normalizeMarkdownLineEndings(value).trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  return undefined;
+}
+
+function normalizeFrontmatterInlineText(value: unknown) {
+  const normalized = normalizeFrontmatterText(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const flattened = normalized.replace(/\s+/g, " ").trim();
+  return flattened.length > 0 ? flattened : undefined;
+}
+
+function normalizeFrontmatterBoolean(value: unknown) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+
+    if (normalized === "false") {
+      return false;
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeFrontmatterTags(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const tags = value
+      .flatMap((entry) => normalizeFrontmatterTags(entry) ?? [])
+      .map((entry) => entry.trim())
       .filter(Boolean);
+
+    return tags.length > 0 ? tags : undefined;
   }
 
-  return trimmedValue;
+  const normalized = normalizeFrontmatterInlineText(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const tags = normalized
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  return tags.length > 0 ? tags : undefined;
+}
+
+function normalizeFrontmatterData(source: FrontmatterSource): FrontmatterData {
+  return {
+    title: normalizeFrontmatterInlineText(findFrontmatterValue(source, ["title"])),
+    slug: normalizeFrontmatterInlineText(findFrontmatterValue(source, ["slug"])),
+    summary: normalizeFrontmatterInlineText(findFrontmatterValue(source, ["summary", "description"])),
+    category: normalizeFrontmatterInlineText(findFrontmatterValue(source, ["category"])),
+    tags: normalizeFrontmatterTags(findFrontmatterValue(source, ["tags", "keywords"])),
+    author: normalizeFrontmatterInlineText(findFrontmatterValue(source, ["author"])),
+    publishedAt: normalizeFrontmatterText(findFrontmatterValue(source, ["publishedAt", "published_at", "date"])),
+    accent: normalizeFrontmatterInlineText(findFrontmatterValue(source, ["accent"])),
+    draft: normalizeFrontmatterBoolean(findFrontmatterValue(source, ["draft"])),
+    featured: normalizeFrontmatterBoolean(findFrontmatterValue(source, ["featured"])),
+  };
 }
 
 function parseMarkdownFile(markdown: string) {
@@ -186,40 +287,18 @@ function parseMarkdownFile(markdown: string) {
 
   const frontmatterBlock = normalizedMarkdown.slice(4, frontmatterEndIndex);
   const body = normalizedMarkdown.slice(frontmatterEndIndex + 5);
-  const frontmatter: FrontmatterData = {};
-  let currentListKey: keyof FrontmatterData | null = null;
+  let frontmatter: FrontmatterData = {};
 
-  frontmatterBlock.split("\n").forEach((line) => {
-    const trimmedLine = line.trim();
-    if (trimmedLine.length === 0) {
-      return;
+  if (frontmatterBlock.trim().length > 0) {
+    try {
+      const parsedFrontmatter = parseYAML(frontmatterBlock);
+      if (isFrontmatterSource(parsedFrontmatter)) {
+        frontmatter = normalizeFrontmatterData(parsedFrontmatter);
+      }
+    } catch {
+      throw new Error("Markdown frontmatter 解析失败，请检查 YAML 格式。");
     }
-
-    const listItemMatch = trimmedLine.match(/^[-*]\s+(.+)$/);
-    if (listItemMatch && currentListKey) {
-      const previousItems = Array.isArray(frontmatter[currentListKey])
-        ? [...(frontmatter[currentListKey] as string[])]
-        : [];
-      frontmatter[currentListKey] = [...previousItems, stripQuotes(listItemMatch[1].trim())] as never;
-      return;
-    }
-
-    currentListKey = null;
-    const separatorIndex = trimmedLine.indexOf(":");
-    if (separatorIndex === -1) {
-      return;
-    }
-
-    const key = trimmedLine.slice(0, separatorIndex).trim() as keyof FrontmatterData;
-    const rawValue = trimmedLine.slice(separatorIndex + 1).trim();
-    if (rawValue === "") {
-      currentListKey = key;
-      frontmatter[key] = [] as never;
-      return;
-    }
-
-    frontmatter[key] = parseFrontmatterValue(rawValue) as never;
-  });
+  }
 
   return {
     frontmatter,

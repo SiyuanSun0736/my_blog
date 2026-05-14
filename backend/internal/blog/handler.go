@@ -112,8 +112,14 @@ func (h *Handler) getPostPDF(c *gin.Context) {
 	pdfBytes, fileName, err := buildPostPDF(pdfExportInputFromPost(post), PDFRenderOptions{
 		MediaDir:     h.mediaDir,
 		MediaURLPath: h.mediaURLPath,
+		BaseURL:      h.pdfBaseURL(c),
 	})
 	if err != nil {
+		if err == ErrPDFTooLarge {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"message": "pdf 内容过大，请减少超大图片或拆分文章后再导出"})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to export pdf"})
 		return
 	}
@@ -296,10 +302,16 @@ func (h *Handler) exportPDF(c *gin.Context) {
 	pdfBytes, fileName, err := buildPostPDF(request, PDFRenderOptions{
 		MediaDir:     h.mediaDir,
 		MediaURLPath: h.mediaURLPath,
+		BaseURL:      h.pdfBaseURL(c),
 	})
 	if err != nil {
 		if err == ErrInvalidPost {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "title, body or publishedAt is invalid"})
+			return
+		}
+
+		if err == ErrPDFTooLarge {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"message": "pdf 内容过大，请减少超大图片或拆分文章后再导出"})
 			return
 		}
 
@@ -378,6 +390,31 @@ func (h *Handler) respondHTMLImportError(c *gin.Context, err error) {
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"message": "failed to import html file"})
 	}
+}
+
+func (h *Handler) pdfBaseURL(c *gin.Context) string {
+	if configuredBaseURL := strings.TrimSpace(os.Getenv("BLOG_PDF_BASE_URL")); configuredBaseURL != "" {
+		return configuredBaseURL
+	}
+
+	host := strings.TrimSpace(c.GetHeader("X-Forwarded-Host"))
+	if host == "" {
+		host = strings.TrimSpace(c.Request.Host)
+	}
+	if host == "" {
+		return strings.TrimRight(defaultPDFBaseURL, "/")
+	}
+
+	scheme := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto"))
+	if scheme == "" {
+		if c.Request.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+
+	return scheme + "://" + host
 }
 
 func (h *Handler) deletePost(c *gin.Context) {

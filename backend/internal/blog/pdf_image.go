@@ -2,7 +2,9 @@ package blog
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"image"
 	"image/png"
@@ -19,6 +21,9 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/chromedp"
+
 	"github.com/phpdave11/gofpdf"
 	"github.com/srwiley/oksvg"
 	"github.com/srwiley/rasterx"
@@ -26,10 +31,10 @@ import (
 )
 
 const (
-	maxPDFImageBytes         = 12 * 1024 * 1024
+	maxPDFImageBytes         = 6 * 1024 * 1024
 	pdfExternalImageTimeout  = 8 * time.Second
 	pdfExternalRedirectLimit = 3
-	pdfMaxRasterDimension    = 1600
+	pdfMaxRasterDimension    = 1024
 )
 
 type pdfImageAsset struct {
@@ -198,6 +203,14 @@ func preparePDFImageAsset(source pdfImageSource) (*pdfImageAsset, error) {
 }
 
 func rasterizeSVGToPNG(svgBytes []byte) ([]byte, error) {
+	if pngBytes, err := rasterizeSVGToPNGWithChromium(svgBytes); err == nil {
+		return pngBytes, nil
+	}
+
+	return rasterizeSVGToPNGWithOKSVG(svgBytes)
+}
+
+func rasterizeSVGToPNGWithOKSVG(svgBytes []byte) ([]byte, error) {
 	icon, err := oksvg.ReadIconStream(bytes.NewReader(svgBytes))
 	if err != nil {
 		return nil, err
@@ -217,6 +230,101 @@ func rasterizeSVGToPNG(svgBytes []byte) ([]byte, error) {
 	}
 
 	return buffer.Bytes(), nil
+}
+
+func rasterizeSVGToPNGWithChromium(svgBytes []byte) ([]byte, error) {
+	executablePath, err := resolvePDFChromiumExecutable()
+	if err != nil {
+		return nil, err
+	}
+
+	icon, err := oksvg.ReadIconStream(bytes.NewReader(svgBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	renderWidth, renderHeight := svgRenderSize(icon)
+	encodedSVG := base64.StdEncoding.EncodeToString(svgBytes)
+	documentHTML := fmt.Sprintf(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: %dpx;
+      height: %dpx;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    body {
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+    }
+
+    img {
+      display: block;
+      width: %dpx;
+      height: %dpx;
+    }
+  </style>
+</head>
+<body data-ready="loading">
+  <img id="svg-image" src="data:image/svg+xml;base64,%s" alt="svg" onload="document.body.dataset.ready='true'" onerror="document.body.dataset.ready='error'" />
+</body>
+</html>`, renderWidth, renderHeight, renderWidth, renderHeight, encodedSVG)
+
+	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(executablePath),
+		chromedp.Headless,
+		chromedp.DisableGPU,
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-setuid-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("hide-scrollbars", true),
+		chromedp.Flag("force-color-profile", "srgb"),
+	)
+
+	allocatorContext, cancelAllocator := chromedp.NewExecAllocator(context.Background(), allocatorOptions...)
+	defer cancelAllocator()
+
+	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
+	defer cancelBrowser()
+
+	timeoutContext, cancelTimeout := context.WithTimeout(browserContext, 20*time.Second)
+	defer cancelTimeout()
+
+	var pngBytes []byte
+	err = chromedp.Run(timeoutContext,
+		chromedp.EmulateViewport(int64(renderWidth), int64(renderHeight)),
+		chromedp.Navigate("about:blank"),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			frameTree, err := page.GetFrameTree().Do(ctx)
+			if err != nil {
+				return err
+			}
+
+			if frameTree == nil || frameTree.Frame.ID == "" {
+				return fmt.Errorf("failed to resolve chromium frame")
+			}
+
+			return page.SetDocumentContent(frameTree.Frame.ID, documentHTML).Do(ctx)
+		}),
+		chromedp.WaitReady("body[data-ready='true']", chromedp.ByQuery),
+		chromedp.FullScreenshot(&pngBytes, 100),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pngBytes) == 0 {
+		return nil, fmt.Errorf("chromium returned an empty svg screenshot")
+	}
+
+	return pngBytes, nil
 }
 
 func svgRenderSize(icon *oksvg.SvgIcon) (int, int) {
