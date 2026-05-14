@@ -184,6 +184,25 @@ func TestNormalizePDFTextConvertsLatexExpressions(t *testing.T) {
 	}
 }
 
+func TestNormalizePDFMathExpressionForRendererNormalizesCommonShorthand(t *testing.T) {
+	t.Parallel()
+
+	normalized := normalizePDFMathExpressionForRenderer(`\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma`)
+	if normalized != `\hat{r}^{\mathrm{gated}}_{q,k} = \hat{r}^{\mathrm{cal}}_{q,k} \cdot (1 - p_{\mathrm{tie}})^\gamma` {
+		t.Fatalf("unexpected normalized shorthand math: %q", normalized)
+	}
+
+	normalized = normalizePDFMathExpressionForRenderer(`S_q = log(\frac{T_00}{T_q})`)
+	if normalized != `S_q = log(\frac{T_{00}}{T_q})` {
+		t.Fatalf("unexpected normalized numeric subscript math: %q", normalized)
+	}
+
+	normalized = normalizePDFMathExpressionForRenderer(`\hat r_q,k = model(q, a_k)`)
+	if normalized != `\hat{r}_{q,k} = model(q, a_k)` {
+		t.Fatalf("unexpected normalized pairwise math: %q", normalized)
+	}
+}
+
 func TestRenderPostBodyHTMLConvertsLatexOutsideCodeBlocks(t *testing.T) {
 	t.Parallel()
 
@@ -246,11 +265,11 @@ func TestRenderPostBodyHTMLMarksStandaloneLatexParagraphs(t *testing.T) {
 		t.Fatalf("renderPostBodyHTML returned error: %v", err)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-math-expression="S_q = log(\frac{T_00}{T_q})"`) {
+	if !strings.Contains(bodyHTML, `data-pdf-math-expression="S_q = log(\frac{T_{00}}{T_q})"`) {
 		t.Fatalf("expected standalone score formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma"`) {
+	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat{r}^{\mathrm{gated}}_{q,k} = \hat{r}^{\mathrm{cal}}_{q,k} \cdot (1 - p_{\mathrm{tie}})^\gamma"`) {
 		t.Fatalf("expected standalone gated formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 }
@@ -263,7 +282,7 @@ func TestRenderPostBodyHTMLMarksStandalonePairwiseFormulaLine(t *testing.T) {
 		t.Fatalf("renderPostBodyHTML returned error: %v", err)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat r_q,k = model(q, a_k)"`) {
+	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat{r}_{q,k} = model(q, a_k)"`) {
 		t.Fatalf("expected standalone pairwise formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 }
@@ -297,7 +316,7 @@ func TestRenderPostBodyHTMLHandlesDualTowerArchitectureFixture(t *testing.T) {
 		t.Fatalf("expected pairwise objective formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat S_x^{(k)} = S_k + \hat r_{x,k}"`) {
+	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat{S}_x^{(k)} = S_k + \hat{r}_{x,k}"`) {
 		t.Fatalf("expected anchor score formula to be marked for browser rendering, got %q", bodyHTML)
 	}
 
@@ -429,7 +448,7 @@ func TestPDFFragmentDocumentRendersCommonScriptShorthand(t *testing.T) {
 		t.Skip("skip chromium katex shorthand test without local katex assets")
 	}
 
-	documentHTML := buildPDFFragmentDocumentHTML(`<p><span class="pdf-math-fragment" data-pdf-math-expression="\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma" data-pdf-math-display="true">placeholder</span></p>`, 640, 592, assets)
+	documentHTML := buildPDFFragmentDocumentHTML(`<p><span class="pdf-math-fragment" data-pdf-math-expression="`+normalizePDFMathExpressionForRenderer(`\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma`)+`" data-pdf-math-display="true">placeholder</span></p>`, 640, 592, assets)
 	executablePath, err := resolvePDFChromiumExecutable()
 	if err != nil {
 		t.Fatalf("resolvePDFChromiumExecutable returned error: %v", err)

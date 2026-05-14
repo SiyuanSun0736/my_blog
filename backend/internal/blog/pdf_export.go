@@ -1329,10 +1329,254 @@ func extractPDFMathExpressionFromMatch(source string, match []int) string {
 	return ""
 }
 
+func normalizePDFMathExpressionForRenderer(expression string) string {
+	normalizedExpression := strings.TrimSpace(strings.ReplaceAll(expression, "\r", ""))
+	if normalizedExpression == "" {
+		return ""
+	}
+
+	normalizedExpression = normalizePDFMathAccentShorthand(normalizedExpression)
+	normalizedExpression = normalizePDFMathScriptShorthand(normalizedExpression)
+	return normalizedExpression
+}
+
+func normalizePDFMathAccentShorthand(expression string) string {
+	if expression == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(expression) + 8)
+	for index := 0; index < len(expression); {
+		if expression[index] != '\\' {
+			builder.WriteByte(expression[index])
+			index++
+			continue
+		}
+
+		command, nextIndex := consumePDFMathControlSequence(expression, index)
+		if !isPDFMathAccentCommand(command) {
+			builder.WriteString(command)
+			index = nextIndex
+			continue
+		}
+
+		builder.WriteString(command)
+		whitespaceStart := nextIndex
+		for nextIndex < len(expression) && isPDFMathWhitespace(expression[nextIndex]) {
+			nextIndex++
+		}
+
+		if nextIndex >= len(expression) || expression[nextIndex] == '{' {
+			builder.WriteString(expression[whitespaceStart:nextIndex])
+			index = nextIndex
+			continue
+		}
+
+		token, endIndex := consumePDFMathToken(expression, nextIndex)
+		if token == "" {
+			builder.WriteString(expression[whitespaceStart:nextIndex])
+			index = nextIndex
+			continue
+		}
+
+		builder.WriteString("{")
+		builder.WriteString(token)
+		builder.WriteString("}")
+		index = endIndex
+	}
+
+	return builder.String()
+}
+
+func normalizePDFMathScriptShorthand(expression string) string {
+	if expression == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(expression) + 8)
+	for index := 0; index < len(expression); {
+		currentByte := expression[index]
+		if currentByte != '^' && currentByte != '_' {
+			builder.WriteByte(currentByte)
+			index++
+			continue
+		}
+
+		builder.WriteByte(currentByte)
+		index++
+		for index < len(expression) && isPDFMathWhitespace(expression[index]) {
+			index++
+		}
+
+		if index >= len(expression) {
+			break
+		}
+
+		if expression[index] == '{' {
+			continue
+		}
+
+		token, endIndex := consumePDFMathToken(expression, index)
+		if token == "" {
+			continue
+		}
+
+		builder.WriteString(normalizePDFMathScriptToken(token))
+		index = endIndex
+	}
+
+	return builder.String()
+}
+
+func consumePDFMathControlSequence(expression string, startIndex int) (string, int) {
+	if startIndex >= len(expression) || expression[startIndex] != '\\' {
+		return "", startIndex
+	}
+
+	endIndex := startIndex + 1
+	for endIndex < len(expression) {
+		currentByte := expression[endIndex]
+		if (currentByte >= 'a' && currentByte <= 'z') || (currentByte >= 'A' && currentByte <= 'Z') {
+			endIndex++
+			continue
+		}
+
+		break
+	}
+
+	if endIndex == startIndex+1 && endIndex < len(expression) {
+		endIndex++
+	}
+
+	return expression[startIndex:endIndex], endIndex
+}
+
+func consumePDFMathToken(expression string, startIndex int) (string, int) {
+	if startIndex >= len(expression) {
+		return "", startIndex
+	}
+
+	if expression[startIndex] == '\\' {
+		return consumePDFMathControlSequence(expression, startIndex)
+	}
+
+	endIndex := startIndex
+	for endIndex < len(expression) {
+		switch expression[endIndex] {
+		case ' ', '\t', '\n', '\r', '{', '}', '[', ']', '(', ')', '+', '-', '*', '/', '=', '<', '>', '|', '&', ';', ':', '!', '?', '.', '^', '_':
+			if endIndex == startIndex {
+				endIndex++
+			}
+			return expression[startIndex:endIndex], endIndex
+		}
+
+		endIndex++
+	}
+
+	return expression[startIndex:endIndex], endIndex
+}
+
+func normalizePDFMathScriptToken(token string) string {
+	if token == "" {
+		return ""
+	}
+
+	if replacement, ok := pdfMathScriptFontShorthandReplacement(token); ok {
+		return replacement
+	}
+
+	if isPDFMathWordToken(token) {
+		return `{\mathrm{` + token + `}}`
+	}
+
+	if isPDFMathSimpleScriptToken(token) {
+		return `{` + token + `}`
+	}
+
+	return token
+}
+
+func pdfMathScriptFontShorthandReplacement(token string) (string, bool) {
+	var label string
+	switch token {
+	case `\cal`:
+		label = "cal"
+	case `\bf`:
+		label = "bf"
+	case `\it`:
+		label = "it"
+	case `\rm`:
+		label = "rm"
+	case `\sf`:
+		label = "sf"
+	case `\tt`:
+		label = "tt"
+	default:
+		return "", false
+	}
+
+	return `{\mathrm{` + label + `}}`, true
+}
+
+func isPDFMathWordToken(token string) bool {
+	runeCount := 0
+	for _, currentRune := range token {
+		if !unicode.IsLetter(currentRune) {
+			return false
+		}
+		runeCount++
+	}
+
+	return runeCount > 1
+}
+
+func isPDFMathSimpleScriptToken(token string) bool {
+	runeCount := 0
+	hasComma := false
+	for _, currentRune := range token {
+		switch {
+		case unicode.IsLetter(currentRune), unicode.IsDigit(currentRune):
+			runeCount++
+		case currentRune == ',':
+			hasComma = true
+			runeCount++
+		default:
+			return false
+		}
+	}
+
+	return hasComma || runeCount > 1
+}
+
+func isPDFMathAccentCommand(command string) bool {
+	switch command {
+	case `\acute`, `\bar`, `\breve`, `\check`, `\ddot`, `\dot`, `\grave`, `\hat`, `\overline`, `\tilde`, `\vec`, `\widehat`, `\widetilde`:
+		return true
+	default:
+		return false
+	}
+}
+
+func isPDFMathWhitespace(value byte) bool {
+	switch value {
+	case ' ', '\t', '\n', '\r':
+		return true
+	default:
+		return false
+	}
+}
+
 func newPDFMathPlaceholderNode(expression string, display bool) *htmlnode.Node {
 	trimmedExpression := strings.TrimSpace(expression)
 	if trimmedExpression == "" {
 		return nil
+	}
+
+	normalizedExpression := normalizePDFMathExpressionForRenderer(trimmedExpression)
+	if normalizedExpression == "" {
+		normalizedExpression = trimmedExpression
 	}
 
 	placeholderNode := &htmlnode.Node{
@@ -1341,7 +1585,7 @@ func newPDFMathPlaceholderNode(expression string, display bool) *htmlnode.Node {
 		Data:     atom.Span.String(),
 		Attr: []htmlnode.Attribute{
 			{Key: "class", Val: "pdf-math-fragment"},
-			{Key: pdfMathExpressionAttrName, Val: trimmedExpression},
+			{Key: pdfMathExpressionAttrName, Val: normalizedExpression},
 			{Key: pdfMathDisplayAttrName, Val: strconv.FormatBool(display)},
 		},
 	}
@@ -2164,7 +2408,7 @@ func buildPDFFragmentDocumentHTML(fragmentHTML string, viewportWidth int, conten
 					}
 
 					try {
-						window.katex.render(expression, node, { displayMode: displayMode, throwOnError: false });
+						window.katex.render(expression, node, { displayMode: displayMode, throwOnError: true });
 					} catch (error) {
 						node.textContent = node.textContent || expression;
 					}
