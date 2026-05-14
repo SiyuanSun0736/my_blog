@@ -12,6 +12,7 @@ const requireFromMathJax = (relativePath) => require(path.join(mathJaxDir, "math
 
 const { Resvg } = requireFromNodeModules("@resvg/resvg-js");
 const { mathjax } = requireFromMathJax("js/mathjax.js");
+const { MathML } = requireFromMathJax("js/input/mathml.js");
 const { TeX } = requireFromMathJax("js/input/tex.js");
 const { SVG } = requireFromMathJax("js/output/svg.js");
 const { liteAdaptor } = requireFromMathJax("js/adaptors/liteAdaptor.js");
@@ -22,8 +23,10 @@ const adaptor = liteAdaptor();
 RegisterHTMLHandler(adaptor);
 
 const tex = new TeX({ packages: AllPackages });
+const mathML = new MathML();
 const svg = new SVG({ fontCache: "none", displayAlign: "left" });
-const html = mathjax.document("", { InputJax: tex, OutputJax: svg });
+const texDocument = mathjax.document("", { InputJax: tex, OutputJax: svg });
+const mathMLDocument = mathjax.document("", { InputJax: mathML, OutputJax: svg });
 
 const inputText = fs.readFileSync(0, "utf8").trim();
 if (!inputText) {
@@ -41,13 +44,20 @@ try {
 
 const expression = String(input.expression || "").trim();
 const display = Boolean(input.display);
+const format = String(input.format || "tex").trim().toLowerCase() || "tex";
 if (!expression) {
 	process.stdout.write(JSON.stringify({ error: "expression is required" }));
 	process.exit(0);
 }
 
+if (!["tex", "mathml"].includes(format)) {
+	process.stdout.write(JSON.stringify({ error: `unsupported math format: ${format}` }));
+	process.exit(0);
+}
+
 try {
-	const container = html.convert(expression, { display });
+	const document = format === "mathml" ? mathMLDocument : texDocument;
+	const container = document.convert(expression, { display });
 	const svgNode = adaptor.firstChild(container);
 	if (!svgNode) {
 		throw new Error("MathJax returned an empty SVG node");

@@ -5,6 +5,7 @@ import (
 	stdhtml "html"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,11 +19,47 @@ var (
 	markdownLinkPattern      = regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
 	spacePattern             = regexp.MustCompile(`\s+`)
 	htmlBodySanitizer        = newHTMLBodySanitizer()
+	mathMLAllowedElements    = []string{
+		"math", "semantics", "annotation", "annotation-xml",
+		"mrow", "mi", "mn", "mo", "mtext", "ms", "mspace",
+		"msub", "msup", "msubsup", "munder", "mover", "munderover",
+		"mmultiscripts", "mprescripts", "none", "mfrac", "msqrt", "mroot",
+		"mfenced", "menclose", "mtable", "mtr", "mtd", "mstyle",
+		"mpadded", "mphantom",
+	}
 )
 
 func newHTMLBodySanitizer() *bluemonday.Policy {
 	policy := bluemonday.UGCPolicy()
-	policy.AllowAttrs("class").OnElements("code", "pre")
+	policy.AllowAttrs("class").OnElements("code", "pre", "span", "div")
+	policy.AllowAttrs(htmlMathExpressionAttrName, htmlMathDisplayAttrName, htmlMathFormatAttrName).OnElements("span", "div")
+	policy.AllowElements(mathMLAllowedElements...)
+	policy.AllowAttrs(
+		"xmlns",
+		"display",
+		"displaystyle",
+		"mathvariant",
+		"mathsize",
+		"mathcolor",
+		"mathbackground",
+		"scriptlevel",
+		"stretchy",
+		"symmetric",
+		"fence",
+		"separator",
+		"form",
+		"linethickness",
+		"columnalign",
+		"rowalign",
+		"columnspan",
+		"rowspan",
+		"width",
+		"height",
+		"depth",
+		"open",
+		"close",
+		"encoding",
+	).OnElements(mathMLAllowedElements...)
 	return policy
 }
 
@@ -47,10 +84,75 @@ func sanitizeBodyContent(body string, bodyFormat BodyFormat) string {
 	}
 
 	if normalizeBodyFormat(bodyFormat) == BodyFormatHTML {
-		return strings.TrimSpace(htmlBodySanitizer.Sanitize(trimmedBody))
+		normalizedBody := normalizeHTMLMathForStorage(trimmedBody)
+		return strings.TrimSpace(htmlBodySanitizer.Sanitize(normalizedBody))
 	}
 
 	return trimmedBody
+}
+
+func normalizeHTMLMathForStorage(body string) string {
+	document, err := htmlnode.Parse(strings.NewReader(body))
+	if err != nil {
+		return body
+	}
+
+	root := findFirstNodeByAtom(document, atom.Body)
+	if root == nil {
+		root = document
+	}
+
+	rewriteHTMLMathNodes(root)
+	return renderNodeInnerHTML(root)
+}
+
+func rewriteHTMLMathNodes(node *htmlnode.Node) {
+	if node == nil {
+		return
+	}
+
+	for child := node.FirstChild; child != nil; {
+		nextChild := child.NextSibling
+		if replacementNode := newHTMLMathDataNode(child); replacementNode != nil {
+			insertHTMLNodeBefore(child, replacementNode)
+			detachHTMLNode(child)
+			child = nextChild
+			continue
+		}
+
+		rewriteHTMLMathNodes(child)
+		child = nextChild
+	}
+}
+
+func newHTMLMathDataNode(node *htmlnode.Node) *htmlnode.Node {
+	if !isMathMLNode(node) {
+		return nil
+	}
+
+	expression := strings.TrimSpace(renderSingleNodeHTML(node))
+	if expression == "" {
+		return nil
+	}
+
+	fallbackText := normalizeWhitespace(extractNodeText(node))
+	if fallbackText == "" {
+		fallbackText = "数学公式"
+	}
+
+	mathNode := &htmlnode.Node{
+		Type:     htmlnode.ElementNode,
+		DataAtom: atom.Span,
+		Data:     atom.Span.String(),
+		Attr: []htmlnode.Attribute{
+			{Key: "class", Val: "html-math-fragment"},
+			{Key: htmlMathExpressionAttrName, Val: expression},
+			{Key: htmlMathDisplayAttrName, Val: strconv.FormatBool(isBlockMathMLNode(node))},
+			{Key: htmlMathFormatAttrName, Val: "mathml"},
+		},
+	}
+	mathNode.AppendChild(&htmlnode.Node{Type: htmlnode.TextNode, Data: fallbackText})
+	return mathNode
 }
 
 func summarizeBody(body string, bodyFormat BodyFormat) string {

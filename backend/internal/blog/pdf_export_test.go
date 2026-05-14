@@ -226,7 +226,7 @@ func TestNormalizePDFMathExpressionForRendererNormalizesCommonShorthand(t *testi
 func TestRenderPostBodyHTMLConvertsLatexOutsideCodeBlocks(t *testing.T) {
 	t.Parallel()
 
-	bodyHTML, err := renderPostBodyHTML("Overview", "内联公式 $E=mc^2$\n\n$$\\frac{a}{b} + \\sqrt{x}$$\n\n```tex\n$E=mc^2$\n```", BodyFormatMarkdown)
+	bodyHTML, err := renderPostBodyHTML("Overview", "内联公式 $E=mc^2$\n\n$$\n\\frac{a}{b} + \\sqrt{x}\n$$\n\n```tex\n$E=mc^2$\n```", BodyFormatMarkdown)
 	if err != nil {
 		t.Fatalf("renderPostBodyHTML returned error: %v", err)
 	}
@@ -256,10 +256,10 @@ func TestRenderPostBodyHTMLConvertsLatexOutsideCodeBlocks(t *testing.T) {
 	}
 }
 
-func TestRenderPostBodyHTMLStripsSpacedBlockMathDelimiters(t *testing.T) {
+func TestRenderPostBodyHTMLStripsDelimitedBlockMath(t *testing.T) {
 	t.Parallel()
 
-	bodyHTML, err := renderPostBodyHTML("目标", "$$ S_q = \\log\\left(\\frac{T_{00}}{T_q}\\right) $$", BodyFormatMarkdown)
+	bodyHTML, err := renderPostBodyHTML("目标", "$$\nS_q = \\log\\left(\\frac{T_{00}}{T_q}\\right)\n$$", BodyFormatMarkdown)
 	if err != nil {
 		t.Fatalf("renderPostBodyHTML returned error: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestRenderPostBodyHTMLStripsSpacedBlockMathDelimiters(t *testing.T) {
 func TestRenderPostBodyHTMLMarksStandaloneLatexParagraphs(t *testing.T) {
 	t.Parallel()
 
-	bodyHTML, err := renderPostBodyHTML("Scoring", "绝对分数：\n\nS_q = log(\\frac{T_00}{T_q})\n\n解码：\n\n\\hat r^gated_{q,k} = \\hat r^\\cal_{q,k} \\cdot (1 - p_tie)^\\gamma", BodyFormatMarkdown)
+	bodyHTML, err := renderPostBodyHTML("Scoring", "绝对分数：\n\n$$\nS_q = log(\\frac{T_00}{T_q})\n$$\n\n解码：\n\n$$\n\\hat r^gated_{q,k} = \\hat r^\\cal_{q,k} \\cdot (1 - p_tie)^\\gamma\n$$", BodyFormatMarkdown)
 	if err != nil {
 		t.Fatalf("renderPostBodyHTML returned error: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestRenderPostBodyHTMLMarksStandaloneLatexParagraphs(t *testing.T) {
 	}
 }
 
-func TestRenderPostBodyHTMLMarksStandalonePairwiseFormulaLine(t *testing.T) {
+func TestRenderPostBodyHTMLDoesNotGuessBarePairwiseFormulaLine(t *testing.T) {
 	t.Parallel()
 
 	bodyHTML, err := renderPostBodyHTML("目标", "\\hat r_q,k = model(q, a_k)", BodyFormatMarkdown)
@@ -298,8 +298,12 @@ func TestRenderPostBodyHTMLMarksStandalonePairwiseFormulaLine(t *testing.T) {
 		t.Fatalf("renderPostBodyHTML returned error: %v", err)
 	}
 
-	if !strings.Contains(bodyHTML, `data-pdf-math-expression="\hat r_q,k = model(q, a_k)"`) {
-		t.Fatalf("expected standalone pairwise formula to be marked for browser rendering, got %q", bodyHTML)
+	if strings.Contains(bodyHTML, `data-pdf-math-expression="\hat r_q,k = model(q, a_k)"`) {
+		t.Fatalf("expected bare markdown formula without delimiters to stay plain text, got %q", bodyHTML)
+	}
+
+	if !strings.Contains(bodyHTML, `\hat r_q,k = model(q, a_k)`) {
+		t.Fatalf("expected bare markdown formula text to remain in html output, got %q", bodyHTML)
 	}
 }
 
@@ -310,7 +314,7 @@ func TestBuildPostPDFRendersStandaloneLatexParagraphsAsEmbeddedImages(t *testing
 	pdfBytes, _, err := buildPostPDF(PDFExportInput{
 		Title:      "Formula report",
 		BodyFormat: BodyFormatMarkdown,
-		Body:       "绝对分数：\n\nS_q = log(\\frac{T_00}{T_q})\n\n解码：\n\n\\hat r^gated_{q,k} = \\hat r^\\cal_{q,k} \\cdot (1 - p_tie)^\\gamma",
+		Body:       "绝对分数：\n\n$$\nS_q = log(\\frac{T_00}{T_q})\n$$\n\n解码：\n\n$$\n\\hat r^gated_{q,k} = \\hat r^\\cal_{q,k} \\cdot (1 - p_tie)^\\gamma\n$$",
 	}, PDFRenderOptions{})
 	if err != nil {
 		t.Fatalf("buildPostPDF returned error: %v", err)
@@ -321,21 +325,39 @@ func TestBuildPostPDFRendersStandaloneLatexParagraphsAsEmbeddedImages(t *testing
 	}
 }
 
-func TestBuildPostPDFRendersHTMLWrappedStandaloneLatexParagraphsAsEmbeddedImages(t *testing.T) {
+func TestBuildPostPDFRendersHTMLDataMathBlocksAsEmbeddedImages(t *testing.T) {
 	requirePDFFontForPDFTests(t)
 	requireMathJaxForPDFTests(t)
 
 	pdfBytes, _, err := buildPostPDF(PDFExportInput{
-		Title:      "Wrapped formula report",
+		Title:      "Data math report",
 		BodyFormat: BodyFormatHTML,
-		Body:       `<p><span>\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma</span></p>`,
+		Body:       `<p><span data-math-expression="\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma" data-math-display="true" data-math-format="tex">r_gated(q,k)</span></p>`,
 	}, PDFRenderOptions{})
 	if err != nil {
 		t.Fatalf("buildPostPDF returned error: %v", err)
 	}
 
 	if !bytes.Contains(pdfBytes, []byte("/Subtype /Image")) {
-		t.Fatalf("expected wrapped standalone formula paragraph to be rasterized into an embedded image")
+		t.Fatalf("expected explicit html data-math block to be rasterized into an embedded image")
+	}
+}
+
+func TestBuildPostPDFRendersHTMLMathMLBlocksAsEmbeddedImages(t *testing.T) {
+	requirePDFFontForPDFTests(t)
+	requireMathJaxForPDFTests(t)
+
+	pdfBytes, _, err := buildPostPDF(PDFExportInput{
+		Title:      "MathML report",
+		BodyFormat: BodyFormatHTML,
+		Body:       `<div><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><msup><mi>x</mi><mn>2</mn></msup></math></div>`,
+	}, PDFRenderOptions{})
+	if err != nil {
+		t.Fatalf("buildPostPDF returned error: %v", err)
+	}
+
+	if !bytes.Contains(pdfBytes, []byte("/Subtype /Image")) {
+		t.Fatalf("expected html mathml block to be rasterized into an embedded image")
 	}
 }
 
@@ -423,7 +445,7 @@ func TestPDFMathRendererRendersStandaloneFormula(t *testing.T) {
 		t.Fatalf("newPDFMathRenderer returned error: %v", err)
 	}
 
-	asset, err := renderer.render(`E=mc^2`, false)
+	asset, err := renderer.render(`E=mc^2`, false, "tex")
 	if err != nil {
 		t.Fatalf("renderer.render returned error: %v", err)
 	}
@@ -449,13 +471,31 @@ func TestPDFMathRendererHandlesCommonScriptShorthand(t *testing.T) {
 		t.Fatalf("newPDFMathRenderer returned error: %v", err)
 	}
 
-	asset, err := renderer.render(`\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma`, true)
+	asset, err := renderer.render(`\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma`, true, "tex")
 	if err != nil {
 		t.Fatalf("renderer.render returned error: %v", err)
 	}
 
 	if asset == nil || len(asset.data) == 0 {
 		t.Fatal("expected rendered shorthand math asset")
+	}
+}
+
+func TestPDFMathRendererRendersMathMLFormula(t *testing.T) {
+	requireMathJaxForPDFTests(t)
+
+	renderer, err := newPDFMathRenderer()
+	if err != nil {
+		t.Fatalf("newPDFMathRenderer returned error: %v", err)
+	}
+
+	asset, err := renderer.render(`<math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><msup><mi>x</mi><mn>2</mn></msup></math>`, true, "mathml")
+	if err != nil {
+		t.Fatalf("renderer.render returned error: %v", err)
+	}
+
+	if asset == nil || len(asset.data) == 0 {
+		t.Fatal("expected rendered mathml asset")
 	}
 }
 

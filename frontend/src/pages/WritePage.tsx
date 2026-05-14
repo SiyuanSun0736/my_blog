@@ -16,6 +16,7 @@ import {
   type BatchPostsAction,
   type HTMLImportResponse,
 } from "../lib/api";
+import { normalizeLatexInBody } from "../lib/latex";
 import type { BodyFormat, Post, PostSummary } from "../types";
 
 interface WriteFormState {
@@ -376,6 +377,49 @@ function buildImageSnippet(source: string, altText: string, bodyFormat: BodyForm
   return bodyFormat === "html" ? buildImageHTML(source, altText) : buildImageMarkdown(source, altText);
 }
 
+type MarkdownMathWrapMode = "inline" | "block";
+
+interface MarkdownMathWrapResult {
+  text: string;
+  selectionStartOffset: number;
+  selectionEndOffset: number;
+}
+
+function paddingBeforeStandaloneMarkdownBlock(value: string) {
+  if (value.length === 0 || value.endsWith("\n\n")) {
+    return "";
+  }
+
+  return value.endsWith("\n") ? "\n" : "\n\n";
+}
+
+function paddingAfterStandaloneMarkdownBlock(value: string) {
+  if (value.length === 0 || value.startsWith("\n\n")) {
+    return "";
+  }
+
+  return value.startsWith("\n") ? "\n" : "\n\n";
+}
+
+function wrapMarkdownMathSelection(selection: string, mode: MarkdownMathWrapMode): MarkdownMathWrapResult {
+  if (mode === "inline") {
+    return {
+      text: `$${selection}$`,
+      selectionStartOffset: 1,
+      selectionEndOffset: selection.length + 1,
+    };
+  }
+
+  const openingDelimiter = "$$\n";
+  const closingDelimiter = "\n$$";
+
+  return {
+    text: `${openingDelimiter}${selection}${closingDelimiter}`,
+    selectionStartOffset: openingDelimiter.length,
+    selectionEndOffset: openingDelimiter.length + selection.length,
+  };
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024) {
     return `${bytes} B`;
@@ -693,6 +737,7 @@ export function WritePage() {
   const [imageAltText, setImageAltText] = useState("");
   const [imageStatus, setImageStatus] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [bodyToolStatus, setBodyToolStatus] = useState<string | null>(null);
 
   const isEditing = selectedSlug !== null;
   const featuredPosts = posts.filter((post) => post.featured).slice(0, 3);
@@ -837,10 +882,82 @@ export function WritePage() {
   }
 
   function updateField<Key extends keyof WriteFormState>(field: Key, value: WriteFormState[Key]) {
+    if (field === "body" || field === "bodyFormat") {
+      setBodyToolStatus(null);
+    }
+
     setForm((current) => ({
       ...current,
       [field]: value,
     }));
+  }
+
+  function handleNormalizeBodyLatex() {
+    const normalizedBody = normalizeLatexInBody(form.body, form.bodyFormat);
+
+    if (normalizedBody.body !== form.body) {
+      updateField("body", normalizedBody.body);
+    }
+
+    setError(null);
+
+    if (normalizedBody.matchedExpressions === 0) {
+      setBodyToolStatus(
+        form.bodyFormat === "html"
+          ? "未找到可标准化的 data-math TeX 节点。"
+          : "未找到带显式定界符的 LaTeX 公式。",
+      );
+    } else if (normalizedBody.changedExpressions === 0) {
+      setBodyToolStatus(`已检查 ${normalizedBody.matchedExpressions} 段公式，未发现需要标准化的写法。`);
+    } else {
+      setBodyToolStatus(`已标准化 ${normalizedBody.changedExpressions}/${normalizedBody.matchedExpressions} 段公式。`);
+    }
+
+    window.requestAnimationFrame(() => {
+      bodyTextareaRef.current?.focus();
+    });
+  }
+
+  function handleWrapBodySelection(mode: MarkdownMathWrapMode) {
+    if (form.bodyFormat !== "markdown") {
+      setBodyToolStatus("当前正文格式为 HTML；$...$ / $$...$$ 包裹工具仅适用于 Markdown。");
+      return;
+    }
+
+    const editor = bodyTextareaRef.current;
+    const selectionStart = editor?.selectionStart ?? form.body.length;
+    const selectionEnd = editor?.selectionEnd ?? form.body.length;
+    const before = form.body.slice(0, selectionStart);
+    const selectedText = form.body.slice(selectionStart, selectionEnd);
+    const after = form.body.slice(selectionEnd);
+    const prefix = mode === "block" ? paddingBeforeStandaloneMarkdownBlock(before) : "";
+    const suffix = mode === "block" ? paddingAfterStandaloneMarkdownBlock(after) : "";
+    const wrappedSelection = wrapMarkdownMathSelection(selectedText, mode);
+    const nextBody = `${before}${prefix}${wrappedSelection.text}${suffix}${after}`;
+    const nextSelectionStart = before.length + prefix.length + wrappedSelection.selectionStartOffset;
+    const nextSelectionEnd = before.length + prefix.length + wrappedSelection.selectionEndOffset;
+
+    updateField("body", nextBody);
+    setError(null);
+    setBodyToolStatus(
+      mode === "block"
+        ? selectedText.length === 0
+          ? "已插入 $$...$$ 块级公式模板。"
+          : "已将当前选区包成 $$...$$ 块级公式。"
+        : selectedText.length === 0
+          ? "已插入 $...$ 行内公式定界符。"
+          : "已将当前选区包成 $...$ 行内公式。",
+    );
+
+    window.requestAnimationFrame(() => {
+      const textarea = bodyTextareaRef.current;
+      if (!textarea) {
+        return;
+      }
+
+      textarea.focus();
+      textarea.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+    });
   }
 
   function insertBodyBlock(snippet: string) {
@@ -966,6 +1083,7 @@ export function WritePage() {
     setImageAltText("");
     setImageStatus(null);
     setUploadingImage(false);
+    setBodyToolStatus(null);
   }
 
   function selectEditorPost(post: Post) {
@@ -975,6 +1093,7 @@ export function WritePage() {
     setImportedFileName(null);
     setImageStatus(null);
     setUploadingImage(false);
+    setBodyToolStatus(null);
   }
 
   function toggleSelectedSlug(slug: string) {
@@ -1102,6 +1221,7 @@ export function WritePage() {
       setImportedFileName(file.name);
       setError(null);
       setSuccessMessage(null);
+      setBodyToolStatus(null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "本地 Markdown 导入失败。");
     }
@@ -1139,6 +1259,7 @@ export function WritePage() {
     setImportedFileName(sourceLabel);
     setError(null);
     setSuccessMessage(null);
+    setBodyToolStatus(null);
   }
 
   async function handleEditPost(slug: string) {
@@ -1738,6 +1859,48 @@ export function WritePage() {
                     </Button>
                   </div>
                 </div>
+
+                <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <p className="text-xs leading-6 text-[var(--muted)]">
+                    {form.bodyFormat === "html"
+                      ? "HTML 模式下只处理显式 data-math-expression 里的 TeX，不会改写 MathML 节点；$...$ / $$...$$ 包裹工具仅在 Markdown 下可用。"
+                      : "包裹按钮会把当前选区包成 $...$ 或独立的 $$...$$ 公式块；标准化按钮只处理 $...$、$$...$$、\\(...\\)、\\[...\\] 里的公式，并跳过代码块或反引号代码。"}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      radius="full"
+                      size="sm"
+                      variant="bordered"
+                      isDisabled={form.bodyFormat !== "markdown"}
+                      onPress={() => handleWrapBodySelection("inline")}
+                    >
+                      包成 $...$
+                    </Button>
+                    <Button
+                      type="button"
+                      radius="full"
+                      size="sm"
+                      variant="bordered"
+                      isDisabled={form.bodyFormat !== "markdown"}
+                      onPress={() => handleWrapBodySelection("block")}
+                    >
+                      包成 $$...$$
+                    </Button>
+                    <Button
+                      type="button"
+                      radius="full"
+                      size="sm"
+                      variant="bordered"
+                      isDisabled={form.body.trim().length === 0}
+                      onPress={handleNormalizeBodyLatex}
+                    >
+                      标准化 LaTeX
+                    </Button>
+                  </div>
+                </div>
+
+                {bodyToolStatus ? <p className="mt-3 text-xs leading-6 text-emerald-700">{bodyToolStatus}</p> : null}
               </div>
 
               <label className="block space-y-2">

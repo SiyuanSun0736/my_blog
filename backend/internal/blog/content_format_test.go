@@ -85,3 +85,29 @@ func TestParseHTMLImportDocumentExtractsMetadata(t *testing.T) {
 		t.Fatalf("unexpected imported tags: %#v", result.Tags)
 	}
 }
+
+func TestNormalizeCreatePostInputPreservesHTMLMathSemantics(t *testing.T) {
+	input := CreatePostInput{
+		Title:      "Math report",
+		BodyFormat: BodyFormatHTML,
+		Body: `<article><p><span data-math-expression="\\frac{a}{b}" data-math-display="true" data-math-format="tex">a/b</span></p>` +
+			`<p><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><msup><mi>x</mi><mn>2</mn></msup></math></p></article>`,
+	}
+
+	normalized, err := normalizeCreatePostInput(input)
+	if err != nil {
+		t.Fatalf("normalizeCreatePostInput returned error: %v", err)
+	}
+
+	if !strings.Contains(normalized.Body, `data-math-expression="\\frac{a}{b}"`) {
+		t.Fatalf("expected explicit data-math node to survive sanitization, got %q", normalized.Body)
+	}
+
+	if !strings.Contains(normalized.Body, `data-math-format="mathml"`) || !strings.Contains(normalized.Body, `data-math-expression="&lt;math`) {
+		t.Fatalf("expected MathML to be converted into an explicit data-math node, got %q", normalized.Body)
+	}
+
+	if strings.Contains(normalized.Body, `<script`) {
+		t.Fatalf("expected sanitizer to keep stripping script nodes, got %q", normalized.Body)
+	}
+}

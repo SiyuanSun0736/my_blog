@@ -19,6 +19,7 @@ import (
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	mathjax "github.com/litao91/goldmark-mathjax"
 	"github.com/phpdave11/gofpdf"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -94,8 +95,12 @@ type pdfFragmentBrowserRenderer struct {
 var ErrPDFTooLarge = errors.New("pdf export too large")
 
 const (
-	pdfMathExpressionAttrName = "data-pdf-math-expression"
-	pdfMathDisplayAttrName    = "data-pdf-math-display"
+	htmlMathExpressionAttrName = "data-math-expression"
+	htmlMathDisplayAttrName    = "data-math-display"
+	htmlMathFormatAttrName     = "data-math-format"
+	pdfMathExpressionAttrName  = "data-pdf-math-expression"
+	pdfMathDisplayAttrName     = "data-pdf-math-display"
+	pdfMathFormatAttrName      = "data-pdf-math-format"
 )
 
 var (
@@ -109,7 +114,7 @@ var (
 	pdfChromiumLocalImageByteLimit     int64 = maxPDFImageBytes
 	pdfAbsoluteLocalImageByteLimit     int64 = 2 * maxPDFImageBytes
 	pdfAccentHexPattern                      = regexp.MustCompile(`#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})`)
-	markdownToHTML                           = goldmark.New(goldmark.WithExtensions(extension.GFM))
+	markdownToHTML                           = goldmark.New(goldmark.WithExtensions(extension.GFM, mathjax.MathJax))
 	pdfBlockMathPattern                      = regexp.MustCompile(`(?s)(\$\$(.+?)\$\$|\\\[(.+?)\\\])`)
 	pdfInlineMathPattern                     = regexp.MustCompile(`(\\\((.+?)\\\)|\$([^$\n]+?)\$)`)
 	pdfLatexFractionPattern                  = regexp.MustCompile(`\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}`)
@@ -935,223 +940,138 @@ func normalizePDFMathHTML(bodyHTML string) string {
 		root = document
 	}
 
-	rewritePDFMathTextNodes(root, false)
+	rewritePDFMathNodes(root)
 	return renderNodeInnerHTML(root)
 }
 
-func rewritePDFMathTextNodes(node *htmlnode.Node, preserveRawText bool) {
+func rewritePDFMathNodes(node *htmlnode.Node) {
 	if node == nil {
 		return
 	}
 
-	if node.Type == htmlnode.TextNode && !preserveRawText {
-		rewritePDFMathTextNode(node)
-		return
-	}
-
-	nextPreserveRawText := preserveRawText
-	if node.Type == htmlnode.ElementNode {
-		switch node.DataAtom {
-		case atom.Code, atom.Pre, atom.Script, atom.Style:
-			nextPreserveRawText = true
-		}
-	}
-
 	for child := node.FirstChild; child != nil; {
 		nextChild := child.NextSibling
-		rewritePDFMathTextNodes(child, nextPreserveRawText)
+		if placeholderNode := newPDFMathPlaceholderNodeFromSource(child); placeholderNode != nil {
+			insertHTMLNodeBefore(child, placeholderNode)
+			detachHTMLNode(child)
+			child = nextChild
+			continue
+		}
+
+		rewritePDFMathNodes(child)
 		child = nextChild
 	}
 }
 
-type pdfMathTextSegment struct {
-	text       string
-	expression string
-	display    bool
-	isMath     bool
+func newPDFMathPlaceholderNodeFromSource(node *htmlnode.Node) *htmlnode.Node {
+	expression, display, format, fallbackText, ok := extractRenderablePDFMathNode(node)
+	if !ok {
+		return nil
+	}
+
+	return newPDFMathPlaceholderNode(expression, display, format, fallbackText)
 }
 
-func rewritePDFMathTextNode(node *htmlnode.Node) {
-	if node == nil || node.Type != htmlnode.TextNode {
-		return
+func extractRenderablePDFMathNode(node *htmlnode.Node) (string, bool, string, string, bool) {
+	if node == nil || node.Type != htmlnode.ElementNode {
+		return "", false, "", "", false
 	}
 
-	if containsPDFMathSyntax(node.Data) {
-		segments := splitPDFMathTextSegments(node.Data)
-		if len(segments) == 0 {
-			node.Data = normalizePDFTextNodeValue(node.Data)
-			return
-		}
-
-		replacementNodes := make([]*htmlnode.Node, 0, len(segments))
-		for _, segment := range segments {
-			if segment.isMath {
-				placeholderNode := newPDFMathPlaceholderNode(segment.expression, segment.display)
-				if placeholderNode != nil {
-					replacementNodes = append(replacementNodes, placeholderNode)
-				}
-				continue
-			}
-
-			normalizedText := normalizePDFTextNodeValue(segment.text)
-			if normalizedText == "" {
-				continue
-			}
-
-			replacementNodes = append(replacementNodes, &htmlnode.Node{Type: htmlnode.TextNode, Data: normalizedText})
-		}
-
-		for _, replacementNode := range replacementNodes {
-			insertHTMLNodeBefore(node, replacementNode)
-		}
-
-		detachHTMLNode(node)
-		return
+	if expression := strings.TrimSpace(htmlAttribute(node, htmlMathExpressionAttrName)); expression != "" {
+		return expression,
+			parsePDFMathDisplay(htmlAttribute(node, htmlMathDisplayAttrName)),
+			normalizePDFMathInputFormat(htmlAttribute(node, htmlMathFormatAttrName)),
+			normalizeWhitespace(extractNodeText(node)),
+			true
 	}
 
-	if expression, display := extractStandalonePDFMathExpression(node); expression != "" {
-		placeholderNode := newPDFMathPlaceholderNode(expression, display)
-		if placeholderNode != nil {
-			insertHTMLNodeBefore(node, placeholderNode)
-			detachHTMLNode(node)
-			return
-		}
+	if expression, display, ok := extractGoldmarkPDFMathExpression(node); ok {
+		return expression, display, "tex", "", true
 	}
 
-	node.Data = normalizePDFTextNodeValue(node.Data)
+	if isMathMLNode(node) {
+		expression := strings.TrimSpace(renderSingleNodeHTML(node))
+		if expression == "" {
+			return "", false, "", "", false
+		}
+
+		return expression, isBlockMathMLNode(node), "mathml", normalizeWhitespace(extractNodeText(node)), true
+	}
+
+	return "", false, "", "", false
 }
 
-func extractStandalonePDFMathExpression(node *htmlnode.Node) (string, bool) {
-	if node == nil || node.Type != htmlnode.TextNode || node.Parent == nil || node.Parent.Type != htmlnode.ElementNode {
-		return "", false
+func extractGoldmarkPDFMathExpression(node *htmlnode.Node) (string, bool, bool) {
+	if !isGoldmarkMathNode(node) {
+		return "", false, false
 	}
 
-	if !supportsStandalonePDFMath(node.Parent.DataAtom) {
-		return "", false
+	expression, display, ok := stripExplicitPDFMathDelimiters(extractNodeRawText(node))
+	if !ok {
+		return "", false, false
 	}
 
-	for sibling := node.Parent.FirstChild; sibling != nil; sibling = sibling.NextSibling {
-		if sibling == node {
-			continue
-		}
-
-		if sibling.Type == htmlnode.TextNode && strings.TrimSpace(sibling.Data) == "" {
-			continue
-		}
-
-		return "", false
+	if hasHTMLClass(node, "display") {
+		display = true
+	}
+	if hasHTMLClass(node, "inline") {
+		display = false
 	}
 
-	trimmedText := normalizeWhitespace(node.Data)
-	if !looksLikeStandalonePDFMathExpression(trimmedText) {
-		return "", false
-	}
-
-	return trimmedText, node.Parent.DataAtom != atom.Span
+	return expression, display, true
 }
 
-func supportsStandalonePDFMath(tag atom.Atom) bool {
-	switch tag {
-	case atom.P, atom.Div, atom.Li, atom.Blockquote, atom.Td, atom.Th:
+func stripExplicitPDFMathDelimiters(value string) (string, bool, bool) {
+	trimmedValue := strings.TrimSpace(strings.ReplaceAll(value, "\r", ""))
+	if trimmedValue == "" {
+		return "", false, false
+	}
+
+	switch {
+	case strings.HasPrefix(trimmedValue, `\(`) && strings.HasSuffix(trimmedValue, `\)`):
+		return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmedValue, `\(`), `\)`)), false, true
+	case strings.HasPrefix(trimmedValue, `\[`) && strings.HasSuffix(trimmedValue, `\]`):
+		return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmedValue, `\[`), `\]`)), true, true
+	default:
+		return "", false, false
+	}
+}
+
+func parsePDFMathDisplay(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "display", "block":
 		return true
 	default:
 		return false
 	}
 }
 
-func looksLikeStandalonePDFMathExpression(value string) bool {
-	trimmedValue := normalizeWhitespace(value)
-	if trimmedValue == "" {
+func normalizePDFMathInputFormat(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), "mathml") {
+		return "mathml"
+	}
+
+	return "tex"
+}
+
+func isGoldmarkMathNode(node *htmlnode.Node) bool {
+	if node == nil || node.Type != htmlnode.ElementNode || node.DataAtom != atom.Span {
 		return false
 	}
 
-	for _, currentRune := range trimmedValue {
-		if unicode.Is(unicode.Han, currentRune) {
-			return false
-		}
-	}
+	return hasHTMLClass(node, "math") && (hasHTMLClass(node, "inline") || hasHTMLClass(node, "display"))
+}
 
-	hasStrongMathMarker := strings.ContainsAny(trimmedValue, `\\_^{}=`)
-	if !hasStrongMathMarker {
-		hasStrongMathMarker = strings.Contains(trimmedValue, "=") && strings.Contains(trimmedValue, "(") && strings.Contains(trimmedValue, ")")
-	}
-	if !hasStrongMathMarker {
+func isMathMLNode(node *htmlnode.Node) bool {
+	return node != nil && node.Type == htmlnode.ElementNode && strings.EqualFold(node.Data, "math")
+}
+
+func isBlockMathMLNode(node *htmlnode.Node) bool {
+	if node == nil || node.Type != htmlnode.ElementNode {
 		return false
 	}
 
-	wordCount := len(strings.Fields(trimmedValue))
-	if wordCount > 12 {
-		return false
-	}
-
-	return true
-}
-
-func splitPDFMathTextSegments(value string) []pdfMathTextSegment {
-	segments := make([]pdfMathTextSegment, 0, 4)
-	remaining := value
-
-	for remaining != "" {
-		blockMatch := pdfBlockMathPattern.FindStringSubmatchIndex(remaining)
-		inlineMatch := pdfInlineMathPattern.FindStringSubmatchIndex(remaining)
-
-		match, display := chooseEarlierPDFMathMatch(blockMatch, inlineMatch)
-		if match == nil {
-			segments = append(segments, pdfMathTextSegment{text: remaining})
-			break
-		}
-
-		if match[0] > 0 {
-			segments = append(segments, pdfMathTextSegment{text: remaining[:match[0]]})
-		}
-
-		expression := strings.TrimSpace(extractPDFMathExpressionFromMatch(remaining, match))
-		if expression != "" {
-			segments = append(segments, pdfMathTextSegment{
-				expression: expression,
-				display:    display,
-				isMath:     true,
-			})
-		}
-
-		remaining = remaining[match[1]:]
-	}
-
-	return segments
-}
-
-func chooseEarlierPDFMathMatch(blockMatch []int, inlineMatch []int) ([]int, bool) {
-	if len(blockMatch) == 0 {
-		return inlineMatch, false
-	}
-
-	if len(inlineMatch) == 0 {
-		return blockMatch, true
-	}
-
-	if blockMatch[0] <= inlineMatch[0] {
-		return blockMatch, true
-	}
-
-	return inlineMatch, false
-}
-
-func extractPDFMathExpressionFromMatch(source string, match []int) string {
-	if len(match) < 6 {
-		return ""
-	}
-
-	for captureIndex := 4; captureIndex+1 < len(match); captureIndex += 2 {
-		captureStart := match[captureIndex]
-		captureEnd := match[captureIndex+1]
-		if captureStart < 0 || captureEnd < 0 {
-			continue
-		}
-
-		return source[captureStart:captureEnd]
-	}
-
-	return ""
+	return strings.EqualFold(strings.TrimSpace(htmlAttribute(node, "display")), "block")
 }
 
 func normalizePDFMathExpressionForRenderer(expression string) string {
@@ -1393,11 +1313,13 @@ func isPDFMathWhitespace(value byte) bool {
 	}
 }
 
-func newPDFMathPlaceholderNode(expression string, display bool) *htmlnode.Node {
+func newPDFMathPlaceholderNode(expression string, display bool, format string, fallbackText string) *htmlnode.Node {
 	trimmedExpression := strings.TrimSpace(expression)
 	if trimmedExpression == "" {
 		return nil
 	}
+
+	normalizedFormat := normalizePDFMathInputFormat(format)
 
 	placeholderNode := &htmlnode.Node{
 		Type:     htmlnode.ElementNode,
@@ -1407,10 +1329,19 @@ func newPDFMathPlaceholderNode(expression string, display bool) *htmlnode.Node {
 			{Key: "class", Val: "pdf-math-fragment"},
 			{Key: pdfMathExpressionAttrName, Val: trimmedExpression},
 			{Key: pdfMathDisplayAttrName, Val: strconv.FormatBool(display)},
+			{Key: pdfMathFormatAttrName, Val: normalizedFormat},
 		},
 	}
 
-	fallbackText := strings.TrimSpace(renderPDFMathExpression(trimmedExpression))
+	fallbackText = strings.TrimSpace(fallbackText)
+	if fallbackText == "" {
+		if normalizedFormat == "tex" {
+			fallbackText = strings.TrimSpace(renderPDFMathExpression(trimmedExpression))
+		} else {
+			fallbackText = "数学公式"
+		}
+	}
+
 	if fallbackText == "" {
 		fallbackText = trimmedExpression
 	}
@@ -1436,25 +1367,6 @@ func insertHTMLNodeBefore(referenceNode *htmlnode.Node, newNode *htmlnode.Node) 
 	}
 
 	referenceNode.PrevSibling = newNode
-}
-
-func containsPDFMathSyntax(value string) bool {
-	if strings.TrimSpace(value) == "" {
-		return false
-	}
-
-	return pdfBlockMathPattern.MatchString(value) || pdfInlineMathPattern.MatchString(value)
-}
-
-func normalizePDFTextNodeValue(value string) string {
-	if value == "" {
-		return ""
-	}
-
-	normalizedValue := strings.ReplaceAll(value, "\u00a0", " ")
-	normalizedValue = replacePDFBlockMath(normalizedValue)
-	normalizedValue = replacePDFInlineMath(normalizedValue)
-	return normalizedValue
 }
 
 func (r *pdfRenderer) renderHeader(document normalizedPDFExport) {
@@ -2550,6 +2462,25 @@ func htmlAttribute(node *htmlnode.Node, key string) string {
 	}
 
 	return ""
+}
+
+func hasHTMLClass(node *htmlnode.Node, className string) bool {
+	if node == nil || node.Type != htmlnode.ElementNode {
+		return false
+	}
+
+	targetClass := strings.TrimSpace(className)
+	if targetClass == "" {
+		return false
+	}
+
+	for _, currentClass := range strings.Fields(htmlAttribute(node, "class")) {
+		if currentClass == targetClass {
+			return true
+		}
+	}
+
+	return false
 }
 
 func normalizeInlineText(value string) string {

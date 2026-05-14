@@ -35,6 +35,7 @@ type pdfMathRenderResponse struct {
 type pdfMathPlaceholder struct {
 	expression string
 	display    bool
+	format     string
 }
 
 var (
@@ -197,7 +198,7 @@ func (r *pdfRenderer) ensureMathRenderer() (*pdfMathRenderer, error) {
 	return r.math, nil
 }
 
-func (r *pdfMathRenderer) render(expression string, display bool) (*pdfImageAsset, error) {
+func (r *pdfMathRenderer) render(expression string, display bool, format string) (*pdfImageAsset, error) {
 	if r == nil {
 		return nil, fmt.Errorf("pdf math renderer is not initialized")
 	}
@@ -206,8 +207,9 @@ func (r *pdfMathRenderer) render(expression string, display bool) (*pdfImageAsse
 	if trimmedExpression == "" {
 		return nil, fmt.Errorf("math expression is empty")
 	}
+	normalizedFormat := normalizePDFMathInputFormat(format)
 
-	cacheKey := fmt.Sprintf("%t:%s", display, trimmedExpression)
+	cacheKey := fmt.Sprintf("%s:%t:%s", normalizedFormat, display, trimmedExpression)
 	r.mu.Lock()
 	if asset, exists := r.cache[cacheKey]; exists {
 		r.mu.Unlock()
@@ -215,17 +217,22 @@ func (r *pdfMathRenderer) render(expression string, display bool) (*pdfImageAsse
 	}
 	r.mu.Unlock()
 
-	normalizedExpression := normalizePDFMathExpressionForRenderer(trimmedExpression)
-	if normalizedExpression == "" {
-		normalizedExpression = trimmedExpression
+	normalizedExpression := trimmedExpression
+	if normalizedFormat == "tex" {
+		normalizedExpression = normalizePDFMathExpressionForRenderer(trimmedExpression)
+		if normalizedExpression == "" {
+			normalizedExpression = trimmedExpression
+		}
 	}
 
 	payload, err := json.Marshal(struct {
 		Expression string `json:"expression"`
 		Display    bool   `json:"display"`
+		Format     string `json:"format"`
 	}{
 		Expression: normalizedExpression,
 		Display:    display,
+		Format:     normalizedFormat,
 	})
 	if err != nil {
 		return nil, err
@@ -282,23 +289,24 @@ func (r *pdfMathRenderer) render(expression string, display bool) (*pdfImageAsse
 	return asset, nil
 }
 
-func extractPDFMathPlaceholder(node *htmlnode.Node) (string, bool, bool) {
+func extractPDFMathPlaceholder(node *htmlnode.Node) (string, bool, string, bool) {
 	if node == nil || node.Type != htmlnode.ElementNode {
-		return "", false, false
+		return "", false, "", false
 	}
 
 	expression := strings.TrimSpace(htmlAttribute(node, pdfMathExpressionAttrName))
 	if expression == "" {
-		return "", false, false
+		return "", false, "", false
 	}
 
 	display := strings.EqualFold(strings.TrimSpace(htmlAttribute(node, pdfMathDisplayAttrName)), "true")
-	return expression, display, true
+	format := normalizePDFMathInputFormat(htmlAttribute(node, pdfMathFormatAttrName))
+	return expression, display, format, true
 }
 
 func extractPDFMathOnlyPlaceholders(node *htmlnode.Node) ([]pdfMathPlaceholder, bool) {
-	if expression, display, ok := extractPDFMathPlaceholder(node); ok {
-		return []pdfMathPlaceholder{{expression: expression, display: display}}, true
+	if expression, display, format, ok := extractPDFMathPlaceholder(node); ok {
+		return []pdfMathPlaceholder{{expression: expression, display: display, format: format}}, true
 	}
 
 	if node == nil {
@@ -338,86 +346,6 @@ func extractPDFMathOnlyPlaceholders(node *htmlnode.Node) ([]pdfMathPlaceholder, 
 	return placeholders, true
 }
 
-func extractRawPDFMathOnlyBlock(node *htmlnode.Node) (pdfMathPlaceholder, bool) {
-	if node == nil || node.Type != htmlnode.ElementNode {
-		return pdfMathPlaceholder{}, false
-	}
-
-	if !supportsStandalonePDFMath(node.DataAtom) {
-		return pdfMathPlaceholder{}, false
-	}
-
-	ok, meaningful := rawPDFMathOnlySubtree(node)
-	if !ok || !meaningful {
-		return pdfMathPlaceholder{}, false
-	}
-
-	expression := normalizeWhitespace(extractNodeRawText(node))
-	if !looksLikeStandalonePDFMathExpression(expression) {
-		return pdfMathPlaceholder{}, false
-	}
-
-	return pdfMathPlaceholder{expression: expression, display: node.DataAtom != atom.Span}, true
-}
-
-func rawPDFMathOnlySubtree(node *htmlnode.Node) (bool, bool) {
-	if node == nil {
-		return false, false
-	}
-
-	meaningful := false
-	for child := node.FirstChild; child != nil; child = child.NextSibling {
-		switch child.Type {
-		case htmlnode.TextNode:
-			if strings.TrimSpace(child.Data) != "" {
-				meaningful = true
-			}
-		case htmlnode.ElementNode:
-			if child.DataAtom == atom.Br {
-				continue
-			}
-
-			if disallowsRawPDFMathFallback(child) {
-				return false, false
-			}
-
-			childOK, childMeaningful := rawPDFMathOnlySubtree(child)
-			if !childOK {
-				return false, false
-			}
-
-			meaningful = meaningful || childMeaningful
-		default:
-			continue
-		}
-	}
-
-	return true, meaningful
-}
-
-func disallowsRawPDFMathFallback(node *htmlnode.Node) bool {
-	if node == nil || node.Type != htmlnode.ElementNode {
-		return false
-	}
-
-	if extractable := strings.TrimSpace(htmlAttribute(node, pdfMathExpressionAttrName)); extractable != "" {
-		return false
-	}
-
-	if isRenderableMediaNode(node) {
-		return true
-	}
-
-	switch node.DataAtom {
-	case atom.Pre, atom.Code, atom.Script, atom.Style, atom.Table, atom.Ul, atom.Ol,
-		atom.Figure, atom.Picture, atom.Blockquote, atom.H1, atom.H2, atom.H3, atom.H4,
-		atom.H5, atom.H6:
-		return true
-	default:
-		return false
-	}
-}
-
 func (r *pdfRenderer) renderMathOnlyBlock(node *htmlnode.Node, indentLevel int) bool {
 	if r == nil || node == nil || node.Type != htmlnode.ElementNode {
 		return false
@@ -425,12 +353,7 @@ func (r *pdfRenderer) renderMathOnlyBlock(node *htmlnode.Node, indentLevel int) 
 
 	placeholders, ok := extractPDFMathOnlyPlaceholders(node)
 	if !ok || len(placeholders) == 0 {
-		rawBlock, rawOK := extractRawPDFMathOnlyBlock(node)
-		if !rawOK {
-			return false
-		}
-
-		placeholders = []pdfMathPlaceholder{rawBlock}
+		return false
 	}
 
 	mathRenderer, err := r.ensureMathRenderer()
@@ -440,7 +363,7 @@ func (r *pdfRenderer) renderMathOnlyBlock(node *htmlnode.Node, indentLevel int) 
 
 	assets := make([]*pdfImageAsset, 0, len(placeholders))
 	for _, placeholder := range placeholders {
-		asset, err := mathRenderer.render(placeholder.expression, placeholder.display)
+		asset, err := mathRenderer.render(placeholder.expression, placeholder.display, placeholder.format)
 		if err != nil || asset == nil {
 			return false
 		}
