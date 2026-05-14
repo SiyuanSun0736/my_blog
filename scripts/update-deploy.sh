@@ -18,7 +18,7 @@ Update the deployed stack with the low-memory VPS workflow.
 
 Options:
   --env-file PATH   Use a specific compose env file.
-  --skip-backup     Skip the MongoDB backup step.
+  --skip-backup     Skip the database/media backup step.
   --skip-pull       Skip git pull and deploy the current local checkout.
   --logs            Show recent blog-api/blog-web logs after verification.
   -h, --help        Show this help message.

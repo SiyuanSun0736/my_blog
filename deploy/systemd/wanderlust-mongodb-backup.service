@@ -1,5 +1,5 @@
 [Unit]
-Description=Backup Wanderlust MongoDB data
+Description=Backup Wanderlust database and media data
 Wants=network-online.target docker.service
 After=network-online.target docker.service
 

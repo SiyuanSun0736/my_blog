@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Wanderlust MongoDB backup every night
+Description=Run Wanderlust database and media backup every night
 
 [Timer]
 OnCalendar=*-*-* 04:43:00

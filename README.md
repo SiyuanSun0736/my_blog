@@ -102,10 +102,10 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 
 ### 数据备份与恢复
 
-仓库里已经补了两条与 MongoDB 内容备份相关的脚本：
+仓库里已经补了两条数据库与图片媒体备份相关的脚本：
 
-- `./scripts/backup-mongodb.sh`：把当前 `wanderlust` 数据库导出为 gzip archive
-- `./scripts/restore-mongodb.sh <备份目录或 archive 文件>`：把归档恢复回 MongoDB
+- `./scripts/backup-mongodb.sh`：把当前 `wanderlust` 数据库导出为 gzip archive，并把上传图片目录打包成 `media.tar.gz`
+- `./scripts/restore-mongodb.sh <备份目录或 archive 文件>`：从备份目录恢复 MongoDB 和图片；如果直接传 archive 文件，则只恢复 MongoDB
 
 手动备份示例：
 
@@ -113,7 +113,7 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 ./scripts/backup-mongodb.sh
 ```
 
-默认输出目录是 `./backups/mongodb/`，每次会生成形如 `wanderlust-20260512T123456Z/dump.archive.gz` 的备份目录，并附带 `metadata.txt` 与可用时的 `sha256` 校验文件。
+默认输出目录是 `./backups/mongodb/`，每次会生成形如 `wanderlust-20260512T123456Z/` 的备份目录，里面包含 `dump.archive.gz`、`media.tar.gz`、`metadata.txt` 与可用时的 `sha256` 校验文件。
 
 恢复示例：
 
@@ -121,10 +121,16 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 ./scripts/restore-mongodb.sh ./backups/mongodb/wanderlust-20260512T123456Z
 ```
 
-恢复前默认会清空目标数据库；如果你想保留现有内容再尝试恢复，可以先设置：
+恢复备份目录时，脚本默认会清空目标数据库并覆盖当前图片目录；如果你想保留现有数据库内容再尝试恢复，可以先设置：
 
 ```bash
 export BLOG_BACKUP_RESTORE_DROP=0
+```
+
+如果你只想跳过图片恢复，可以先设置：
+
+```bash
+export BLOG_BACKUP_RESTORE_MEDIA=0
 ```
 
 如果你要把备份接到定时任务，仓库里也已经准备好了模板：

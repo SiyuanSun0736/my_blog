@@ -321,8 +321,8 @@ docker logs wanderlust-web --since 10m
 
 这组命令分别处理的事情是：
 
-- 先备份当前数据库，给回滚留出口
-- 备份脚本只会把归档写到本机 `backups/`，不会再自动 `git commit` / `git push`，避免定时任务和部署流程卡在 git 认证
+- 先备份当前数据库和图片媒体卷，给回滚留出口
+- 备份脚本只会把数据库归档和图片归档写到本机 `backups/`，不会再自动 `git commit` / `git push`，避免定时任务和部署流程卡在 git 认证
 - 先停止当前 `mongodb`、`redis`、`blog-api` 和 `blog-web`，再进入部署流程，避免云上构建时继续占用运行时内存
 - 非交互拉取最新代码，避免 merge commit 混进服务器更新流程；如果服务器没配好免交互认证，会直接报错退出
 - 串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 在构建时同时占用过多内存
@@ -410,9 +410,9 @@ chmod +x scripts/backup-mongodb.sh scripts/restore-mongodb.sh
 ls backups/mongodb
 ```
 
-默认备份会输出到 `backups/mongodb/<database>-<timestamp>/dump.archive.gz`。
+默认备份会输出到 `backups/mongodb/<database>-<timestamp>/`，其中包含 `dump.archive.gz`、`media.tar.gz`、`metadata.txt` 与可用时的校验文件。
 
-当前备份只保留在服务器本机目录，不会自动提交到仓库；`backups/latest-mongodb/` 仍会同步最近一次副本，方便恢复，但生成的 archive / metadata / checksum 文件默认不再进入 git。
+当前备份只保留在服务器本机目录，不会自动提交到仓库；`backups/latest-mongodb/` 仍会同步最近一次副本，方便恢复，但生成的数据库归档、图片归档、metadata 和 checksum 文件默认不再进入 git。
 
 恢复示例：
 
@@ -421,6 +421,8 @@ cd /你的仓库目录
 
 ./scripts/restore-mongodb.sh ./backups/mongodb/你的备份目录
 ```
+
+如果传的是备份目录，脚本会同时恢复其中的 `media.tar.gz`；如果你只想恢复数据库，可以直接传 `dump.archive.gz` 文件，或者先设置 `BLOG_BACKUP_RESTORE_MEDIA=0`。
 
 如果你不想在恢复前先清空当前数据库，可以先执行：
 
