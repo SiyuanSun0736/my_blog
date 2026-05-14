@@ -321,6 +321,24 @@ func TestBuildPostPDFRendersStandaloneLatexParagraphsAsEmbeddedImages(t *testing
 	}
 }
 
+func TestBuildPostPDFRendersHTMLWrappedStandaloneLatexParagraphsAsEmbeddedImages(t *testing.T) {
+	requirePDFFontForPDFTests(t)
+	requireMathJaxForPDFTests(t)
+
+	pdfBytes, _, err := buildPostPDF(PDFExportInput{
+		Title:      "Wrapped formula report",
+		BodyFormat: BodyFormatHTML,
+		Body:       `<p><span>\hat r^gated_{q,k} = \hat r^\cal_{q,k} \cdot (1 - p_tie)^\gamma</span></p>`,
+	}, PDFRenderOptions{})
+	if err != nil {
+		t.Fatalf("buildPostPDF returned error: %v", err)
+	}
+
+	if !bytes.Contains(pdfBytes, []byte("/Subtype /Image")) {
+		t.Fatalf("expected wrapped standalone formula paragraph to be rasterized into an embedded image")
+	}
+}
+
 func TestRenderPostBodyHTMLHandlesDualTowerArchitectureFixture(t *testing.T) {
 	t.Parallel()
 

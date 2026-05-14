@@ -338,6 +338,86 @@ func extractPDFMathOnlyPlaceholders(node *htmlnode.Node) ([]pdfMathPlaceholder, 
 	return placeholders, true
 }
 
+func extractRawPDFMathOnlyBlock(node *htmlnode.Node) (pdfMathPlaceholder, bool) {
+	if node == nil || node.Type != htmlnode.ElementNode {
+		return pdfMathPlaceholder{}, false
+	}
+
+	if !supportsStandalonePDFMath(node.DataAtom) {
+		return pdfMathPlaceholder{}, false
+	}
+
+	ok, meaningful := rawPDFMathOnlySubtree(node)
+	if !ok || !meaningful {
+		return pdfMathPlaceholder{}, false
+	}
+
+	expression := normalizeWhitespace(extractNodeRawText(node))
+	if !looksLikeStandalonePDFMathExpression(expression) {
+		return pdfMathPlaceholder{}, false
+	}
+
+	return pdfMathPlaceholder{expression: expression, display: node.DataAtom != atom.Span}, true
+}
+
+func rawPDFMathOnlySubtree(node *htmlnode.Node) (bool, bool) {
+	if node == nil {
+		return false, false
+	}
+
+	meaningful := false
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		switch child.Type {
+		case htmlnode.TextNode:
+			if strings.TrimSpace(child.Data) != "" {
+				meaningful = true
+			}
+		case htmlnode.ElementNode:
+			if child.DataAtom == atom.Br {
+				continue
+			}
+
+			if disallowsRawPDFMathFallback(child) {
+				return false, false
+			}
+
+			childOK, childMeaningful := rawPDFMathOnlySubtree(child)
+			if !childOK {
+				return false, false
+			}
+
+			meaningful = meaningful || childMeaningful
+		default:
+			continue
+		}
+	}
+
+	return true, meaningful
+}
+
+func disallowsRawPDFMathFallback(node *htmlnode.Node) bool {
+	if node == nil || node.Type != htmlnode.ElementNode {
+		return false
+	}
+
+	if extractable := strings.TrimSpace(htmlAttribute(node, pdfMathExpressionAttrName)); extractable != "" {
+		return false
+	}
+
+	if isRenderableMediaNode(node) {
+		return true
+	}
+
+	switch node.DataAtom {
+	case atom.Pre, atom.Code, atom.Script, atom.Style, atom.Table, atom.Ul, atom.Ol,
+		atom.Figure, atom.Picture, atom.Blockquote, atom.H1, atom.H2, atom.H3, atom.H4,
+		atom.H5, atom.H6:
+		return true
+	default:
+		return false
+	}
+}
+
 func (r *pdfRenderer) renderMathOnlyBlock(node *htmlnode.Node, indentLevel int) bool {
 	if r == nil || node == nil || node.Type != htmlnode.ElementNode {
 		return false
@@ -345,7 +425,12 @@ func (r *pdfRenderer) renderMathOnlyBlock(node *htmlnode.Node, indentLevel int) 
 
 	placeholders, ok := extractPDFMathOnlyPlaceholders(node)
 	if !ok || len(placeholders) == 0 {
-		return false
+		rawBlock, rawOK := extractRawPDFMathOnlyBlock(node)
+		if !rawOK {
+			return false
+		}
+
+		placeholders = []pdfMathPlaceholder{rawBlock}
 	}
 
 	mathRenderer, err := r.ensureMathRenderer()
