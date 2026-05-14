@@ -5,7 +5,6 @@ import {
   batchPosts,
   createPost,
   deletePost,
-  exportPostPDF,
   fetchAdminPost,
   fetchAdminPosts,
   importHTMLDocument,
@@ -14,6 +13,7 @@ import {
   updatePost,
   verifyWriteAccess,
   type BatchPostsAction,
+  type HTMLImportResponse,
 } from "../lib/api";
 import type { BodyFormat, Post, PostSummary } from "../types";
 
@@ -295,20 +295,6 @@ function buildImageHTML(source: string, altText: string) {
 
 function buildImageSnippet(source: string, altText: string, bodyFormat: BodyFormat) {
   return bodyFormat === "html" ? buildImageHTML(source, altText) : buildImageMarkdown(source, altText);
-}
-
-function downloadBlob(blob: Blob, fileName: string) {
-  const objectURL = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectURL;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-
-  window.setTimeout(() => {
-    window.URL.revokeObjectURL(objectURL);
-  }, 1000);
 }
 
 function formatFileSize(bytes: number) {
@@ -628,7 +614,6 @@ export function WritePage() {
   const [imageAltText, setImageAltText] = useState("");
   const [imageStatus, setImageStatus] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [exportingPDF, setExportingPDF] = useState(false);
 
   const isEditing = selectedSlug !== null;
   const featuredPosts = posts.filter((post) => post.featured).slice(0, 3);
@@ -1054,53 +1039,27 @@ export function WritePage() {
       setError(null);
       setSuccessMessage(null);
       const imported = await importHTMLDocument(file, writeToken.trim());
-      setForm((current) => ({
-        ...current,
-        title: imported.title || current.title,
-        slug: imported.slug || current.slug || stripHTMLDocumentExtension(file.name),
-        summary: imported.summary || current.summary,
-        tags: imported.tags.length > 0 ? imported.tags.join(", ") : current.tags,
-        author: imported.author || current.author,
-        publishedAt: imported.publishedAt || current.publishedAt,
-        bodyFormat: normalizeBodyFormat(imported.bodyFormat),
-        body: imported.body || current.body,
-      }));
-      setImportedFileName(file.name);
+      applyImportedHTML(imported, file.name, stripHTMLDocumentExtension(file.name));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "HTML 导入失败。");
     }
   }
 
-  async function handleExportPDF() {
-    if (exportingPDF) {
-      return;
-    }
-
-    try {
-      setError(null);
-      setSuccessMessage(null);
-      setExportingPDF(true);
-      const { blob, fileName } = await exportPostPDF({
-        title: form.title.trim(),
-        summary: form.summary.trim(),
-        category: form.category.trim(),
-        tags: form.tags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-        author: form.author.trim(),
-        publishedAt: form.publishedAt.trim(),
-        accent: form.accent.trim(),
-        bodyFormat: form.bodyFormat,
-        body: form.body,
-      }, writeToken.trim());
-      downloadBlob(blob, fileName);
-      setSuccessMessage(`已下载 ${fileName}。`);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "PDF 导出失败。");
-    } finally {
-      setExportingPDF(false);
-    }
+  function applyImportedHTML(imported: HTMLImportResponse, sourceLabel: string, fallbackSlug?: string) {
+    setForm((current) => ({
+      ...current,
+      title: imported.title || current.title,
+      slug: imported.slug || current.slug || fallbackSlug || "",
+      summary: imported.summary || current.summary,
+      tags: imported.tags.length > 0 ? imported.tags.join(", ") : current.tags,
+      author: imported.author || current.author,
+      publishedAt: imported.publishedAt || current.publishedAt,
+      bodyFormat: normalizeBodyFormat(imported.bodyFormat),
+      body: imported.body || current.body,
+    }));
+    setImportedFileName(sourceLabel);
+    setError(null);
+    setSuccessMessage(null);
   }
 
   async function handleEditPost(slug: string) {
@@ -1422,20 +1381,10 @@ export function WritePage() {
                     to={`/posts/${selectedSlug}`}
                     className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
                   >
-                    预览正文
+                    打开正文页
                   </Link>
                 ) : null}
-                <Button
-                  type="button"
-                  radius="full"
-                  variant="bordered"
-                  isDisabled={exportingPDF || form.title.trim().length === 0 || form.body.trim().length === 0}
-                  onPress={() => {
-                    void handleExportPDF();
-                  }}
-                >
-                  {exportingPDF ? "导出中..." : "导出 PDF"}
-                </Button>
+                {selectedSlug && !form.draft ? <Chip variant="bordered">PDF 下载在正文页</Chip> : null}
                 {selectedSlug && form.draft ? <Chip color="warning" variant="flat">草稿仅管理端可见</Chip> : null}
                 <Button type="button" radius="full" variant="light" onPress={clearWriteAccess}>
                   退出管理端
@@ -1592,30 +1541,32 @@ export function WritePage() {
               </div>
 
               <div className="rounded-[1.5rem] border border-black/10 bg-white/70 p-4 text-sm leading-7 text-[var(--muted)]">
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="inline-flex cursor-pointer rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-lg">
-                    导入本地 md
-                    <input
-                      type="file"
-                      accept=".md,.markdown,text/markdown"
-                      className="hidden"
-                      onChange={handleMarkdownImport}
-                    />
-                  </label>
-                  <label className="inline-flex cursor-pointer rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90">
-                    导入本地 html
-                    <input
-                      type="file"
-                      accept=".html,.htm,text/html"
-                      className="hidden"
-                      onChange={handleHTMLImport}
-                    />
-                  </label>
-                  <span>
-                    {importedFileName
-                      ? `已导入 ${importedFileName}，内容已同步到当前表单。`
-                      : "Markdown 会直接读 frontmatter；HTML 会走服务端导入接口并按 HTML 正文保存。"}
-                  </span>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex cursor-pointer rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-lg">
+                      导入本地 md
+                      <input
+                        type="file"
+                        accept=".md,.markdown,text/markdown"
+                        className="hidden"
+                        onChange={handleMarkdownImport}
+                      />
+                    </label>
+                    <label className="inline-flex cursor-pointer rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90">
+                      导入本地 html
+                      <input
+                        type="file"
+                        accept=".html,.htm,text/html"
+                        className="hidden"
+                        onChange={handleHTMLImport}
+                      />
+                    </label>
+                    <span className="min-w-0 break-all">
+                      {importedFileName
+                        ? `已导入 ${importedFileName}，内容已同步到当前表单。`
+                        : "Markdown 会直接读 frontmatter；HTML 会走服务端导入接口并按 HTML 正文保存。"}
+                    </span>
+                  </div>
                 </div>
               </div>
 

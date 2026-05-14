@@ -92,7 +92,7 @@ func buildPostPDF(input PDFExportInput, options PDFRenderOptions) ([]byte, strin
 	}
 
 	renderer.renderHeader(normalized)
-	bodyHTML, err := renderPostBodyHTML(normalized.Body, normalized.BodyFormat)
+	bodyHTML, err := renderPostBodyHTML(normalized.Title, normalized.Body, normalized.BodyFormat)
 	if err != nil {
 		return nil, "", err
 	}
@@ -107,6 +107,20 @@ func buildPostPDF(input PDFExportInput, options PDFRenderOptions) ([]byte, strin
 	}
 
 	return buffer.Bytes(), buildPDFFileName(normalized.Title), nil
+}
+
+func pdfExportInputFromPost(post Post) PDFExportInput {
+	return PDFExportInput{
+		Title:       post.Title,
+		Summary:     post.Summary,
+		Category:    post.Category,
+		Tags:        post.Tags,
+		Author:      post.Author,
+		PublishedAt: post.PublishedAt,
+		Accent:      post.Accent,
+		BodyFormat:  post.BodyFormat,
+		Body:        post.Body,
+	}
 }
 
 func normalizePDFExportInput(input PDFExportInput) (normalizedPDFExport, error) {
@@ -154,9 +168,10 @@ func resolvePDFFontPath() (string, error) {
 	return "", fmt.Errorf("pdf font not found; set BLOG_PDF_FONT_PATH or install a supported font")
 }
 
-func renderPostBodyHTML(body string, bodyFormat BodyFormat) (string, error) {
+func renderPostBodyHTML(title string, body string, bodyFormat BodyFormat) (string, error) {
+	normalizedTitle := normalizeWhitespace(title)
 	if normalizeBodyFormat(bodyFormat) == BodyFormatHTML {
-		return sanitizeBodyContent(body, BodyFormatHTML), nil
+		return stripLeadingPDFTitleHeading(normalizedTitle, sanitizeBodyContent(body, BodyFormatHTML)), nil
 	}
 
 	var buffer bytes.Buffer
@@ -164,7 +179,7 @@ func renderPostBodyHTML(body string, bodyFormat BodyFormat) (string, error) {
 		return "", err
 	}
 
-	return buffer.String(), nil
+	return stripLeadingPDFTitleHeading(normalizedTitle, buffer.String()), nil
 }
 
 func (r *pdfRenderer) renderHeader(document normalizedPDFExport) {
@@ -177,9 +192,10 @@ func (r *pdfRenderer) renderHeader(document normalizedPDFExport) {
 	r.pdf.SetFont(r.fontFamily, "", 26)
 	r.writeTextBlock(document.Title, 11.5, 0)
 
-	if document.Summary != "" {
+	if summary := normalizePDFSummary(document.Title, document.Summary); summary != "" {
 		r.pdf.SetTextColor(98, 82, 68)
-		r.writeTextBlock(document.Summary, 7, 0)
+		r.pdf.SetFont(r.fontFamily, "", 16)
+		r.writeTextBlock(summary, 7, 0)
 	}
 
 	metaParts := []string{}
@@ -368,22 +384,16 @@ func (r *pdfRenderer) renderImage(node *htmlnode.Node, indentLevel int) {
 		return
 	}
 
-	resolvedPath, imageType := r.localImagePath(imageSource)
-	if resolvedPath == "" || imageType == "" {
-		fallbackText := imageSource
-		if imageAlt != "" {
-			fallbackText = imageAlt + " · " + imageSource
-		}
-		r.pdf.SetFont(r.fontFamily, "", 10.5)
-		r.pdf.SetTextColor(98, 82, 68)
-		r.writeTextBlock(fallbackText, 5.8, indentLevel)
-		r.pdf.SetTextColor(36, 24, 15)
+	asset, err := r.resolveImageAsset(imageSource)
+	if err != nil || asset == nil {
+		r.renderImageFallback(imageAlt, indentLevel)
 		return
 	}
 
-	options := gofpdf.ImageOptions{ImageType: imageType, ReadDpi: true}
-	info := r.pdf.RegisterImageOptions(resolvedPath, options)
+	options := gofpdf.ImageOptions{ImageType: asset.imageType, ReadDpi: true}
+	info := registerPDFImage(r.pdf, asset)
 	if info == nil {
+		r.renderImageFallback(imageAlt, indentLevel)
 		return
 	}
 
@@ -397,7 +407,7 @@ func (r *pdfRenderer) renderImage(node *htmlnode.Node, indentLevel int) {
 	renderHeight := imageHeight * renderWidth / imageWidth
 	x := r.contentX(indentLevel)
 	y := r.pdf.GetY()
-	r.pdf.ImageOptions(resolvedPath, x, y, renderWidth, 0, false, options, 0, "")
+	r.pdf.ImageOptions(asset.name, x, y, renderWidth, 0, false, options, 0, "")
 	r.pdf.SetY(y + renderHeight + 2)
 
 	if imageAlt != "" {
@@ -444,33 +454,73 @@ func (r *pdfRenderer) contentWidth(indentLevel int) float64 {
 	return width
 }
 
-func (r *pdfRenderer) localImagePath(rawSource string) (string, string) {
-	if r.mediaDir == "" {
-		return "", ""
+func normalizePDFSummary(title string, summary string) string {
+	normalizedSummary := normalizeWhitespace(summary)
+	if normalizedSummary == "" {
+		return ""
 	}
 
-	normalizedPath := normalizeReferencedMediaPath(rawSource, r.mediaURLPath)
-	if normalizedPath == "" {
-		return "", ""
+	normalizedTitle := normalizeWhitespace(title)
+	if normalizedTitle == "" {
+		return normalizedSummary
 	}
 
-	relativePath := strings.TrimPrefix(normalizedPath, r.mediaURLPath)
-	relativePath = strings.TrimLeft(relativePath, "/")
-	localPath := filepath.Join(r.mediaDir, filepath.FromSlash(relativePath))
-	if _, err := os.Stat(localPath); err != nil {
-		return "", ""
+	if normalizedSummary == normalizedTitle {
+		return ""
 	}
 
-	switch strings.ToLower(filepath.Ext(localPath)) {
-	case ".jpg", ".jpeg":
-		return localPath, "JPG"
-	case ".png":
-		return localPath, "PNG"
-	case ".gif":
-		return localPath, "GIF"
-	default:
-		return "", ""
+	if strings.HasPrefix(normalizedSummary, normalizedTitle) {
+		trimmedSummary := strings.TrimSpace(strings.TrimLeft(strings.TrimPrefix(normalizedSummary, normalizedTitle), " :：-—–,.，。;；、|/"))
+		if trimmedSummary != "" {
+			return trimmedSummary
+		}
 	}
+
+	return normalizedSummary
+}
+
+func stripLeadingPDFTitleHeading(title string, bodyHTML string) string {
+	if title == "" || strings.TrimSpace(bodyHTML) == "" {
+		return bodyHTML
+	}
+
+	document, err := htmlnode.Parse(strings.NewReader(bodyHTML))
+	if err != nil {
+		return bodyHTML
+	}
+
+	root := findFirstNodeByAtom(document, atom.Body)
+	if root == nil {
+		root = document
+	}
+
+	firstNode := firstMeaningfulHTMLChild(root)
+	if firstNode == nil || firstNode.Type != htmlnode.ElementNode || firstNode.DataAtom != atom.H1 {
+		return bodyHTML
+	}
+
+	if normalizeWhitespace(extractNodeText(firstNode)) != title {
+		return bodyHTML
+	}
+
+	detachHTMLNode(firstNode)
+	return renderNodeInnerHTML(root)
+}
+
+func firstMeaningfulHTMLChild(root *htmlnode.Node) *htmlnode.Node {
+	for child := root.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type == htmlnode.CommentNode {
+			continue
+		}
+
+		if child.Type == htmlnode.TextNode && strings.TrimSpace(child.Data) == "" {
+			continue
+		}
+
+		return child
+	}
+
+	return nil
 }
 
 func collectInlineText(node *htmlnode.Node) string {
@@ -520,6 +570,18 @@ func collectInlineText(node *htmlnode.Node) string {
 
 	walk(node)
 	return normalizeInlineText(builder.String())
+}
+
+func (r *pdfRenderer) renderImageFallback(imageAlt string, indentLevel int) {
+	fallbackText := strings.TrimSpace(imageAlt)
+	if fallbackText == "" {
+		fallbackText = "图片未嵌入 PDF"
+	}
+
+	r.pdf.SetFont(r.fontFamily, "", 10.5)
+	r.pdf.SetTextColor(98, 82, 68)
+	r.writeTextBlock(fallbackText, 5.8, indentLevel)
+	r.pdf.SetTextColor(36, 24, 15)
 }
 
 func listItemLeadText(node *htmlnode.Node) string {

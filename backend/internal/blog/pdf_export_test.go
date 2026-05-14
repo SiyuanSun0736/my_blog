@@ -2,8 +2,19 @@ package blog
 
 import (
 	"bytes"
+	"encoding/base64"
+	"image"
+	"image/color"
+	"image/png"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
+
+const sampleWebPBase64 = "UklGRjYAAABXRUJQVlA4ICoAAABwAQCdASoCAAIAAgA0JaACdAFAAAD+771WBJWrN0/+bA/8g/+Qfc0AAAA="
 
 func TestBuildPostPDFReturnsPDFDocument(t *testing.T) {
 	fontPath, err := resolvePDFFontPath()
@@ -47,6 +58,168 @@ func TestBuildPostPDFRequiresValidPostBody(t *testing.T) {
 	_, _, err = buildPostPDF(PDFExportInput{Title: "", Body: ""}, PDFRenderOptions{})
 	if err != ErrInvalidPost {
 		t.Fatalf("expected ErrInvalidPost, got %v", err)
+	}
+}
+
+func TestNormalizePDFSummaryStripsLeadingTitle(t *testing.T) {
+	t.Parallel()
+
+	summary := normalizePDFSummary("整合测试（仅覆盖指定15条规则）", "整合测试（仅覆盖指定15条规则） 本文覆盖以下 15 条内置规则")
+	if summary != "本文覆盖以下 15 条内置规则" {
+		t.Fatalf("unexpected normalized summary: %q", summary)
+	}
+}
+
+func TestStripLeadingPDFTitleHeading(t *testing.T) {
+	t.Parallel()
+
+	bodyHTML := stripLeadingPDFTitleHeading("Overview", "<h1>Overview</h1><p>正文段落</p>")
+	if strings.Contains(bodyHTML, "<h1>Overview</h1>") {
+		t.Fatalf("expected leading title heading to be removed, got %q", bodyHTML)
+	}
+
+	if !strings.Contains(bodyHTML, "正文段落") {
+		t.Fatalf("expected body content to be kept, got %q", bodyHTML)
+	}
+}
+
+func TestPreparePDFImageAssetSupportsSVGAndWebP(t *testing.T) {
+	t.Parallel()
+
+	webpBytes, err := base64.StdEncoding.DecodeString(sampleWebPBase64)
+	if err != nil {
+		t.Fatalf("failed to decode webp fixture: %v", err)
+	}
+
+	for _, testCase := range []struct {
+		name        string
+		cacheKey    string
+		contentType string
+		payload     []byte
+	}{
+		{
+			name:        "svg",
+			cacheKey:    "/media/diagram.svg",
+			contentType: "image/svg+xml",
+			payload: []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">
+  <rect width="12" height="12" fill="#0f766e" />
+</svg>`),
+		},
+		{
+			name:        "webp",
+			cacheKey:    "/media/chart.webp",
+			contentType: "image/webp",
+			payload:     webpBytes,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			asset, err := preparePDFImageAsset(pdfImageSource{
+				cacheKey:    testCase.cacheKey,
+				contentType: testCase.contentType,
+				data:        testCase.payload,
+			})
+			if err != nil {
+				t.Fatalf("preparePDFImageAsset returned error: %v", err)
+			}
+
+			if asset.imageType != "PNG" {
+				t.Fatalf("expected PNG image type, got %q", asset.imageType)
+			}
+
+			if _, _, err := image.DecodeConfig(bytes.NewReader(asset.data)); err != nil {
+				t.Fatalf("expected a decodable raster image, got %v", err)
+			}
+		})
+	}
+}
+
+func TestPreparePDFImageAssetSupportsExternalPNGLikeSource(t *testing.T) {
+	t.Parallel()
+
+	imageBuffer := bytes.NewBuffer(nil)
+	pngImage := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			pngImage.Set(x, y, color.RGBA{R: 15, G: 118, B: 110, A: 255})
+		}
+	}
+	if err := png.Encode(imageBuffer, pngImage); err != nil {
+		t.Fatalf("failed to encode png fixture: %v", err)
+	}
+
+	asset, err := preparePDFImageAsset(pdfImageSource{
+		cacheKey:    "https://cdn.example.com/chart.png",
+		contentType: "image/png",
+		data:        imageBuffer.Bytes(),
+	})
+	if err != nil {
+		t.Fatalf("preparePDFImageAsset returned error: %v", err)
+	}
+
+	if asset == nil || len(asset.data) == 0 {
+		t.Fatal("expected non-empty external png asset")
+	}
+}
+
+func TestResolveImageAssetRejectsPrivateExternalImages(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "image/png")
+		imageBuffer := bytes.NewBuffer(nil)
+		pngImage := image.NewRGBA(image.Rect(0, 0, 4, 4))
+		for y := 0; y < 4; y++ {
+			for x := 0; x < 4; x++ {
+				pngImage.Set(x, y, color.RGBA{R: 15, G: 118, B: 110, A: 255})
+			}
+		}
+		if err := png.Encode(imageBuffer, pngImage); err != nil {
+			t.Fatalf("failed to encode png fixture: %v", err)
+		}
+
+		_, _ = writer.Write(imageBuffer.Bytes())
+	}))
+	defer server.Close()
+
+	renderer := &pdfRenderer{mediaURLPath: "/media"}
+	asset, err := renderer.resolveImageAsset(server.URL + "/chart.png")
+	if err == nil {
+		t.Fatal("expected localhost external source to be rejected by SSRF guard")
+	}
+	if asset != nil {
+		t.Fatal("expected no asset for rejected external image")
+	}
+}
+
+func TestResolveImageAssetSupportsLocalSVGAndWebP(t *testing.T) {
+	t.Parallel()
+
+	mediaDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mediaDir, "diagram.svg"), []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">
+  <circle cx="6" cy="6" r="5" fill="#0f766e" />
+</svg>`), 0o600); err != nil {
+		t.Fatalf("failed to write svg fixture: %v", err)
+	}
+
+	webpBytes, err := base64.StdEncoding.DecodeString(sampleWebPBase64)
+	if err != nil {
+		t.Fatalf("failed to decode webp fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(mediaDir, "chart.webp"), webpBytes, 0o600); err != nil {
+		t.Fatalf("failed to write webp fixture: %v", err)
+	}
+
+	renderer := &pdfRenderer{mediaDir: mediaDir, mediaURLPath: "/media"}
+	for _, source := range []string{"/media/diagram.svg", "/media/chart.webp"} {
+		asset, err := renderer.resolveImageAsset(source)
+		if err != nil {
+			t.Fatalf("resolveImageAsset(%q) returned error: %v", source, err)
+		}
+		if asset == nil || len(asset.data) == 0 {
+			t.Fatalf("resolveImageAsset(%q) returned empty asset", source)
+		}
 	}
 }
 

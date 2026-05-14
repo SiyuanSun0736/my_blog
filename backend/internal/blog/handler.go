@@ -2,7 +2,7 @@ package blog
 
 import (
 	"crypto/subtle"
-	"io"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -12,7 +12,7 @@ import (
 
 const writeTokenEnvName = "BLOG_WRITE_TOKEN"
 
-const maxHTMLImportBytes = 4 * 1024 * 1024
+const maxHTMLImportBytes = 16 * 1024 * 1024
 
 type Handler struct {
 	service        *Service
@@ -56,6 +56,7 @@ func NewHandler(service *Service, options HandlerOptions) *Handler {
 
 func (h *Handler) RegisterRoutes(router gin.IRoutes) {
 	router.GET("/posts", h.listPosts)
+	router.GET("/posts/:slug/pdf", h.getPostPDF)
 	router.GET("/posts/:slug", h.getPost)
 	router.GET("/admin/posts", h.requireWriteAccess, h.listAdminPosts)
 	router.GET("/admin/posts/:slug", h.requireWriteAccess, h.getAdminPost)
@@ -93,6 +94,32 @@ func (h *Handler) getPost(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, post)
+}
+
+func (h *Handler) getPostPDF(c *gin.Context) {
+	post, found, err := h.service.GetPostBySlug(c.Request.Context(), c.Param("slug"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load post"})
+		return
+	}
+
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"message": "post not found"})
+		return
+	}
+
+	pdfBytes, fileName, err := buildPostPDF(pdfExportInputFromPost(post), PDFRenderOptions{
+		MediaDir:     h.mediaDir,
+		MediaURLPath: h.mediaURLPath,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to export pdf"})
+		return
+	}
+
+	c.Header("Cache-Control", "public, max-age=300")
+	c.Header("Content-Disposition", pdfContentDisposition(fileName))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
 func (h *Handler) listAdminPosts(c *gin.Context) {
@@ -285,47 +312,41 @@ func (h *Handler) exportPDF(c *gin.Context) {
 }
 
 func (h *Handler) importHTMLDocument(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxHTMLImportBytes+multipartSlackBytes)
+
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "html file is required"})
-		return
-	}
-
-	if !isHTMLDocumentFileName(fileHeader.Filename) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "only .html or .htm files are supported"})
-		return
-	}
-
-	file, err := fileHeader.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to open html file"})
-		return
-	}
-	defer file.Close()
-
-	contents, err := io.ReadAll(io.LimitReader(file, maxHTMLImportBytes+1))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to read html file"})
-		return
-	}
-
-	if len(contents) > maxHTMLImportBytes {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"message": "html file is too large"})
-		return
-	}
-
-	imported, err := parseHTMLImportDocument(fileHeader.Filename, string(contents))
-	if err != nil {
-		if err == ErrInvalidPost {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "html content is empty or invalid"})
-			return
+		switch {
+		case errors.Is(err, http.ErrMissingFile):
+			c.JSON(http.StatusBadRequest, gin.H{"message": "html file is required"})
+		case isUploadTooLarge(err):
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"message": "html file is too large"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid multipart upload"})
 		}
+		return
+	}
 
-		c.JSON(http.StatusBadRequest, gin.H{"message": "failed to import html file"})
+	imported, importErr := importHTMLDocumentFromFile(fileHeader)
+	if importErr != nil {
+		h.respondHTMLImportError(c, importErr)
 		return
 	}
 
 	c.JSON(http.StatusOK, imported)
+}
+
+func (h *Handler) respondHTMLImportError(c *gin.Context, err error) {
+	switch {
+	case err == nil:
+		c.Status(http.StatusNoContent)
+	case errors.Is(err, ErrInvalidPost):
+		c.JSON(http.StatusBadRequest, gin.H{"message": "html content is empty or invalid"})
+	case errors.Is(err, errHTMLImportTooLarge):
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"message": "html file is too large"})
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"message": "failed to import html file"})
+	}
 }
 
 func (h *Handler) deletePost(c *gin.Context) {

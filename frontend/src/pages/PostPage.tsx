@@ -126,9 +126,17 @@ export function PostPage() {
   return (
     <article className="mx-auto max-w-5xl space-y-6 sm:space-y-8">
       <div className="space-y-4 sm:space-y-5">
-        <Link to="/" className="inline-flex text-sm font-medium text-[var(--muted)] transition hover:text-[var(--ink)]">
-          返回首页文章流
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link to="/" className="inline-flex text-sm font-medium text-[var(--muted)] transition hover:text-[var(--ink)]">
+            返回首页文章流
+          </Link>
+          <a
+            href={`/posts/${post.slug}/pdf`}
+            className="inline-flex rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+          >
+            下载 PDF
+          </a>
+        </div>
         <div className="overflow-hidden rounded-[1.75rem] border border-black/10 bg-[var(--panel-strong)] shadow-[0_22px_60px_rgba(77,53,35,0.12)] sm:rounded-[2.25rem] sm:shadow-[0_32px_100px_rgba(77,53,35,0.12)]">
           <div className="h-3 w-full sm:h-4" style={{ background: post.accent }} />
           <div className="space-y-6 px-4 py-5 sm:space-y-8 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
