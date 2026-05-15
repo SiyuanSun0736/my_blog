@@ -324,8 +324,8 @@ export function PostPage() {
           </CardBody>
         </Card>
 
-        <aside className="space-y-4 sm:space-y-5">
-          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)] lg:sticky lg:top-24">
+        <aside className="space-y-4 self-start sm:space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7.5rem)] lg:overflow-y-auto lg:pr-1">
+          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardBody className="gap-4 p-4 sm:p-5">
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">目录</p>
