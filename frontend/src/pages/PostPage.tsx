@@ -1,7 +1,7 @@
 import { Avatar, Card, CardBody, Chip, Divider, Spinner } from "../components/ui";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { PostContent } from "../components/PostContent";
+import { PostContent, type PostHeading } from "../components/PostContent";
 import { fetchPost, fetchPosts } from "../lib/api";
 import type { Post, PostSummary } from "../types";
 
@@ -40,10 +40,28 @@ function buildRelatedPosts(currentPost: Post, posts: PostSummary[]) {
   return posts.filter((candidate) => candidate.slug !== currentPost.slug).slice(0, 3);
 }
 
+function normalizeHeadingLabel(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function tableOfContentsIndent(level: PostHeading["level"]) {
+  switch (level) {
+    case 2:
+      return "pl-3";
+    case 3:
+      return "pl-6";
+    case 4:
+      return "pl-9";
+    default:
+      return "";
+  }
+}
+
 export function PostPage() {
   const { slug = "" } = useParams();
   const [post, setPost] = useState<Post | null>(null);
   const [postSummaries, setPostSummaries] = useState<PostSummary[]>([]);
+  const [contentHeadings, setContentHeadings] = useState<PostHeading[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +84,7 @@ export function PostPage() {
 
     setLoading(true);
     setError(null);
+    setContentHeadings([]);
     Promise.allSettled([fetchPost(slug), fetchPosts()])
       .then(([postResult, postsResult]) => {
         if (cancelled) {
@@ -101,6 +120,9 @@ export function PostPage() {
   const previousPost = currentIndex > 0 ? sortedPosts[currentIndex - 1] : null;
   const nextPost = currentIndex >= 0 && currentIndex < sortedPosts.length - 1 ? sortedPosts[currentIndex + 1] : null;
   const relatedPosts = post ? buildRelatedPosts(post, sortedPosts) : [];
+  const tableOfContents = post
+    ? contentHeadings.filter((heading, index) => !(index === 0 && normalizeHeadingLabel(heading.text) === normalizeHeadingLabel(post.title)))
+    : [];
 
   if (loading) {
     return (
@@ -197,7 +219,7 @@ export function PostPage() {
       <div className="grid gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
           <CardBody className="space-y-7 p-4 sm:space-y-8 sm:p-8 lg:p-10">
-            <PostContent body={post.body} bodyFormat={post.bodyFormat} />
+            <PostContent body={post.body} bodyFormat={post.bodyFormat} onHeadingsChange={setContentHeadings} />
 
             <Divider />
 
@@ -303,6 +325,34 @@ export function PostPage() {
         </Card>
 
         <aside className="space-y-4 sm:space-y-5">
+          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)] lg:sticky lg:top-24">
+            <CardBody className="gap-4 p-4 sm:p-5">
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">目录</p>
+                <p className="text-sm leading-7 text-[var(--muted)]">
+                  {tableOfContents.length > 0 ? "点击标题可跳到正文对应位置。" : "本篇正文没有可提取的章节标题。"}
+                </p>
+              </div>
+
+              {tableOfContents.length > 0 ? (
+                <nav aria-label="文章目录" className="max-h-[calc(100vh-9rem)] overflow-y-auto pr-1">
+                  <ol className="space-y-1.5">
+                    {tableOfContents.map((heading) => (
+                      <li key={heading.id}>
+                        <a
+                          href={`#${heading.id}`}
+                          className={`block rounded-[0.9rem] px-3 py-2 text-sm leading-6 text-[var(--muted)] transition hover:bg-white/70 hover:text-[var(--ink)] ${tableOfContentsIndent(heading.level)}`}
+                        >
+                          {heading.text}
+                        </a>
+                      </li>
+                    ))}
+                  </ol>
+                </nav>
+              ) : null}
+            </CardBody>
+          </Card>
+
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardBody className="gap-3 p-4 sm:p-5">
               <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">文章信息</p>

@@ -97,6 +97,7 @@ a {
   font-family: "Fraunces", serif;
   letter-spacing: -0.03em;
   line-height: 1.2;
+  scroll-margin-top: 6.5rem;
 }
 
 .story-prose h1 {
