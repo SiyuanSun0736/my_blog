@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2080 1030" role="img" aria-labelledby="title desc">
+  <title id="title">线上更新时序图</title>
+  <desc id="desc">展示 scripts/update-deploy.sh 在低内存 VPS 上执行备份、停服务、拉代码、串行构建与上线验证的顺序。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 28px 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0f172a; }
+      .box { fill: #ffffff; stroke: #94a3b8; stroke-width: 2; }
+      .box-text { font: 700 18px 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0f172a; }
+      .lane { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 8 10; }
+      .msg { stroke: #2563eb; stroke-width: 3.5; fill: none; marker-end: url(#arrow); stroke-linecap: round; }
+      .msg-return { stroke: #2563eb; stroke-width: 3.5; fill: none; marker-end: url(#arrow); stroke-dasharray: 10 8; stroke-linecap: round; }
+      .msg-text { font: 500 15px 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #1d4ed8; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="2080" height="1030" rx="28"/>
+  <text class="title" x="1040" y="58" text-anchor="middle">线上更新时序</text>
+
+  <g transform="translate(22 0)">
+    <g transform="translate(0 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="124" text-anchor="middle">
+        <tspan x="78" dy="0">运维 /</tspan>
+        <tspan x="78" dy="22">开发者</tspan>
+      </text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+    <g transform="translate(200 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="122" text-anchor="middle">
+        <tspan x="78" dy="0">scripts/</tspan>
+        <tspan x="78" dy="22">update-deploy.sh</tspan>
+      </text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+    <g transform="translate(400 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="128" text-anchor="middle">Git 远端</text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+    <g transform="translate(600 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="122" text-anchor="middle">
+        <tspan x="78" dy="0">docker</tspan>
+        <tspan x="78" dy="22">compose</tspan>
+      </text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+    <g transform="translate(800 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="122" text-anchor="middle">
+        <tspan x="78" dy="0">backup-</tspan>
+        <tspan x="78" dy="22">mongodb.sh</tspan>
+      </text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+    <g transform="translate(1000 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="128" text-anchor="middle">mongodb</text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+    <g transform="translate(1200 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="128" text-anchor="middle">redis</text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+    <g transform="translate(1400 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="128" text-anchor="middle">blog-api</text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+    <g transform="translate(1600 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="122" text-anchor="middle">
+        <tspan x="78" dy="0">blog-web</tspan>
+        <tspan x="78" dy="22">(Nginx)</tspan>
+      </text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+    <g transform="translate(1800 0)">
+      <rect class="box" x="0" y="86" width="156" height="74" rx="18"/>
+      <text class="box-text" x="78" y="122" text-anchor="middle">
+        <tspan x="78" dy="0">本机验证</tspan>
+        <tspan x="78" dy="22">请求</tspan>
+      </text>
+      <line class="lane" x1="78" y1="160" x2="78" y2="980"/>
+    </g>
+
+    <line class="msg" x1="78" y1="194" x2="278" y2="194"/>
+    <text class="msg-text" x="178" y="180" text-anchor="middle">执行更新脚本</text>
+
+    <path class="msg" d="M 278 236 h 44 v 26 h -44"/>
+    <text class="msg-text" x="336" y="228">读取 .env.deploy</text>
+
+    <path class="msg" d="M 278 278 h 44 v 26 h -44"/>
+    <text class="msg-text" x="348" y="270">校验 docker / curl / compose 可用</text>
+
+    <path class="msg" d="M 278 320 h 44 v 26 h -44"/>
+    <text class="msg-text" x="366" y="312">检查 tracked worktree 是否干净</text>
+
+    <line class="msg" x1="278" y1="362" x2="878" y2="362"/>
+    <text class="msg-text" x="578" y="348" text-anchor="middle">执行备份脚本</text>
+
+    <line class="msg" x1="878" y1="404" x2="1078" y2="404"/>
+    <text class="msg-text" x="978" y="390" text-anchor="middle">导出数据库 archive</text>
+
+    <line class="msg" x1="878" y1="446" x2="1478" y2="446"/>
+    <text class="msg-text" x="1178" y="432" text-anchor="middle">打包媒体目录</text>
+
+    <line class="msg" x1="278" y1="488" x2="678" y2="488"/>
+    <text class="msg-text" x="478" y="470" text-anchor="middle">
+      <tspan x="478" dy="0">stop blog-web blog-api</tspan>
+      <tspan x="478" dy="18">redis mongodb</tspan>
+    </text>
+
+    <line class="msg" x1="278" y1="530" x2="478" y2="530"/>
+    <text class="msg-text" x="378" y="516" text-anchor="middle">git pull --ff-only 或 force-sync</text>
+
+    <line class="msg" x1="278" y1="572" x2="678" y2="572"/>
+    <text class="msg-text" x="478" y="558" text-anchor="middle">build blog-api</text>
+
+    <line class="msg" x1="278" y1="614" x2="678" y2="614"/>
+    <text class="msg-text" x="478" y="600" text-anchor="middle">build blog-web</text>
+
+    <line class="msg" x1="278" y1="656" x2="678" y2="656"/>
+    <text class="msg-text" x="478" y="638" text-anchor="middle">
+      <tspan x="478" dy="0">up -d mongodb redis</tspan>
+      <tspan x="478" dy="18">blog-api blog-web</tspan>
+    </text>
+
+    <line class="msg" x1="678" y1="698" x2="1078" y2="698"/>
+    <text class="msg-text" x="878" y="684" text-anchor="middle">启动并通过健康检查</text>
+
+    <line class="msg" x1="678" y1="740" x2="1278" y2="740"/>
+    <text class="msg-text" x="978" y="726" text-anchor="middle">启动并通过健康检查</text>
+
+    <line class="msg" x1="678" y1="782" x2="1478" y2="782"/>
+    <text class="msg-text" x="1078" y="764" text-anchor="middle">等待 Mongo / Redis 健康后启动</text>
+
+    <line class="msg" x1="678" y1="824" x2="1678" y2="824"/>
+    <text class="msg-text" x="1178" y="810" text-anchor="middle">启动 Nginx</text>
+
+    <line class="msg" x1="278" y1="866" x2="678" y2="866"/>
+    <text class="msg-text" x="478" y="852" text-anchor="middle">ps 检查状态</text>
+
+    <line class="msg" x1="278" y1="908" x2="1878" y2="908"/>
+    <text class="msg-text" x="1078" y="890" text-anchor="middle">curl https://127.0.0.1/api/posts</text>
+
+    <line class="msg-return" x1="1878" y1="950" x2="278" y2="950"/>
+    <text class="msg-text" x="1078" y="936" text-anchor="middle">API 可用</text>
+  </g>
+</svg>

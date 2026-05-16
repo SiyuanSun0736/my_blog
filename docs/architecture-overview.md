@@ -4,46 +4,7 @@
 
 ## 总览
 
-```mermaid
-flowchart LR
-    User[用户浏览器]
-    Admin[管理端编辑器]
-
-    subgraph Docker[Docker Compose 应用栈]
-        direction LR
-
-        subgraph Web[blog-web 容器]
-            Nginx[Nginx\nTLS 终止\n静态资源\n反向代理]
-        end
-
-        subgraph API[blog-api 容器]
-            GoAPI[Go API\n文章接口\n上传接口\nPDF 导出]
-        end
-
-        subgraph Data[数据服务]
-            Mongo[MongoDB\nposts 集合]
-            Redis[Redis\n图片摘要去重索引]
-        end
-
-        Media[(blog-media 卷\n上传图片)]
-        MongoVol[(mongodb-data 卷)]
-        RedisVol[(redis-data 卷)]
-        Certs[(证书目录 / Certbot Webroot)]
-    end
-
-    User -->|HTTPS 80/443| Nginx
-    Admin -->|HTTPS 80/443| Nginx
-    Nginx -->|前端静态文件| User
-    Nginx -->|/api /healthz /sitemap.xml /robots.txt| GoAPI
-    Nginx -->|/posts/:slug/pdf| GoAPI
-    Nginx -->|/media/* 直接分发| Media
-    GoAPI -->|读写文章| Mongo
-    GoAPI -->|摘要查重| Redis
-    GoAPI -->|写入媒体文件| Media
-    Mongo --> MongoVol
-    Redis --> RedisVol
-    Nginx --> Certs
-```
+![博客系统总架构图](./assets/architecture-overview.svg)
 
 ## 四部分如何串起来
 

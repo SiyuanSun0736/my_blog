@@ -13,29 +13,7 @@
 
 ### 时序图
 
-```mermaid
-sequenceDiagram
-    participant Dev as 开发者
-    participant Script as scripts/up-local.sh
-    participant Compose as docker compose
-    participant Mongo as mongodb
-    participant Redis as redis
-    participant API as blog-api
-    participant Web as blog-web(Nginx)
-
-    Dev->>Script: 执行本地启动脚本
-    Script->>Script: 定位仓库根目录
-    Script->>Script: 读取 .env
-    Script->>Compose: up -d --build mongodb redis blog-api blog-web
-    Compose->>Mongo: 构建/启动服务
-    Compose->>Redis: 启动服务
-    Compose->>API: 构建后端镜像并启动
-    Compose->>Web: 构建前端+Nginx 镜像并启动
-    API->>Mongo: 建立数据库连接并 ping
-    API->>Redis: 建立 Redis 连接并 ping
-    Web->>API: 反向代理准备完成
-    Dev->>Web: 通过 localhost 访问站点
-```
+![本地启动时序图](./assets/deployment-sequence-local.svg)
 
 ### 详细步骤
 
@@ -62,39 +40,7 @@ sequenceDiagram
 
 ### 时序图
 
-```mermaid
-sequenceDiagram
-    participant Ops as 运维/开发者
-    participant Script as scripts/update-deploy.sh
-    participant Git as Git 远端
-    participant Compose as docker compose
-    participant Backup as backup-mongodb.sh
-    participant Mongo as mongodb
-    participant Redis as redis
-    participant API as blog-api
-    participant Web as blog-web(Nginx)
-    participant Client as 本机验证请求
-
-    Ops->>Script: 执行更新脚本
-    Script->>Script: 读取 .env.deploy
-    Script->>Script: 校验 docker / curl / compose 可用
-    Script->>Script: 检查 tracked worktree 是否干净
-    Script->>Backup: 执行备份脚本
-    Backup->>Mongo: 导出数据库 archive
-    Backup->>API: 打包媒体目录
-    Script->>Compose: stop blog-web blog-api redis mongodb
-    Script->>Git: git pull --ff-only 或 force-sync
-    Script->>Compose: build blog-api
-    Script->>Compose: build blog-web
-    Script->>Compose: up -d mongodb redis blog-api blog-web
-    Compose->>Mongo: 启动并通过健康检查
-    Compose->>Redis: 启动并通过健康检查
-    Compose->>API: 等待 Mongo/Redis 健康后启动
-    Compose->>Web: 启动 Nginx
-    Script->>Compose: ps 检查状态
-    Script->>Client: curl https://127.0.0.1/api/posts
-    Client-->>Script: API 可用
-```
+![线上更新时序图](./assets/deployment-sequence-deploy.svg)
 
 ### 详细步骤
 

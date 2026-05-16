@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 790" role="img" aria-labelledby="title desc">
+  <title id="title">本地启动时序图</title>
+  <desc id="desc">展示 scripts/up-local.sh 驱动 docker compose 启动 mongodb、redis、blog-api 与 blog-web 的顺序。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 28px 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0f172a; }
+      .box { fill: #ffffff; stroke: #94a3b8; stroke-width: 2; }
+      .box-text { font: 700 20px 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0f172a; }
+      .lane { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 8 10; }
+      .msg { stroke: #2563eb; stroke-width: 3.5; fill: none; marker-end: url(#arrow); stroke-linecap: round; }
+      .msg-return { stroke: #2563eb; stroke-width: 3.5; fill: none; marker-end: url(#arrow); stroke-dasharray: 10 8; stroke-linecap: round; }
+      .msg-text { font: 500 17px 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #1d4ed8; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1520" height="790" rx="28"/>
+  <text class="title" x="760" y="58" text-anchor="middle">本地启动时序</text>
+
+  <g transform="translate(30 0)">
+    <g transform="translate(0 0)">
+      <rect class="box" x="0" y="86" width="150" height="72" rx="18"/>
+      <text class="box-text" x="75" y="130" text-anchor="middle">开发者</text>
+      <line class="lane" x1="75" y1="158" x2="75" y2="742"/>
+    </g>
+    <g transform="translate(210 0)">
+      <rect class="box" x="0" y="86" width="150" height="72" rx="18"/>
+      <text class="box-text" x="75" y="122" text-anchor="middle">
+        <tspan x="75" dy="0">scripts/</tspan>
+        <tspan x="75" dy="24">up-local.sh</tspan>
+      </text>
+      <line class="lane" x1="75" y1="158" x2="75" y2="742"/>
+    </g>
+    <g transform="translate(420 0)">
+      <rect class="box" x="0" y="86" width="150" height="72" rx="18"/>
+      <text class="box-text" x="75" y="122" text-anchor="middle">
+        <tspan x="75" dy="0">docker</tspan>
+        <tspan x="75" dy="24">compose</tspan>
+      </text>
+      <line class="lane" x1="75" y1="158" x2="75" y2="742"/>
+    </g>
+    <g transform="translate(630 0)">
+      <rect class="box" x="0" y="86" width="150" height="72" rx="18"/>
+      <text class="box-text" x="75" y="130" text-anchor="middle">mongodb</text>
+      <line class="lane" x1="75" y1="158" x2="75" y2="742"/>
+    </g>
+    <g transform="translate(840 0)">
+      <rect class="box" x="0" y="86" width="150" height="72" rx="18"/>
+      <text class="box-text" x="75" y="130" text-anchor="middle">redis</text>
+      <line class="lane" x1="75" y1="158" x2="75" y2="742"/>
+    </g>
+    <g transform="translate(1050 0)">
+      <rect class="box" x="0" y="86" width="150" height="72" rx="18"/>
+      <text class="box-text" x="75" y="130" text-anchor="middle">blog-api</text>
+      <line class="lane" x1="75" y1="158" x2="75" y2="742"/>
+    </g>
+    <g transform="translate(1260 0)">
+      <rect class="box" x="0" y="86" width="150" height="72" rx="18"/>
+      <text class="box-text" x="75" y="122" text-anchor="middle">
+        <tspan x="75" dy="0">blog-web</tspan>
+        <tspan x="75" dy="24">(Nginx)</tspan>
+      </text>
+      <line class="lane" x1="75" y1="158" x2="75" y2="742"/>
+    </g>
+
+    <line class="msg" x1="75" y1="196" x2="285" y2="196"/>
+    <text class="msg-text" x="180" y="182" text-anchor="middle">执行本地启动脚本</text>
+
+    <path class="msg" d="M 285 244 h 48 v 28 h -48"/>
+    <text class="msg-text" x="350" y="238">定位仓库根目录</text>
+
+    <path class="msg" d="M 285 292 h 48 v 28 h -48"/>
+    <text class="msg-text" x="350" y="286">读取 .env</text>
+
+    <line class="msg" x1="285" y1="340" x2="495" y2="340"/>
+    <text class="msg-text" x="390" y="322" text-anchor="middle">
+      <tspan x="390" dy="0">up -d --build mongodb redis</tspan>
+      <tspan x="390" dy="20">blog-api blog-web</tspan>
+    </text>
+
+    <line class="msg" x1="495" y1="388" x2="705" y2="388"/>
+    <text class="msg-text" x="600" y="374" text-anchor="middle">构建/启动服务</text>
+
+    <line class="msg" x1="495" y1="436" x2="915" y2="436"/>
+    <text class="msg-text" x="705" y="422" text-anchor="middle">启动服务</text>
+
+    <line class="msg" x1="495" y1="484" x2="1125" y2="484"/>
+    <text class="msg-text" x="810" y="470" text-anchor="middle">构建后端镜像并启动</text>
+
+    <line class="msg" x1="495" y1="532" x2="1335" y2="532"/>
+    <text class="msg-text" x="915" y="514" text-anchor="middle">构建前端 + Nginx 镜像并启动</text>
+
+    <line class="msg" x1="1125" y1="580" x2="705" y2="580"/>
+    <text class="msg-text" x="915" y="566" text-anchor="middle">建立数据库连接并 ping</text>
+
+    <line class="msg" x1="1125" y1="628" x2="915" y2="628"/>
+    <text class="msg-text" x="1020" y="614" text-anchor="middle">建立 Redis 连接并 ping</text>
+
+    <line class="msg" x1="1335" y1="676" x2="1125" y2="676"/>
+    <text class="msg-text" x="1230" y="662" text-anchor="middle">反向代理准备完成</text>
+
+    <line class="msg" x1="75" y1="724" x2="1335" y2="724"/>
+    <text class="msg-text" x="705" y="710" text-anchor="middle">通过 localhost 访问站点</text>
+  </g>
+</svg>

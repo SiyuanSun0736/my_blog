@@ -23,6 +23,10 @@ webroot_dir="${BLOG_CERTBOT_WEBROOT_DIR:-$ROOT_DIR/certbot/www}"
 cert_path="${BLOG_TLS_CERT_PATH:-/etc/nginx/certs/live/$primary_domain/fullchain.pem}"
 key_path="${BLOG_TLS_KEY_PATH:-/etc/nginx/certs/live/$primary_domain/privkey.pem}"
 compose_parallel_limit="${COMPOSE_PARALLEL_LIMIT:-1}"
+live_cert_dir="$letsencrypt_dir/live/$primary_domain"
+live_fullchain="$live_cert_dir/fullchain.pem"
+live_privkey="$live_cert_dir/privkey.pem"
+renewal_config="$letsencrypt_dir/renewal/$primary_domain.conf"
 
 export BLOG_PRIMARY_DOMAIN="$primary_domain"
 export BLOG_WWW_DOMAIN="$www_domain"
@@ -39,7 +43,19 @@ compose() {
 
 mkdir -p "$letsencrypt_dir" "$webroot_dir"
 
-if [ ! -f "$letsencrypt_dir/live/$primary_domain/fullchain.pem" ] || [ ! -f "$letsencrypt_dir/live/$primary_domain/privkey.pem" ]; then
+if { [ -f "$live_fullchain" ] || [ -f "$live_privkey" ]; } && [ ! -f "$renewal_config" ]; then
+  echo "Found certificate files in $live_cert_dir but no Certbot renewal config at $renewal_config." >&2
+  echo "Move the unmanaged files aside or point BLOG_TLS_CERTS_DIR to an empty Let's Encrypt directory before rerunning this script." >&2
+  exit 1
+fi
+
+if [ -f "$renewal_config" ] && { [ ! -f "$live_fullchain" ] || [ ! -f "$live_privkey" ]; }; then
+  echo "Found Certbot renewal config at $renewal_config but missing live certificate files in $live_cert_dir." >&2
+  echo "Repair or remove the broken Let's Encrypt lineage before rerunning this script." >&2
+  exit 1
+fi
+
+if [ ! -f "$live_fullchain" ] || [ ! -f "$live_privkey" ]; then
   if [ -z "$certbot_email" ]; then
     echo "CERTBOT_EMAIL is required for the first Let's Encrypt issuance." >&2
     exit 1
