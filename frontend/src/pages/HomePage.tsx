@@ -1,5 +1,5 @@
 import { Button, Card, CardBody, CardHeader, Chip, Input, Spinner } from "../components/ui";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchPosts } from "../lib/api";
 import type { PostSummary } from "../types";
@@ -10,10 +10,14 @@ const GITHUB_PROFILE_URL = "https://github.com/SiyuanSun0736";
 const AVATAR_URL = "/profile-avatar.jpg";
 
 export function HomePage() {
+  const searchRequestRef = useRef(0);
+  const [allPosts, setAllPosts] = useState<PostSummary[]>([]);
   const [posts, setPosts] = useState<PostSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [keyword, setKeyword] = useState("");
+  const [serverKeyword, setServerKeyword] = useState("");
   const [activeCategory, setActiveCategory] = useState("全部");
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -27,7 +31,9 @@ export function HomePage() {
           return;
         }
 
+        setAllPosts(items);
         setPosts(items);
+        setServerKeyword("");
         setError(null);
       })
       .catch((requestError: Error) => {
@@ -50,22 +56,77 @@ export function HomePage() {
     setCurrentPage(1);
   }, [keyword, activeCategory]);
 
-  const sortedPosts = [...posts].sort(
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    const normalizedKeyword = keyword.trim();
+    if (normalizedKeyword.length === 0) {
+      searchRequestRef.current += 1;
+      setPosts(allPosts);
+      setServerKeyword("");
+      setSearchLoading(false);
+      return;
+    }
+
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
+    setSearchLoading(true);
+
+    const timer = window.setTimeout(() => {
+      fetchPosts(normalizedKeyword)
+        .then((items) => {
+          if (requestId !== searchRequestRef.current) {
+            return;
+          }
+
+          setPosts(items);
+          setServerKeyword(normalizedKeyword);
+          setError(null);
+        })
+        .catch((requestError: Error) => {
+          if (requestId !== searchRequestRef.current) {
+            return;
+          }
+
+          setError(requestError.message);
+        })
+        .finally(() => {
+          if (requestId === searchRequestRef.current) {
+            setSearchLoading(false);
+          }
+        });
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [allPosts, keyword, loading]);
+
+  const sortedPosts = [...allPosts].sort(
     (left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt),
   );
   const categories = ["全部", ...new Set(sortedPosts.map((post) => post.category))];
   const normalizedKeyword = keyword.trim().toLowerCase();
+  const normalizedServerKeyword = serverKeyword.trim().toLowerCase();
   const featuredPosts = sortedPosts.filter((post) => post.featured).slice(0, 3);
   const featuredPost = featuredPosts[0] ?? sortedPosts[0];
   const featuredShelfPosts = featuredPosts.length > 0 ? featuredPosts : sortedPosts.slice(0, 3);
   const latestPost = sortedPosts[0];
-  const filteredPosts = sortedPosts.filter((post) => {
+  const searchBasePosts = normalizedKeyword.length > 0 && normalizedKeyword === normalizedServerKeyword
+    ? posts
+    : sortedPosts;
+  const filteredPosts = searchBasePosts.filter((post) => {
     const matchesCategory = activeCategory === "全部" || post.category === activeCategory;
     const matchesKeyword =
       normalizedKeyword.length === 0 ||
       post.title.toLowerCase().includes(normalizedKeyword) ||
       post.summary.toLowerCase().includes(normalizedKeyword) ||
-      post.tags.some((tag) => tag.toLowerCase().includes(normalizedKeyword));
+      post.tags.some((tag) => tag.toLowerCase().includes(normalizedKeyword)) ||
+      post.category.toLowerCase().includes(normalizedKeyword) ||
+      post.author.toLowerCase().includes(normalizedKeyword) ||
+      (post.searchSnippet?.text ?? "").toLowerCase().includes(normalizedKeyword);
 
     return matchesCategory && matchesKeyword;
   });
@@ -400,6 +461,19 @@ export function HomePage() {
                   value={keyword}
                   onValueChange={setKeyword}
                 />
+                {normalizedKeyword.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2 pt-1 text-xs leading-6 text-[var(--muted)]">
+                    <Chip size="sm" variant="bordered">服务端全文检索</Chip>
+                    <Chip size="sm" variant="bordered">本地即时筛选</Chip>
+                    <span>
+                      {searchLoading
+                        ? "正在刷新相关度排序..."
+                        : normalizedServerKeyword === normalizedKeyword
+                          ? `当前展示 ${filteredPosts.length} 条相关结果`
+                          : "先按本地匹配即时筛选，再更新为服务端相关度结果"}
+                    </span>
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-2">
@@ -439,7 +513,7 @@ export function HomePage() {
           {!loading && !error ? (
             <div className="grid gap-5 lg:grid-cols-2">
               {paginatedPosts.map((post) => (
-                <PostCard key={post.slug} post={post} />
+                <PostCard key={post.slug} post={post} highlightQuery={keyword} />
               ))}
             </div>
           ) : null}
@@ -448,6 +522,7 @@ export function HomePage() {
             <div className="flex flex-col gap-3 rounded-[1.75rem] border border-black/10 bg-white/60 p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm leading-7 text-[var(--muted)]">
                 当前命中 {filteredPosts.length} 篇文章，覆盖 {Object.keys(categoryCounts).length || 0} 个主题入口。
+                {normalizedKeyword.length > 0 && normalizedServerKeyword === normalizedKeyword ? " 结果已附带相关度和匹配片段。" : ""}
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -532,7 +607,8 @@ export function HomePage() {
                     key={tag}
                     radius="full"
                     size="sm"
-                    variant="bordered"
+                    variant={keyword === tag ? "solid" : "bordered"}
+                    color={keyword === tag ? "primary" : "default"}
                     onPress={() => setKeyword(tag)}
                   >
                     #{tag} · {count}

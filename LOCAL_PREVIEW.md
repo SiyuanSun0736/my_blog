@@ -122,6 +122,8 @@ cd /home/ssy/web
 
 这条脚本会直接按本地 `.env` 启动 `mongodb`、`redis`、`blog-api` 和 `blog-web`，并保留 Compose 默认并发；如果你只想手动执行，也可以继续使用普通 `docker compose up -d --build mongodb redis blog-api blog-web`。
 
+如果本地 `.env` 里的域名仍是 `localhost` / `*.localhost`，且 `certs/` 下还没有 `fullchain.pem` / `privkey.pem`，脚本会自动生成一对仅供本地预览使用的自签证书，避免 `blog-web` 因证书缺失反复重启。
+
 ### 2. 启动完整服务
 
 如果上一步已经执行 `./scripts/up-local.sh`，这里可以直接跳过。

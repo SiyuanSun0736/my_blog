@@ -1,12 +1,21 @@
 import { Card, CardBody, CardHeader, Chip } from "./ui";
 import { Link } from "react-router-dom";
 import type { PostSummary } from "../types";
+import { renderHighlightedText } from "../lib/searchHighlight";
 
 interface PostCardProps {
   post: PostSummary;
+  highlightQuery?: string;
 }
 
-export function PostCard({ post }: PostCardProps) {
+export function PostCard({ post, highlightQuery }: PostCardProps) {
+  const formattedSearchScore =
+    typeof post.searchScore === "number"
+      ? post.searchScore >= 10
+        ? post.searchScore.toFixed(1)
+        : post.searchScore.toFixed(2)
+      : null;
+
   return (
     <Card className="glass-panel overflow-hidden border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
       <div className="h-2 w-full" style={{ background: post.accent }} />
@@ -17,12 +26,26 @@ export function PostCard({ post }: PostCardProps) {
             {post.category} · {post.publishedAt} · {post.readMinutes} 分钟阅读
           </p>
           <h2 className="display-type mt-3 text-2xl leading-tight text-[var(--ink)]">
-            {post.title}
+            {renderHighlightedText(post.title, highlightQuery)}
           </h2>
         </div>
       </CardHeader>
       <CardBody className="px-5 pb-5 pt-4 text-[var(--muted)]">
-        <p className="text-sm leading-7">{post.summary}</p>
+        <p className="text-sm leading-7">{renderHighlightedText(post.summary, highlightQuery)}</p>
+
+        {post.searchSnippet ? (
+          <div className="mt-4 rounded-[1rem] border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-xs leading-6 text-amber-900">
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip size="sm" variant="bordered">匹配于 {post.searchSnippet.label}</Chip>
+              {post.searchMode ? <Chip size="sm" variant="bordered">{post.searchMode === "text" ? "全文" : "模糊"}</Chip> : null}
+              {formattedSearchScore ? <Chip size="sm" color="warning" variant="flat">相关度 {formattedSearchScore}</Chip> : null}
+            </div>
+            <p
+              className="mt-2 [&_mark]:rounded [&_mark]:bg-amber-200 [&_mark]:px-1"
+              dangerouslySetInnerHTML={{ __html: post.searchSnippet.html }}
+            />
+          </div>
+        ) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
           {post.featured ? (

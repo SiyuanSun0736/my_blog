@@ -73,7 +73,8 @@ func (h *Handler) RegisterRoutes(router gin.IRoutes) {
 }
 
 func (h *Handler) listPosts(c *gin.Context) {
-	posts, err := h.service.ListPosts(c.Request.Context())
+	q := strings.TrimSpace(c.Query("q"))
+	posts, err := h.service.SearchPosts(c.Request.Context(), q)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to list posts"})
 		return
@@ -130,7 +131,10 @@ func (h *Handler) getPostPDF(c *gin.Context) {
 }
 
 func (h *Handler) listAdminPosts(c *gin.Context) {
-	posts, err := h.service.ListAdminPosts(c.Request.Context())
+	q := strings.TrimSpace(c.Query("q"))
+	listFilter := strings.TrimSpace(c.Query("filter")) // "all", "published", "draft"
+
+	posts, err := h.service.SearchAdminPosts(c.Request.Context(), q, listFilter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to list admin posts"})
 		return

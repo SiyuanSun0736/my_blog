@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -17,6 +18,7 @@ import (
 const (
 	postsCollectionName = "posts"
 	maxFeaturedPosts    = 3
+	searchTextIndexName = "posts_search_text"
 )
 
 var (
@@ -25,6 +27,15 @@ var (
 	ErrInvalidBatchAction = errors.New("invalid batch action")
 	ErrDraftCannotFeature = errors.New("draft post cannot be featured")
 	ErrFeaturedLimit      = errors.New("featured post limit reached")
+	searchTextIndexWeights = bson.D{
+		{Key: "title", Value: 12},
+		{Key: "summary", Value: 6},
+		{Key: "tags", Value: 4},
+		{Key: "slug", Value: 4},
+		{Key: "author", Value: 2},
+		{Key: "category", Value: 2},
+		{Key: "body", Value: 1},
+	}
 )
 
 type Service struct {
@@ -61,6 +72,10 @@ func (s *Service) ListPosts(ctx context.Context) ([]Post, error) {
 
 func (s *Service) ListAdminPosts(ctx context.Context) ([]Post, error) {
 	return s.listPosts(ctx, true)
+}
+
+func (s *Service) SearchPosts(ctx context.Context, query string) ([]Post, error) {
+	return s.searchPosts(ctx, query, bson.D{{Key: "draft", Value: bson.D{{Key: "$ne", Value: true}}}})
 }
 
 func (s *Service) ListPostBodies(ctx context.Context) ([]string, error) {
@@ -377,7 +392,274 @@ func (s *Service) ensureIndexes(ctx context.Context) error {
 		return err
 	}
 
-	return nil
+	return s.ensureSearchTextIndex(ctx)
+}
+
+func (s *Service) ensureSearchTextIndex(ctx context.Context) error {
+	indexView := s.collection.Indexes()
+	desiredIndex := searchTextIndexModel()
+	cursor, err := indexView.List(ctx)
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var spec bson.M
+		if err := cursor.Decode(&spec); err != nil {
+			return err
+		}
+
+		name, _ := spec["name"].(string)
+		if name == searchTextIndexName {
+			if isTextIndexDefinition(spec["key"]) && searchTextIndexWeightsMatch(spec["weights"]) {
+				return nil
+			}
+
+			if _, err := indexView.DropOne(ctx, name); err != nil {
+				return err
+			}
+
+			continue
+		}
+
+		if isTextIndexDefinition(spec["key"]) {
+			if _, err := indexView.DropOne(ctx, name); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := cursor.Err(); err != nil {
+		return err
+	}
+
+	_, err = indexView.CreateOne(ctx, desiredIndex)
+
+	return err
+}
+
+func searchTextIndexModel() mongo.IndexModel {
+	return mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "title", Value: "text"},
+			{Key: "summary", Value: "text"},
+			{Key: "tags", Value: "text"},
+			{Key: "slug", Value: "text"},
+			{Key: "author", Value: "text"},
+			{Key: "category", Value: "text"},
+			{Key: "body", Value: "text"},
+		},
+		Options: options.Index().SetName(searchTextIndexName).SetWeights(searchTextIndexWeights),
+	}
+}
+
+func searchTextIndexWeightsMatch(value interface{}) bool {
+	expectedWeights := readSearchTextIndexWeights(searchTextIndexWeights)
+	actualWeights := readSearchTextIndexWeights(value)
+	if len(actualWeights) != len(expectedWeights) {
+		return false
+	}
+
+	for field, weight := range expectedWeights {
+		if actualWeights[field] != weight {
+			return false
+		}
+	}
+
+	return true
+}
+
+func readSearchTextIndexWeights(value interface{}) map[string]int64 {
+	weights := make(map[string]int64)
+
+	switch typed := value.(type) {
+	case bson.D:
+		for _, element := range typed {
+			if weight, ok := searchTextIndexWeightValue(element.Value); ok {
+				weights[element.Key] = weight
+			}
+		}
+	case bson.M:
+		for field, rawWeight := range typed {
+			if weight, ok := searchTextIndexWeightValue(rawWeight); ok {
+				weights[field] = weight
+			}
+		}
+	case map[string]interface{}:
+		for field, rawWeight := range typed {
+			if weight, ok := searchTextIndexWeightValue(rawWeight); ok {
+				weights[field] = weight
+			}
+		}
+	}
+
+	return weights
+}
+
+func searchTextIndexWeightValue(value interface{}) (int64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return int64(typed), true
+	case int32:
+		return int64(typed), true
+	case int64:
+		return typed, true
+	}
+
+	return 0, false
+}
+
+func isTextIndexDefinition(value interface{}) bool {
+	switch typed := value.(type) {
+	case bson.M:
+		for _, element := range typed {
+			if mode, ok := element.(string); ok && mode == "text" {
+				return true
+			}
+		}
+	case map[string]interface{}:
+		for _, element := range typed {
+			if mode, ok := element.(string); ok && mode == "text" {
+				return true
+			}
+		}
+	case bson.D:
+		for _, element := range typed {
+			if mode, ok := element.Value.(string); ok && mode == "text" {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// SearchAdminPosts performs an admin-visible search. The `query` may be empty
+// (in which case it lists posts according to `listFilter`). `listFilter` can
+// be "all", "published" or "draft".
+func (s *Service) SearchAdminPosts(ctx context.Context, query string, listFilter string) ([]Post, error) {
+	var baseFilter bson.D
+	switch listFilter {
+	case "draft":
+		baseFilter = bson.D{{Key: "draft", Value: true}}
+	case "published":
+		baseFilter = bson.D{{Key: "draft", Value: bson.D{{Key: "$ne", Value: true}}}}
+	default:
+		baseFilter = bson.D{}
+	}
+
+	return s.searchPosts(ctx, query, baseFilter)
+}
+
+func (s *Service) searchPosts(ctx context.Context, query string, baseFilter bson.D) ([]Post, error) {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		cursor, err := s.collection.Find(
+			ctx,
+			baseFilter,
+			options.Find().SetProjection(bson.D{{Key: "body", Value: 0}}).SetSort(bson.D{{Key: "publishedAt", Value: -1}, {Key: "id", Value: -1}}),
+		)
+		if err != nil {
+			return nil, err
+		}
+		defer cursor.Close(ctx)
+
+		posts := make([]Post, 0)
+		for cursor.Next(ctx) {
+			var post Post
+			if err := cursor.Decode(&post); err != nil {
+				return nil, err
+			}
+
+			posts = append(posts, normalizeStoredPost(post))
+		}
+
+		return posts, cursor.Err()
+	}
+
+	textFilter := bson.D{{Key: "$text", Value: bson.D{{Key: "$search", Value: q}}}}
+	var filter bson.D
+	if len(baseFilter) == 0 {
+		filter = textFilter
+	} else {
+		filter = bson.D{{Key: "$and", Value: bson.A{baseFilter, textFilter}}}
+	}
+
+	projection := bson.D{{Key: "score", Value: bson.D{{Key: "$meta", Value: "textScore"}}}}
+	findOpts := options.Find().SetProjection(projection).SetSort(bson.D{{Key: "score", Value: bson.D{{Key: "$meta", Value: "textScore"}}}, {Key: "publishedAt", Value: -1}})
+
+	cursor, err := s.collection.Find(ctx, filter, findOpts)
+	if err == nil {
+		defer cursor.Close(ctx)
+
+		posts := make([]Post, 0)
+		for cursor.Next(ctx) {
+			var post Post
+			if err := cursor.Decode(&post); err != nil {
+				return nil, err
+			}
+
+			post = normalizeStoredPost(post)
+			post.SearchMode = "text"
+			post.SearchSnippet = buildSearchSnippet(post, q)
+			post.Body = ""
+			posts = append(posts, post)
+		}
+
+		if err := cursor.Err(); err == nil && len(posts) > 0 {
+			return posts, nil
+		}
+	}
+
+	tokens := searchTokens(q)
+	if len(tokens) == 0 {
+		return s.searchPosts(ctx, "", baseFilter)
+	}
+
+	andClauses := bson.A{}
+	for _, t := range tokens {
+		esc := regexp.QuoteMeta(t)
+		re := bson.D{{Key: "$regex", Value: esc}, {Key: "$options", Value: "i"}}
+		orClauses := bson.A{
+			bson.D{{Key: "title", Value: re}},
+			bson.D{{Key: "summary", Value: re}},
+			bson.D{{Key: "body", Value: re}},
+			bson.D{{Key: "slug", Value: re}},
+			bson.D{{Key: "author", Value: re}},
+			bson.D{{Key: "category", Value: re}},
+			bson.D{{Key: "tags", Value: re}},
+		}
+
+		andClauses = append(andClauses, bson.D{{Key: "$or", Value: orClauses}})
+	}
+
+	finalFilter := bson.D{{Key: "$and", Value: andClauses}}
+	if len(baseFilter) != 0 {
+		finalFilter = bson.D{{Key: "$and", Value: bson.A{baseFilter, finalFilter}}}
+	}
+
+	cursor, err = s.collection.Find(ctx, finalFilter, options.Find().SetSort(bson.D{{Key: "publishedAt", Value: -1}, {Key: "id", Value: -1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	posts := make([]Post, 0)
+	for cursor.Next(ctx) {
+		var post Post
+		if err := cursor.Decode(&post); err != nil {
+			return nil, err
+		}
+
+		post = normalizeStoredPost(post)
+		post.SearchMode = "fuzzy"
+		post.SearchSnippet = buildSearchSnippet(post, q)
+		post.Body = ""
+		posts = append(posts, post)
+	}
+
+	return posts, cursor.Err()
 }
 
 func (s *Service) nextPostID(ctx context.Context) (int, error) {

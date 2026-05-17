@@ -713,7 +713,10 @@ export function WritePage() {
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const newPostTemplateRef = useRef<WriteFormState>(createEmptyFormState());
   const skipNextAutosaveCleanupRef = useRef(false);
+  const listRequestRef = useRef(0);
+  const allPostsRequestRef = useRef(0);
   const [form, setForm] = useState<WriteFormState>(newPostTemplateRef.current);
+  const [allPosts, setAllPosts] = useState<PostSummary[]>([]);
   const [posts, setPosts] = useState<PostSummary[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [editorLoading, setEditorLoading] = useState(false);
@@ -730,6 +733,7 @@ export function WritePage() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [selectedSlugs, setSelectedSlugs] = useState<string[]>([]);
   const [listFilter, setListFilter] = useState<"all" | "published" | "draft">("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [originalPost, setOriginalPost] = useState<Post | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [autosaveSavedAt, setAutosaveSavedAt] = useState<string | null>(null);
@@ -740,10 +744,10 @@ export function WritePage() {
   const [bodyToolStatus, setBodyToolStatus] = useState<string | null>(null);
 
   const isEditing = selectedSlug !== null;
-  const featuredPosts = posts.filter((post) => post.featured).slice(0, 3);
+  const featuredPosts = allPosts.filter((post) => post.featured).slice(0, 3);
   const featuredLimitReached = featuredPosts.length >= 3;
-  const draftCount = posts.filter((post) => post.draft).length;
-  const publishedCount = posts.length - draftCount;
+  const draftCount = allPosts.filter((post) => post.draft).length;
+  const publishedCount = allPosts.length - draftCount;
   const editorKey = selectedSlug ?? "new";
   const currentAutosaveKey = autosaveStorageKey(editorKey);
   const baselineForm = originalPost ? formStateFromPost(originalPost) : newPostTemplateRef.current;
@@ -752,15 +756,35 @@ export function WritePage() {
   const canFeatureCurrentForm = !form.draft && (form.featured || originalPost?.featured === true || !featuredLimitReached);
   const featuredSlotsRemaining = Math.max(0, 3 - featuredPosts.length);
   const visiblePosts = posts.filter((post) => {
-    if (listFilter === "draft") {
-      return post.draft;
+    if (listFilter === "draft" && !post.draft) {
+      return false;
     }
 
-    if (listFilter === "published") {
-      return !post.draft;
+    if (listFilter === "published" && post.draft) {
+      return false;
     }
 
-    return true;
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (normalizedQuery.length === 0) {
+      return true;
+    }
+
+    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) {
+      return true;
+    }
+
+    const haystack = [
+      post.title,
+      post.summary,
+      post.slug,
+      post.author,
+      post.category,
+      post.tags.join(" "),
+      post.searchSnippet?.text ?? "",
+    ].join(" ").toLowerCase();
+
+    return tokens.every((token) => haystack.includes(token));
   });
   const allVisibleSelected = visiblePosts.length > 0 && visiblePosts.every((post) => selectedSlugs.includes(post.slug));
   const metadataChanges = originalPost ? buildMetadataChanges(originalPost, form) : [];
@@ -777,15 +801,29 @@ export function WritePage() {
     void handleVerifyAccess(storedToken, true);
   }, []);
 
+  // Fetch posts when access is verified and when search/filter changes.
   useEffect(() => {
     if (!accessVerified) {
+      setAllPosts([]);
       setPosts([]);
       setSelectedSlug(null);
       return;
     }
 
-    void loadPosts();
-  }, [accessVerified]);
+    void loadAllPosts();
+  }, [accessVerified, writeToken]);
+
+  useEffect(() => {
+    if (!accessVerified) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void loadPosts();
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [accessVerified, searchQuery, listFilter, writeToken]);
 
   useEffect(() => {
     if (!accessVerified) {
@@ -867,18 +905,89 @@ export function WritePage() {
     };
   }, [accessVerified, hasUnsavedChanges]);
 
-  async function loadPosts() {
-    setPostsLoading(true);
+  async function loadAllPosts() {
+    const requestId = allPostsRequestRef.current + 1;
+    allPostsRequestRef.current = requestId;
 
     try {
       const items = await fetchAdminPosts(writeToken.trim());
+      if (requestId !== allPostsRequestRef.current) {
+        return;
+      }
+
+      setAllPosts(items);
+    } catch (requestError) {
+      if (requestId !== allPostsRequestRef.current) {
+        return;
+      }
+
+      setError(requestError instanceof Error ? requestError.message : "文章统计加载失败。");
+    }
+  }
+
+  async function loadPosts(queryOverride = searchQuery.trim(), filterOverride = listFilter) {
+    const requestId = listRequestRef.current + 1;
+    listRequestRef.current = requestId;
+    setPostsLoading(true);
+
+    try {
+      const items = await fetchAdminPosts(writeToken.trim(), queryOverride, filterOverride);
+      if (requestId !== listRequestRef.current) {
+        return;
+      }
+
       setPosts(items);
       setSelectedSlugs((current) => current.filter((slug) => items.some((post) => post.slug === slug)));
     } catch (requestError) {
+      if (requestId !== listRequestRef.current) {
+        return;
+      }
+
       setError(requestError instanceof Error ? requestError.message : "文章列表加载失败。");
     } finally {
-      setPostsLoading(false);
+      if (requestId === listRequestRef.current) {
+        setPostsLoading(false);
+      }
     }
+  }
+
+  async function refreshPostLists() {
+    await Promise.all([loadAllPosts(), loadPosts()]);
+  }
+
+  function renderHighlighted(text: string | undefined | null) {
+    const str = String(text ?? "");
+    const q = searchQuery.trim();
+    if (q.length === 0) {
+      return str;
+    }
+
+    const tokens = q
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+    if (tokens.length === 0) {
+      return str;
+    }
+
+    const re = new RegExp(`(${tokens.join("|")})`, "ig");
+    const parts = str.split(re);
+
+    return parts.map((part, i) => (part.match(re) ? (
+      <mark key={i} className="rounded px-1 bg-amber-100 text-amber-800">{part}</mark>
+    ) : (
+      <span key={i}>{part}</span>
+    )));
+  }
+
+  function formatSearchScore(score: number | undefined) {
+    if (typeof score !== "number" || Number.isNaN(score)) {
+      return null;
+    }
+
+    return score >= 10 ? score.toFixed(1) : score.toFixed(2);
   }
 
   function updateField<Key extends keyof WriteFormState>(field: Key, value: WriteFormState[Key]) {
@@ -1296,7 +1405,7 @@ export function WritePage() {
         resetEditor();
       }
 
-      await loadPosts();
+      await refreshPostLists();
       setSuccessMessage(`已删除《${post.title}》。`);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "删除文章失败。");
@@ -1312,7 +1421,7 @@ export function WritePage() {
 
     try {
       const updatedPost = await setPostFeatured(post.slug, !post.featured, writeToken.trim());
-      await loadPosts();
+      await refreshPostLists();
 
       if (selectedSlug === updatedPost.slug) {
         setForm((current) => ({
@@ -1373,7 +1482,7 @@ export function WritePage() {
         }
       }
 
-      await loadPosts();
+      await refreshPostLists();
       setSelectedSlugs([]);
       setSuccessMessage(`已对 ${response.affected} 篇文章执行${batchActionLabels[action]}操作。`);
     } catch (requestError) {
@@ -1426,7 +1535,7 @@ export function WritePage() {
       clearAutosaveSnapshot(autosaveStorageKey(post.slug));
 
       selectEditorPost(post);
-      await loadPosts();
+      await refreshPostLists();
       setSelectedSlugs([]);
       setAutosaveStatus("idle");
       setAutosaveSavedAt(null);
@@ -2013,6 +2122,23 @@ export function WritePage() {
                 </Button>
               </div>
 
+              <div className="mt-3">
+                <Input
+                  placeholder="搜索标题、摘要、标签或 slug"
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                  radius="full"
+                />
+              </div>
+
+              {searchQuery.trim().length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs leading-6 text-[var(--muted)]">
+                  <Chip size="sm" variant="bordered">服务端全文检索</Chip>
+                  <Chip size="sm" variant="bordered">本地子串过滤</Chip>
+                  <span>当前展示 {visiblePosts.length} / {posts.length} 条</span>
+                </div>
+              ) : null}
+
               <div className="rounded-[1.5rem] border border-black/10 bg-white/70 p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <Button size="sm" radius="full" variant="bordered" onPress={toggleSelectAllVisible} isDisabled={visiblePosts.length === 0 || batchAction !== null}>
@@ -2088,7 +2214,7 @@ export function WritePage() {
                             onChange={() => toggleSelectedSlug(post.slug)}
                           />
                           <button type="button" className="text-left" onClick={() => { void handleEditPost(post.slug); }}>
-                            <span className="block text-sm font-semibold text-[var(--ink)]">{post.title}</span>
+                            <span className="block text-sm font-semibold text-[var(--ink)]">{renderHighlighted(post.title)}</span>
                             <span className="mt-1 block text-xs leading-6 text-[var(--muted)]">
                               {formatPublishDate(post.publishedAt)} · {post.category} · {post.readMinutes} 分钟阅读
                             </span>
@@ -2098,10 +2224,26 @@ export function WritePage() {
                         <div className="flex flex-wrap gap-2">
                           {post.draft ? <Chip size="sm" variant="bordered">草稿</Chip> : <Chip size="sm" color="secondary" variant="flat">已发布</Chip>}
                           {post.featured ? <Chip size="sm" color="warning" variant="flat">置顶</Chip> : null}
+                          {searchQuery.trim().length > 0 && post.searchMode ? (
+                            <Chip size="sm" variant="bordered">{post.searchMode === "text" ? "全文" : "模糊"}</Chip>
+                          ) : null}
+                          {searchQuery.trim().length > 0 && formatSearchScore(post.searchScore) ? (
+                            <Chip size="sm" color="warning" variant="flat">相关度 {formatSearchScore(post.searchScore)}</Chip>
+                          ) : null}
                         </div>
                       </div>
 
-                      <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{post.summary}</p>
+                      <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{renderHighlighted(post.summary)}</p>
+
+                      {searchQuery.trim().length > 0 && post.searchSnippet ? (
+                        <div className="mt-3 rounded-[1rem] border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-xs leading-6 text-amber-900">
+                          <p className="font-medium text-amber-800">匹配片段 · {post.searchSnippet.label}</p>
+                          <p
+                            className="mt-1 [&_mark]:rounded [&_mark]:bg-amber-200 [&_mark]:px-1"
+                            dangerouslySetInnerHTML={{ __html: post.searchSnippet.html }}
+                          />
+                        </div>
+                      ) : null}
 
                       <div className="mt-4 flex flex-wrap gap-2">
                         <Button

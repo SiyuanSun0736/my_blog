@@ -123,16 +123,33 @@ function parseContentDispositionFileName(contentDisposition: string | null) {
   return "post.pdf";
 }
 
-export function fetchPosts(): Promise<PostSummary[]> {
-  return request<PostSummary[]>("/posts");
+export function fetchPosts(query?: string): Promise<PostSummary[]> {
+  const params = new URLSearchParams();
+  if (query && query.trim().length > 0) {
+    params.set("q", query.trim());
+  }
+
+  const path = params.toString() ? `/posts?${params.toString()}` : "/posts";
+  return request<PostSummary[]>(path);
 }
 
 export function fetchPost(slug: string): Promise<Post> {
   return request<Post>(`/posts/${slug}`);
 }
 
-export function fetchAdminPosts(writeToken: string): Promise<PostSummary[]> {
-  return request<PostSummary[]>("/admin/posts", {
+export function fetchAdminPosts(writeToken: string, query?: string, listFilter?: string): Promise<PostSummary[]> {
+  const params = new URLSearchParams();
+  if (query && query.trim().length > 0) {
+    params.set("q", query.trim());
+  }
+
+  if (listFilter && listFilter.trim().length > 0) {
+    params.set("filter", listFilter.trim());
+  }
+
+  const path = params.toString() ? `/admin/posts?${params.toString()}` : "/admin/posts";
+
+  return request<PostSummary[]>(path, {
     headers: writeAccessHeaders(writeToken),
   });
 }
