@@ -15,7 +15,7 @@
 当前仓库已经针对 `1GB` 内存的 VPS 做了几项默认优化：
 
 - MongoDB 使用 `MONGODB_WIREDTIGER_CACHE_GB=0.25`，把 WiredTiger 缓存压到 Mongo 7 允许的最低值 `256MB`
-- Go API 使用 `BLOG_API_GOMEMLIMIT=120MiB` 和 `BLOG_API_GOGC=75`，降低运行时内存峰值
+- Go API 使用 `GIN_MODE=release`、`BLOG_API_GOMEMLIMIT=120MiB` 和 `BLOG_API_GOGC=50`，降低运行时内存峰值
 - 后端镜像构建使用 `BLOG_API_BUILD_GOMEMLIMIT=120MiB`、`BLOG_API_BUILD_GOGC=50` 和 `BLOG_API_BUILD_P=1`，让 `go build` 在 1GB VPS 上按单并行、低内存模式编译
 - 后端 Docker build 复用 Go module/build cache，避免每次部署都从零开始编译同一批依赖
 - 更新脚本默认用 `WANDERLUST_BUILD_NICE_LEVEL=10` 降低 build 调度优先级，减轻构建阶段对在线容器的 CPU 抢占
