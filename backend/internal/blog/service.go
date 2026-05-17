@@ -29,10 +29,10 @@ var (
 	ErrFeaturedLimit       = errors.New("featured post limit reached")
 	searchTextIndexWeights = bson.D{
 		{Key: "title", Value: 12},
-		{Key: "summary", Value: 6},
-		{Key: "tags", Value: 4},
-		{Key: "slug", Value: 4},
-		{Key: "author", Value: 2},
+		{Key: "author", Value: 8},
+		{Key: "tags", Value: 6},
+		{Key: "slug", Value: 6},
+		{Key: "summary", Value: 4},
 		{Key: "category", Value: 2},
 		{Key: "body", Value: 1},
 	}
