@@ -22,11 +22,11 @@ const (
 )
 
 var (
-	ErrInvalidPost        = errors.New("invalid post")
-	ErrPostNotFound       = errors.New("post not found")
-	ErrInvalidBatchAction = errors.New("invalid batch action")
-	ErrDraftCannotFeature = errors.New("draft post cannot be featured")
-	ErrFeaturedLimit      = errors.New("featured post limit reached")
+	ErrInvalidPost         = errors.New("invalid post")
+	ErrPostNotFound        = errors.New("post not found")
+	ErrInvalidBatchAction  = errors.New("invalid batch action")
+	ErrDraftCannotFeature  = errors.New("draft post cannot be featured")
+	ErrFeaturedLimit       = errors.New("featured post limit reached")
 	searchTextIndexWeights = bson.D{
 		{Key: "title", Value: 12},
 		{Key: "summary", Value: 6},
