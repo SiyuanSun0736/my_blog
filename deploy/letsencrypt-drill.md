@@ -7,7 +7,7 @@
 5. 首次签发并启动服务：在仓库根目录执行 `./scripts/deploy-letsencrypt.sh`。
 6. 查看容器状态：执行 `docker compose --env-file .env.deploy ps`，确认 `wanderlust-web` 为 `healthy`。
 7. 检查主域名健康接口：执行 `docker exec wanderlust-web wget -q --no-check-certificate -O - https://127.0.0.1/nginx-healthz`，确认返回里的 `certificate` 路径为 `/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem`。
-8. 验证 `www` 跳转：执行 `curl -I https://wanderlust0736.top` 和 `curl -k -I https://127.0.0.1 -H 'Host: www.wanderlust0736.top'`，确认 `www` 返回 301 到主域名。
+8. 验证 `www` 跳转：执行 `curl -I https://wanderlust0736.top` 和 `curl -k --resolve www.wanderlust0736.top:8444:127.0.0.1 -I https://www.wanderlust0736.top:8444`，确认 `www` 返回 301 到主域名。
 9. 做一次续期演练：执行 `CERTBOT_DRY_RUN=1 ./scripts/renew-letsencrypt.sh`，确认 Certbot dry-run 可以完成。
 10. 查看重载日志：执行 `docker logs wanderlust-web --since 10m`，确认能看到 TLS watcher 的启动日志与证书指纹日志。
 11. 安装自动续期任务：二选一。

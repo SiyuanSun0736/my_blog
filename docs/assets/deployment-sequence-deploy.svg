@@ -148,7 +148,7 @@
     <text class="msg-text" x="478" y="852" text-anchor="middle">ps 检查状态</text>
 
     <line class="msg" x1="278" y1="908" x2="1878" y2="908"/>
-    <text class="msg-text" x="1078" y="890" text-anchor="middle">curl https://127.0.0.1/api/posts</text>
+    <text class="msg-text" x="1078" y="890" text-anchor="middle">curl https://主域名:8444/api/posts</text>
 
     <line class="msg-return" x1="1878" y1="950" x2="278" y2="950"/>
     <text class="msg-text" x="1078" y="936" text-anchor="middle">API 可用</text>

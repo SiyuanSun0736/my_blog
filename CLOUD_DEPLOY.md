@@ -95,8 +95,8 @@ docker compose --env-file .env.deploy up -d --force-recreate --no-deps blog-api
 ```bash
 cd /你的仓库目录
 
-curl -sk https://127.0.0.1/api/write-access \
-	-H 'Host: wanderlust0736.top' \
+curl -sk --resolve "${BLOG_PRIMARY_DOMAIN}:8444:127.0.0.1" \
+	"https://${BLOG_PRIMARY_DOMAIN}:8444/api/write-access" \
 	-H 'Authorization: Bearer 你的新token'
 ```
 
@@ -117,7 +117,8 @@ docker exec wanderlust-web wget -q --no-check-certificate -O - https://127.0.0.1
 ```bash
 cd /你的仓库目录
 
-curl -k -I https://127.0.0.1 -H 'Host: www.wanderlust0736.top'
+curl -skI --resolve "${BLOG_WWW_DOMAIN}:8444:127.0.0.1" \
+	"https://${BLOG_WWW_DOMAIN}:8444"
 ```
 
 预期结果：
@@ -161,8 +162,8 @@ printf 'local sha256: %s\n' "$sha256"
 status_1=$(curl -sk \
 	-o "$tmp_dir/upload-1.json" \
 	-w '%{http_code}' \
-	"https://127.0.0.1/api/admin/uploads/images" \
-	-H "Host: $BLOG_PRIMARY_DOMAIN" \
+	--resolve "${BLOG_PRIMARY_DOMAIN}:8444:127.0.0.1" \
+	"https://${BLOG_PRIMARY_DOMAIN}:8444/api/admin/uploads/images" \
 	-H "Authorization: Bearer $BLOG_WRITE_TOKEN" \
 	-F "file=@$tmp_dir/wanderlust-smoke.png;type=image/png")
 
@@ -185,9 +186,11 @@ printf 'cached flag #1: %s\n' "$cached_1"
 ### 2. 验证 Nginx 直出 `/media/...`
 
 ```bash
-curl -skI "https://127.0.0.1${media_path_1}" -H "Host: $BLOG_PRIMARY_DOMAIN"
+curl -skI --resolve "${BLOG_PRIMARY_DOMAIN}:8444:127.0.0.1" \
+	"https://${BLOG_PRIMARY_DOMAIN}:8444${media_path_1}"
 
-remote_sha256=$(curl -sk "https://127.0.0.1${media_path_1}" -H "Host: $BLOG_PRIMARY_DOMAIN" | sha256sum | awk '{print $1}')
+remote_sha256=$(curl -sk --resolve "${BLOG_PRIMARY_DOMAIN}:8444:127.0.0.1" \
+	"https://${BLOG_PRIMARY_DOMAIN}:8444${media_path_1}" | sha256sum | awk '{print $1}')
 printf 'remote sha256: %s\n' "$remote_sha256"
 
 test "$remote_sha256" = "$sha256"
@@ -207,8 +210,8 @@ printf 'nginx media hash check: ok\n'
 status_2=$(curl -sk \
 	-o "$tmp_dir/upload-2.json" \
 	-w '%{http_code}' \
-	"https://127.0.0.1/api/admin/uploads/images" \
-	-H "Host: $BLOG_PRIMARY_DOMAIN" \
+	--resolve "${BLOG_PRIMARY_DOMAIN}:8444:127.0.0.1" \
+	"https://${BLOG_PRIMARY_DOMAIN}:8444/api/admin/uploads/images" \
 	-H "Authorization: Bearer $BLOG_WRITE_TOKEN" \
 	-F "file=@$tmp_dir/wanderlust-smoke.png;type=image/png")
 
@@ -319,7 +322,7 @@ docker compose --env-file .env.deploy build blog-api
 docker compose --env-file .env.deploy build blog-web
 docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
 docker compose --env-file .env.deploy ps
-curl -sk https://127.0.0.1/api/posts -H 'Host: wanderlust0736.top'
+curl -sk --resolve wanderlust0736.top:8444:127.0.0.1 https://wanderlust0736.top:8444/api/posts
 docker logs wanderlust-api --since 10m
 docker logs wanderlust-web --since 10m
 ```
@@ -355,7 +358,7 @@ docker compose --env-file .env.deploy up -d --build blog-api blog-web
 # 例如：docker compose exec -T mongodb mongosh
 
 docker compose --env-file .env.deploy ps
-curl -sk https://127.0.0.1/api/posts -H 'Host: wanderlust0736.top'
+curl -sk --resolve wanderlust0736.top:8444:127.0.0.1 https://wanderlust0736.top:8444/api/posts
 docker logs wanderlust-api --since 10m
 ```
 
@@ -526,7 +529,7 @@ docker logs wanderlust-mongodb --since 30m
 ## 失败时先看这几项
 
 - DNS 是否已经解析到服务器公网 IP
-- 服务器 `80/443` 端口是否对外开放
+- 服务器 `80` 端口、以及前置 SNI router 接管的 `443` 端口是否对外开放
 - `CERTBOT_EMAIL` 是否已设置
 - 是否有其他服务占用了 `80` 或 `443`
 - `docker logs wanderlust-web --since 10m` 里是否有证书校验或重载失败日志

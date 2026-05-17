@@ -89,6 +89,7 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      # Reserve host 443 for an external SNI router and expose blog-web HTTPS on loopback only.
       - "127.0.0.1:8444:443"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --no-check-certificate -O - https://127.0.0.1/nginx-healthz | grep -q '\"status\":\"ok\"'"]

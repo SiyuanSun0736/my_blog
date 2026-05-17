@@ -6,6 +6,8 @@
 
 ![博客系统总架构图](./assets/architecture-overview.svg)
 
+补充：当前 Compose 已把 `blog-web` 的宿主机 HTTPS 绑定调整为 `127.0.0.1:8444`，把公网 `443` 预留给仓库外部的前置 SNI router。上图只聚焦本仓库自身服务关系，没有展开那一层前置分流。
+
 ## 四部分如何串起来
 
 ### 1. Docker 负责把所有角色编排成一套栈

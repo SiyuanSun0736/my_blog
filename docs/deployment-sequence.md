@@ -25,7 +25,7 @@
 6. `blog-api` 启动后连接 MongoDB，并在可用时连接 Redis。
 7. `blog-api` 在启动阶段还会完成 MongoDB 连通性检查和 `slug` 唯一索引检查。
 8. `blog-web` 启动后加载 Nginx 配置、证书路径和前端构建产物。
-9. 开发者通过本地域名或本地证书入口访问站点。
+10. 开发者通过本地域名或 `https://localhost:8444` 访问站点；宿主机 `443` 预留给前置 SNI router。
 
 ### 本地启动的特点
 
@@ -60,9 +60,9 @@
 9. 脚本执行 `docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web`。
 10. Compose 先拉起 MongoDB 和 Redis，并等待健康检查通过。
 11. `blog-api` 在依赖健康后启动，连接 MongoDB 和 Redis。
-12. `blog-web` 启动，接管 80/443，并加载证书和前端静态资源。
+12. `blog-web` 启动，接管 `80` 和宿主机 `127.0.0.1:8444`，并加载证书和前端静态资源；宿主机 `443` 留给前置 SNI router。
 13. 脚本执行 `docker compose ps` 检查容器状态。
-14. 脚本通过 `curl -k https://127.0.0.1/api/posts -H 'Host: 主域名'` 验证 API 可用。
+14. 脚本通过 `curl -k --resolve 主域名:8444:127.0.0.1 https://主域名:8444/api/posts` 验证 API 可用。
 15. 如果指定了 `--logs`，脚本最后还会带出最近日志。
 
 ### 为什么线上流程要比本地更长

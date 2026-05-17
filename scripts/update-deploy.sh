@@ -87,6 +87,7 @@ set -a
 set +a
 
 primary_domain="${BLOG_PRIMARY_DOMAIN:-wanderlust0736.top}"
+web_https_loopback_port="${WANDERLUST_WEB_HTTPS_LOOPBACK_PORT:-8444}"
 build_nice_level="${WANDERLUST_BUILD_NICE_LEVEL:-10}"
 log_since="${WANDERLUST_DEPLOY_LOG_SINCE:-10m}"
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
@@ -217,8 +218,10 @@ compose up -d mongodb redis blog-api blog-web
 
 announce_step "Verifying container status and API response..."
 compose ps
-curl -fsS -k "https://127.0.0.1/api/posts" -H "Host: ${primary_domain}" >/dev/null
-echo "API check passed for ${primary_domain}." >&2
+curl -fsS -k \
+  --resolve "${primary_domain}:${web_https_loopback_port}:127.0.0.1" \
+  "https://${primary_domain}:${web_https_loopback_port}/api/posts" >/dev/null
+echo "API check passed for ${primary_domain} via loopback :${web_https_loopback_port}." >&2
 
 if [ "$show_logs" -eq 1 ]; then
   announce_step "Showing recent application logs..."

@@ -128,16 +128,18 @@ cd /home/ssy/web
 
 ### 3. 打开页面
 
+因为宿主机 `443` 已经预留给前置 SNI router，本地 Compose 预览时请直接访问 `8444`。
+
 访问：
 
 ```text
-https://localhost
+https://localhost:8444
 ```
 
 也可以检查健康接口：
 
 ```text
-https://localhost/nginx-healthz
+https://localhost:8444/nginx-healthz
 ```
 
 ### 4. 浏览器提示证书不安全怎么办
@@ -153,7 +155,7 @@ https://localhost/nginx-healthz
 
 如果只是临时验页面，直接继续访问即可。
 
-如果你希望本地 `https://localhost` 完全不报警，需要自己换成包含 `localhost` 的本地证书。
+如果你希望本地 `https://localhost:8444` 完全不报警，需要自己换成包含 `localhost` 的本地证书。
 
 ## 方案 C：只验证前端能不能打包
 
@@ -260,7 +262,7 @@ cd /home/ssy/web
 然后打开：
 
 ```text
-https://localhost
+https://localhost:8444
 ```
 
 ## 常见问题

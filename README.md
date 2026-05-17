@@ -88,7 +88,7 @@ docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
 
 启动后主站访问地址为 `https://wanderlust0736.top`。
 
-Compose 模式下会启动 MongoDB、Redis、API 和 Nginx，外部暴露 Nginx 的 `80` 与 `443` 端口，其中 `80` 会自动跳转到 HTTPS，API 通过 `https://wanderlust0736.top/api` 访问，上传图片通过 `https://wanderlust0736.top/media/...` 访问。
+Compose 模式下会启动 MongoDB、Redis、API 和 Nginx。`blog-web` 会直接暴露 `80`，并把容器内 `443` 仅绑定到宿主机 `127.0.0.1:8444`，为前置 SNI router 让出公网 `443`；站点对外地址仍可保持 `https://wanderlust0736.top`，API 仍通过 `https://wanderlust0736.top/api` 访问，上传图片通过 `https://wanderlust0736.top/media/...` 访问。
 
 MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器重建后文章数据仍会保留。
 
@@ -274,7 +274,7 @@ crontab deploy/cron/wanderlust-cert-renew.cron
 
 ### Nginx 健康检查与排障
 
-- 新增了 `https://127.0.0.1/nginx-healthz` 健康检查接口，返回当前主域名、证书路径和自动重载配置。
+- 新增了容器内 `https://127.0.0.1/nginx-healthz` 健康检查接口，返回当前主域名、证书路径和自动重载配置；如果要在宿主机绕过前置 SNI router 直测 `blog-web`，请使用 `curl -k --resolve wanderlust0736.top:8444:127.0.0.1 https://wanderlust0736.top:8444/nginx-healthz`。
 - `blog-web` 已配置 Compose `healthcheck`，会直接探测这个接口。
 - 证书监听脚本现在会输出带时间戳的启动日志、证书指纹变化日志，以及 `nginx reload` 成功或失败日志，方便直接用 `docker logs wanderlust-web` 排查。
 
@@ -288,7 +288,7 @@ crontab deploy/cron/wanderlust-cert-renew.cron
 - 如果要同时支持 `www.wanderlust0736.top`，再加一条 `CNAME` 或 `A` 记录。
 - 当前仓库里的 Nginx 会把 `www.wanderlust0736.top` 永久重定向到 `wanderlust0736.top`。
 - 如果你希望 `https://www.wanderlust0736.top` 也能顺利跳转，证书里需要同时包含主域名和 `www` 子域名。
-- 如果需要在本机继续通过 `https://localhost` 联调，必须使用包含 `localhost` 的本地证书；正式云证书通常只覆盖真实域名。
+- 如果需要在本机继续通过 `https://localhost:8444` 联调，必须使用包含 `localhost` 的本地证书；正式云证书通常只覆盖真实域名。
 
 ## 后续可扩展方向
 
