@@ -50,13 +50,13 @@ func buildSearchSnippet(post Post, query string) *SearchSnippet {
 	}
 
 	sources := []searchSnippetSource{
-		{field: "summary", label: "摘要", text: post.Summary},
 		{field: "title", label: "标题", text: post.Title},
-		{field: "body", label: "正文", text: bodyPlainText(post.Body, post.BodyFormat)},
-		{field: "tags", label: "标签", text: strings.Join(post.Tags, " · ")},
-		{field: "category", label: "分类", text: post.Category},
 		{field: "author", label: "作者", text: post.Author},
 		{field: "slug", label: "Slug", text: post.Slug},
+		{field: "tags", label: "标签", text: strings.Join(post.Tags, " · ")},
+		{field: "summary", label: "摘要", text: post.Summary},
+		{field: "category", label: "分类", text: post.Category},
+		{field: "body", label: "正文", text: bodyPlainText(post.Body, post.BodyFormat)},
 	}
 
 	for _, source := range sources {
