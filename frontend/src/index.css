@@ -157,12 +157,66 @@ a {
 }
 
 .story-prose pre {
+  position: relative;
   overflow-x: auto;
   border-radius: 1.25rem;
   border: 1px solid rgba(36, 24, 15, 0.12);
   background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(247, 239, 228, 0.96));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  padding: 1rem 1.1rem;
+  padding: 3.2rem 1.1rem 1rem;
+}
+
+.story-prose .story-code-shell {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.story-prose .story-code-shell > pre {
+  margin: 0;
+}
+
+.story-prose .story-code-copy {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 1;
+  border: 1px solid rgba(36, 24, 15, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 251, 245, 0.88);
+  color: rgba(36, 24, 15, 0.88);
+  padding: 0.38rem 0.78rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 18px rgba(36, 24, 15, 0.08);
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.story-prose .story-code-copy:hover {
+  transform: translateY(-1px);
+  border-color: rgba(36, 24, 15, 0.22);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.story-prose .story-code-copy:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.45);
+  outline-offset: 2px;
+}
+
+.story-prose .story-code-copy[data-state="success"] {
+  border-color: rgba(15, 118, 110, 0.24);
+  background: rgba(15, 118, 110, 0.14);
+  color: #0f766e;
+}
+
+.story-prose .story-code-copy[data-state="error"] {
+  border-color: rgba(185, 28, 28, 0.2);
+  background: rgba(185, 28, 28, 0.1);
+  color: #b91c1c;
 }
 
 .story-prose pre code {
@@ -243,7 +297,14 @@ a {
   .story-prose pre {
     margin-inline: -0.25rem;
     border-radius: 1rem;
-    padding: 0.9rem 1rem;
+    padding: 3rem 1rem 0.9rem;
+  }
+
+  .story-prose .story-code-copy {
+    top: 0.75rem;
+    right: 0.75rem;
+    padding: 0.34rem 0.7rem;
+    font-size: 0.74rem;
   }
 
   .story-prose th,
