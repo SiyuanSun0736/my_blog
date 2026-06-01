@@ -66,6 +66,7 @@ export function PostPage() {
   const [post, setPost] = useState<Post | null>(null);
   const [postSummaries, setPostSummaries] = useState<PostSummary[]>([]);
   const [contentHeadings, setContentHeadings] = useState<PostHeading[]>([]);
+  const [activeHeadingId, setActiveHeadingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,6 +141,51 @@ export function PostPage() {
   const tableOfContents = post
     ? contentHeadings.filter((heading, index) => !(index === 0 && normalizeHeadingLabel(heading.text) === normalizeHeadingLabel(post.title)))
     : [];
+  const tableOfContentsSignature = tableOfContents.map((heading) => heading.id).join("|");
+
+  useEffect(() => {
+    if (tableOfContents.length === 0) {
+      setActiveHeadingId("");
+      return;
+    }
+
+    const headingIds = tableOfContents.map((heading) => heading.id);
+
+    function updateActiveHeadingFromHash() {
+      const hashId = decodeURIComponent(window.location.hash.slice(1));
+      if (hashId && headingIds.includes(hashId)) {
+        setActiveHeadingId(hashId);
+      }
+    }
+
+    function updateActiveHeading() {
+      const headings = headingIds
+        .map((id) => document.getElementById(id))
+        .filter((heading): heading is HTMLElement => Boolean(heading));
+
+      if (headings.length === 0) {
+        return;
+      }
+
+      const activeHeading = [...headings]
+        .reverse()
+        .find((heading) => heading.getBoundingClientRect().top <= 128);
+
+      setActiveHeadingId(activeHeading?.id ?? headings[0].id);
+    }
+
+    updateActiveHeadingFromHash();
+    updateActiveHeading();
+    window.addEventListener("scroll", updateActiveHeading, { passive: true });
+    window.addEventListener("resize", updateActiveHeading);
+    window.addEventListener("hashchange", updateActiveHeadingFromHash);
+
+    return () => {
+      window.removeEventListener("scroll", updateActiveHeading);
+      window.removeEventListener("resize", updateActiveHeading);
+      window.removeEventListener("hashchange", updateActiveHeadingFromHash);
+    };
+  }, [tableOfContentsSignature]);
 
   if (loading) {
     return (
@@ -364,7 +410,11 @@ export function PostPage() {
                       <li key={heading.id}>
                         <a
                           href={`#${heading.id}`}
-                          className={`block rounded-[0.9rem] px-3 py-2 text-sm leading-6 text-[var(--muted)] transition hover:bg-white/70 hover:text-[var(--ink)] ${tableOfContentsIndent(heading.level)}`}
+                          aria-current={activeHeadingId === heading.id ? "location" : undefined}
+                          onClick={() => setActiveHeadingId(heading.id)}
+                          className={`post-toc-link block rounded-[0.9rem] border px-3 py-2 text-sm leading-6 text-[var(--muted)] transition hover:bg-white/70 hover:text-[var(--ink)] ${tableOfContentsIndent(heading.level)} ${
+                            activeHeadingId === heading.id ? "post-toc-link-active" : "border-transparent"
+                          }`}
                         >
                           {heading.text}
                         </a>

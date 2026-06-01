@@ -1,10 +1,27 @@
 import { Chip } from "./ui";
 import { Outlet, Link, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 export function Shell() {
   const location = useLocation();
   const isHome = location.pathname === "/";
   const isArchive = location.pathname.startsWith("/archive");
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 360);
+    };
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <div className="page-shell text-[var(--ink)]">
@@ -55,6 +72,18 @@ export function Shell() {
         <div className="h-px w-full bg-black/10" />
         <p>Wanderlust 记录编译器、性能分析、深度学习工程、构建脚本和 Kubernetes 实践。</p>
       </footer>
+
+      <button
+        type="button"
+        aria-label="回到顶部"
+        title="回到顶部"
+        onClick={scrollToTop}
+        className={`fixed bottom-5 right-5 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-black/10 bg-[rgba(255,251,245,0.88)] text-2xl font-semibold leading-none text-[var(--ink)] shadow-[0_14px_36px_rgba(36,24,15,0.18)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:border-black/20 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(15,118,110,0.5)] sm:bottom-7 sm:right-7 ${
+          showBackToTop ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"
+        }`}
+      >
+        ↑
+      </button>
     </div>
   );
 }

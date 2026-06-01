@@ -370,6 +370,17 @@ a {
   max-height: min(24rem, calc(100svh - 14rem));
 }
 
+.post-toc-link {
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.post-toc-link-active {
+  border-color: rgba(15, 118, 110, 0.32);
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.12), 0 8px 18px rgba(36, 24, 15, 0.06);
+}
+
 @media (min-width: 1024px) {
   .sidebar-scroll {
     max-height: calc(100svh - 2.5rem);
