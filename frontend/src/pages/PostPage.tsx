@@ -349,7 +349,7 @@ export function PostPage() {
           </CardBody>
         </Card>
 
-        <aside className="post-side-rail space-y-4 self-start sm:space-y-5">
+        <aside className="post-side-rail sidebar-scroll space-y-4 self-start sm:space-y-5">
           {tableOfContents.length > 0 ? (
             <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
               <CardBody className="gap-4 p-4 sm:p-5">

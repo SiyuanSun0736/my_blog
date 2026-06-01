@@ -343,7 +343,37 @@ a {
   padding: 0.25rem 0;
 }
 
+.sidebar-scroll {
+  scrollbar-color: rgba(36, 24, 15, 0.28) rgba(255, 251, 245, 0.3);
+  scrollbar-width: thin;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 0.45rem;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 251, 245, 0.3);
+  border-radius: 999px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(36, 24, 15, 0.28);
+  border-radius: 999px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(36, 24, 15, 0.42);
+}
+
 @media (min-width: 1024px) {
+  .sidebar-scroll {
+    max-height: calc(100svh - 2.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.25rem;
+  }
+
   .post-side-rail {
     position: sticky;
     top: 1.25rem;

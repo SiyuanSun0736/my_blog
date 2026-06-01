@@ -407,7 +407,7 @@ export function ArchivePage() {
           ) : null}
         </div>
 
-        <aside className="space-y-5">
+        <aside className="sidebar-scroll space-y-5 self-start">
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
               <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Timeline Stats</p>
