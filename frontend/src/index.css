@@ -343,6 +343,17 @@ a {
   padding: 0.25rem 0;
 }
 
+@media (min-width: 1024px) {
+  .post-side-rail {
+    position: sticky;
+    top: 1.25rem;
+  }
+
+  .post-toc-list {
+    max-height: calc(100svh - 5rem);
+  }
+}
+
 @media (max-width: 639px) {
   .story-prose {
     gap: 1rem;
