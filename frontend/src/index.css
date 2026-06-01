@@ -14,6 +14,9 @@
   --page-gutter: clamp(1rem, 1.1vw + 0.8rem, 2.5rem);
   --shell-max-width: 100rem;
   --reading-max-width: 92rem;
+  --font-sans: "Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei UI", sans-serif;
+  --font-display: "Fraunces", "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  --font-mono: "SFMono-Regular", "SFMono", "Cascadia Code", "JetBrains Mono", "Sarasa Mono SC", "Noto Sans Mono CJK SC", "Source Han Mono SC", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
 * {
@@ -35,7 +38,7 @@ body {
     radial-gradient(circle at top right, rgba(15, 118, 110, 0.18), transparent 30%),
     linear-gradient(180deg, #faf6ef 0%, #f1e8db 100%);
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-sans);
 }
 
 body::before {
@@ -80,7 +83,7 @@ a {
 
 .display-type,
 .brand-wordmark {
-  font-family: "Fraunces", serif;
+  font-family: var(--font-display);
   letter-spacing: -0.04em;
 }
 
@@ -116,7 +119,7 @@ a {
 .story-prose h3,
 .story-prose h4 {
   color: var(--ink);
-  font-family: "Fraunces", serif;
+  font-family: var(--font-display);
   letter-spacing: -0.03em;
   line-height: 1.2;
   scroll-margin-top: 6.5rem;
@@ -247,7 +250,7 @@ a {
   background: transparent;
   padding: 0;
   color: rgba(36, 24, 15, 0.92);
-  font-family: "SFMono-Regular", "SFMono", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-family: var(--font-mono);
   line-height: 1.7;
 }
 
@@ -258,7 +261,7 @@ a {
 .story-prose pre code .hljs-comment,
 .story-prose pre code .hljs-quote {
   color: #6e7781;
-  font-style: italic;
+  font-style: normal;
 }
 
 .story-prose pre code .hljs-doctag,

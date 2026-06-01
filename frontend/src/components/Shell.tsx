@@ -8,7 +8,7 @@ export function Shell() {
 
   return (
     <div className="page-shell text-[var(--ink)]">
-      <header className="sticky top-0 z-20 border-b border-black/10 bg-[rgba(246,241,232,0.86)] backdrop-blur-xl">
+      <header className="border-b border-black/10 bg-[rgba(246,241,232,0.86)] backdrop-blur-xl">
         <div className="page-frame flex flex-col gap-4 py-4 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 max-w-2xl">
             <Link to="/" className="brand-wordmark text-2xl text-[var(--ink)]">
