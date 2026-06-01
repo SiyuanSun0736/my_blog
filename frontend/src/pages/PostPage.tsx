@@ -349,7 +349,7 @@ export function PostPage() {
           </CardBody>
         </Card>
 
-        <aside className="space-y-4 self-start sm:space-y-5 lg:sticky lg:top-24">
+        <aside className="space-y-4 self-start sm:space-y-5 lg:sticky lg:top-5">
           {tableOfContents.length > 0 ? (
             <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
               <CardBody className="gap-4 p-4 sm:p-5">
@@ -358,7 +358,7 @@ export function PostPage() {
                   <p className="text-sm leading-7 text-[var(--muted)]">点击标题可跳到正文对应位置。</p>
                 </div>
 
-                <nav aria-label="文章目录" className="max-h-[20rem] overflow-y-auto pr-1 sm:max-h-[24rem] lg:max-h-[calc(100svh-10rem)]">
+                <nav aria-label="文章目录" className="max-h-[20rem] overflow-y-auto pr-1 sm:max-h-[24rem] lg:max-h-[calc(100svh-5rem)]">
                   <ol className="space-y-1.5">
                     {tableOfContents.map((heading) => (
                       <li key={heading.id}>
