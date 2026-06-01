@@ -16,6 +16,70 @@ compose() {
   docker compose --env-file "$compose_env_file" "$@"
 }
 
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Required command not found: $1" >&2
+    exit 1
+  fi
+}
+
+service_container_id() {
+  compose ps -q "$1" 2>/dev/null | head -n 1
+}
+
+service_state() {
+  container_id=$(service_container_id "$1")
+  if [ -z "$container_id" ]; then
+    return 1
+  fi
+
+  docker inspect -f '{{.State.Status}}' "$container_id"
+}
+
+service_health() {
+  container_id=$(service_container_id "$1")
+  if [ -z "$container_id" ]; then
+    return 1
+  fi
+
+  docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id"
+}
+
+wait_for_service_ready() {
+  service_name="$1"
+  require_healthy="$2"
+  max_attempts="${3:-15}"
+  attempt=1
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    current_state=$(service_state "$service_name" 2>/dev/null || true)
+    current_health=$(service_health "$service_name" 2>/dev/null || true)
+
+    if [ "$current_state" = "running" ]; then
+      if [ "$require_healthy" -eq 0 ] || [ "$current_health" = "healthy" ] || [ "$current_health" = "none" ]; then
+        return 0
+      fi
+    fi
+
+    if [ "$attempt" -eq 1 ]; then
+      if [ "$require_healthy" -eq 1 ]; then
+        echo "Waiting for service '$service_name' to become healthy before backup..." >&2
+      else
+        echo "Waiting for service '$service_name' to be running before backup..." >&2
+      fi
+    fi
+
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+
+  current_state=$(service_state "$service_name" 2>/dev/null || true)
+  current_health=$(service_health "$service_name" 2>/dev/null || true)
+
+  echo "Service '$service_name' is not ready for backup (state=${current_state:-missing}, health=${current_health:-missing}). Start it first or rerun the deploy script with --skip-backup." >&2
+  exit 1
+}
+
 database="${MONGODB_DATABASE:-wanderlust}"
 backup_root="${BLOG_BACKUP_DIR:-$ROOT_DIR/backups/mongodb}"
 latest_backup_dir="${BLOG_LATEST_BACKUP_DIR:-$ROOT_DIR/backups/latest-mongodb}"
@@ -58,13 +122,31 @@ if [ "$latest_backup_dir" = "$backup_root" ]; then
   exit 1
 fi
 
+require_command docker
+
+wait_for_service_ready mongodb 1
+
+if [ "$media_service" != "mongodb" ]; then
+  wait_for_service_ready "$media_service" 0
+fi
+
 mkdir -p "$output_dir"
 
 echo "Creating MongoDB backup for database '$database'." >&2
 compose exec -T mongodb mongodump --archive --gzip --db "$database" > "$archive_file"
 
+if [ ! -s "$archive_file" ]; then
+  echo "MongoDB backup archive is empty: $archive_file" >&2
+  exit 1
+fi
+
 echo "Creating media backup from '$media_dir' via service '$media_service'." >&2
 compose exec -T "$media_service" sh -eu -c 'mkdir -p "$1"; tar -C "$1" -czf - .' sh "$media_dir" > "$media_archive_file"
+
+if [ ! -s "$media_archive_file" ]; then
+  echo "Media backup archive is empty: $media_archive_file" >&2
+  exit 1
+fi
 
 cat > "$metadata_file" <<EOF
 database=$database
