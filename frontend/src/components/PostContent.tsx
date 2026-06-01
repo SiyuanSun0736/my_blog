@@ -1,5 +1,19 @@
 import "katex/dist/katex.min.css";
-import rehypeHighlight from "rehype-highlight";
+import bash from "highlight.js/lib/languages/bash";
+import c from "highlight.js/lib/languages/c";
+import cpp from "highlight.js/lib/languages/cpp";
+import diff from "highlight.js/lib/languages/diff";
+import hljs from "highlight.js/lib/core";
+import ini from "highlight.js/lib/languages/ini";
+import javascript from "highlight.js/lib/languages/javascript";
+import json from "highlight.js/lib/languages/json";
+import makefile from "highlight.js/lib/languages/makefile";
+import plaintext from "highlight.js/lib/languages/plaintext";
+import python from "highlight.js/lib/languages/python";
+import rust from "highlight.js/lib/languages/rust";
+import typescript from "highlight.js/lib/languages/typescript";
+import xml from "highlight.js/lib/languages/xml";
+import yaml from "highlight.js/lib/languages/yaml";
 import rehypeKatex from "rehype-katex";
 import {
   isValidElement,
@@ -18,6 +32,51 @@ import type { BodyFormat } from "../types";
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
+
+const highlightLanguages = {
+  bash,
+  c,
+  cpp,
+  diff,
+  ini,
+  javascript,
+  json,
+  makefile,
+  plaintext,
+  python,
+  rust,
+  typescript,
+  xml,
+  yaml,
+};
+
+type HighlightLanguageName = keyof typeof highlightLanguages;
+
+const highlightLanguageAliases: Record<string, HighlightLanguageName> = {
+  "c++": "cpp",
+  html: "xml",
+  js: "javascript",
+  make: "makefile",
+  mk: "makefile",
+  py: "python",
+  rs: "rust",
+  sh: "bash",
+  shell: "bash",
+  svg: "xml",
+  text: "plaintext",
+  ts: "typescript",
+  txt: "plaintext",
+  yml: "yaml",
+  zsh: "bash",
+};
+
+Object.entries(highlightLanguages).forEach(([name, language]) => {
+  hljs.registerLanguage(name, language);
+});
+
+Object.entries(highlightLanguageAliases).forEach(([alias, languageName]) => {
+  hljs.registerLanguage(alias, highlightLanguages[languageName]);
+});
 
 export interface PostHeading {
   id: string;
@@ -142,6 +201,39 @@ function extractReactTextContent(value: ReactNode): string {
   return "";
 }
 
+function escapeHTML(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function resolveCodeLanguage(className?: string): HighlightLanguageName | undefined {
+  const match = className?.match(/language-([\w+-]+)/i);
+  if (!match) {
+    return undefined;
+  }
+
+  const normalizedName = match[1].toLowerCase();
+  if (normalizedName in highlightLanguages) {
+    return normalizedName as HighlightLanguageName;
+  }
+
+  return highlightLanguageAliases[normalizedName];
+}
+
+function highlightCode(source: string, language: HighlightLanguageName | undefined) {
+  if (!language) {
+    return escapeHTML(source);
+  }
+
+  try {
+    return hljs.highlight(source, { ignoreIllegals: true, language }).value;
+  } catch {
+    return escapeHTML(source);
+  }
+}
+
 function CopyCodeButton({ source }: { source: string }) {
   const [label, setLabel] = useState("复制");
   const [state, setState] = useState<"success" | "error" | undefined>(undefined);
@@ -200,6 +292,32 @@ type MarkdownPreProps = ComponentPropsWithoutRef<"pre"> & {
   node?: unknown;
   children?: ReactNode;
 };
+
+type MarkdownCodeProps = ComponentPropsWithoutRef<"code"> & {
+  inline?: boolean;
+  node?: unknown;
+};
+
+function MarkdownCode({ node: _node, children, className, inline, ...props }: MarkdownCodeProps) {
+  if (inline) {
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  }
+
+  const source = extractReactTextContent(children).replace(/\n$/, "");
+  const language = resolveCodeLanguage(className);
+
+  return (
+    <code
+      {...props}
+      className={cn("hljs", language ? `language-${language}` : undefined, className)}
+      dangerouslySetInnerHTML={{ __html: highlightCode(source, language) }}
+    />
+  );
+}
 
 function MarkdownPre({ node: _node, children, ...props }: MarkdownPreProps) {
   return (
@@ -299,8 +417,8 @@ export function PostContent({ body, bodyFormat = "markdown", className, onHeadin
   return (
     <div ref={contentRef} className={cn("story-prose", className)}>
       <ReactMarkdown
-        components={{ pre: MarkdownPre }}
-        rehypePlugins={[rehypeKatex, [rehypeHighlight, { ignoreMissing: true }]]}
+        components={{ code: MarkdownCode, pre: MarkdownPre }}
+        rehypePlugins={[rehypeKatex]}
         remarkPlugins={[remarkMath, remarkGfm]}
       >
         {body}
