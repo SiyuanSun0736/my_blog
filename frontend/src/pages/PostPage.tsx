@@ -1,9 +1,13 @@
 import { Avatar, Card, CardBody, Chip, Divider, Spinner } from "../components/ui";
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { PostContent, type PostHeading } from "../components/PostContent";
+import type { PostHeading } from "../components/PostContent";
 import { fetchPost, fetchPosts } from "../lib/api";
 import type { Post, PostSummary } from "../types";
+
+const PostContent = lazy(() =>
+  import("../components/PostContent").then((module) => ({ default: module.PostContent })),
+);
 
 function sortPostsByDate(posts: PostSummary[]) {
   return [...posts].sort(
@@ -232,7 +236,15 @@ export function PostPage() {
       <div className="grid gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_clamp(16rem,26vw,19rem)]">
         <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
           <CardBody className="space-y-6 p-4 sm:space-y-8 sm:p-7 lg:p-8 xl:p-10">
-            <PostContent body={post.body} bodyFormat={post.bodyFormat} onHeadingsChange={setContentHeadings} />
+            <Suspense
+              fallback={
+                <div className="flex min-h-[16rem] items-center justify-center rounded-[1.5rem] border border-black/10 bg-white/50">
+                  <Spinner color="secondary" label="正在加载正文渲染器" labelColor="secondary" />
+                </div>
+              }
+            >
+              <PostContent body={post.body} bodyFormat={post.bodyFormat} onHeadingsChange={setContentHeadings} />
+            </Suspense>
 
             <Divider />
 
