@@ -84,29 +84,42 @@ export function PostPage() {
 
     setLoading(true);
     setError(null);
+    setPost(null);
     setContentHeadings([]);
-    Promise.allSettled([fetchPost(slug), fetchPosts()])
-      .then(([postResult, postsResult]) => {
-        if (cancelled) {
-          return;
+    fetchPost(slug)
+      .then((value) => {
+        if (!cancelled) {
+          setPost(value);
         }
-
-        if (postResult.status === "fulfilled") {
-          setPost(postResult.value);
-        } else {
-          const requestError = postResult.reason;
+      })
+      .catch((requestError) => {
+        if (!cancelled) {
           setError(requestError instanceof Error ? requestError.message : "文章加载失败");
-        }
-
-        if (postsResult.status === "fulfilled") {
-          setPostSummaries(postsResult.value);
-        } else {
-          setPostSummaries([]);
         }
       })
       .finally(() => {
         if (!cancelled) {
           setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchPosts()
+      .then((value) => {
+        if (!cancelled) {
+          setPostSummaries(value);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPostSummaries([]);
         }
       });
 
@@ -216,7 +229,7 @@ export function PostPage() {
         </div>
       </div>
 
-      <div className="grid gap-5 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_clamp(16rem,21vw,19rem)]">
+      <div className="grid gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_clamp(16rem,26vw,19rem)]">
         <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
           <CardBody className="space-y-6 p-4 sm:space-y-8 sm:p-7 lg:p-8 xl:p-10">
             <PostContent body={post.body} bodyFormat={post.bodyFormat} onHeadingsChange={setContentHeadings} />
@@ -324,7 +337,7 @@ export function PostPage() {
           </CardBody>
         </Card>
 
-        <aside className="space-y-4 self-start sm:space-y-5 xl:sticky xl:top-24 xl:max-h-[calc(100svh-7.5rem)] xl:overflow-y-auto xl:pr-1">
+        <aside className="space-y-4 self-start sm:space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100svh-7.5rem)] lg:overflow-y-auto lg:pr-1">
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardBody className="gap-4 p-4 sm:p-5">
               <div className="space-y-2">
@@ -335,7 +348,7 @@ export function PostPage() {
               </div>
 
               {tableOfContents.length > 0 ? (
-                <nav aria-label="文章目录" className="max-h-[20rem] overflow-y-auto pr-1 sm:max-h-[24rem] xl:max-h-[calc(100svh-10rem)]">
+                <nav aria-label="文章目录" className="max-h-[20rem] overflow-y-auto pr-1 sm:max-h-[24rem] lg:max-h-[calc(100svh-10rem)]">
                   <ol className="space-y-1.5">
                     {tableOfContents.map((heading) => (
                       <li key={heading.id}>

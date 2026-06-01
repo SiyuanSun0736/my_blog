@@ -1549,7 +1549,7 @@ export function WritePage() {
 
   if (!accessVerified) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_clamp(16rem,25vw,19rem)]">
         <Card className="overflow-hidden border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
           <div className="h-3 w-full bg-[linear-gradient(90deg,#0f766e_0%,#f59e0b_100%)]" />
           <CardHeader className="flex flex-col items-start gap-4 px-6 pb-0 pt-6 sm:px-8 sm:pt-8">
@@ -1625,6 +1625,44 @@ export function WritePage() {
             </div>
           </CardBody>
         </Card>
+
+        <aside className="space-y-5 self-start lg:sticky lg:top-24 lg:max-h-[calc(100svh-7.5rem)] lg:overflow-y-auto lg:pr-1">
+          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
+            <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
+              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Access Guide</p>
+              <h2 className="display-type text-3xl text-[var(--ink)]">进入前说明</h2>
+            </CardHeader>
+            <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm leading-7 text-[var(--muted)]">
+              <p>这里不向访客暴露写作入口，只接受服务端配置的 BLOG_WRITE_TOKEN。</p>
+              <p>验证成功后会解锁文章列表、批量操作、编辑、删除、置顶和 Markdown/HTML 导入。</p>
+              <p>令牌只保存在当前浏览器会话；关闭会话或手动退出后，需要重新验证。</p>
+            </CardBody>
+          </Card>
+
+          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
+            <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
+              <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Public Routes</p>
+              <h2 className="display-type text-3xl text-[var(--ink)]">公开入口</h2>
+            </CardHeader>
+            <CardBody className="gap-3 px-5 pb-5 pt-4 text-sm leading-7 text-[var(--muted)]">
+              <p>后台未解锁时，仍然可以从公开入口回看首页、归档和已发布正文。</p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  to="/"
+                  className="inline-flex rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+                >
+                  首页
+                </Link>
+                <Link
+                  to="/archive"
+                  className="inline-flex rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+                >
+                  归档
+                </Link>
+              </div>
+            </CardBody>
+          </Card>
+        </aside>
       </div>
     );
   }
@@ -1657,12 +1695,12 @@ export function WritePage() {
         </Card>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_380px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_380px]">
         <Card className="overflow-hidden border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
           <div className="h-3 w-full bg-[linear-gradient(90deg,#0f766e_0%,#f59e0b_100%)]" />
           <CardHeader className="flex flex-col items-start gap-4 px-6 pb-0 pt-6 sm:px-8 sm:pt-8">
             <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Admin Workspace</p>
-            <div className="flex w-full flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl space-y-4">
                 <h1 className="display-type text-4xl leading-none text-[var(--ink)] sm:text-5xl">
                   {isEditing ? "编辑现有文章" : "新建后台内容"}
@@ -2103,7 +2141,7 @@ export function WritePage() {
           </CardBody>
         </Card>
 
-        <aside className="space-y-5">
+        <aside className="space-y-5 self-start lg:sticky lg:top-24 lg:max-h-[calc(100svh-7.5rem)] lg:overflow-y-auto lg:pr-1">
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
               <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Content List</p>
