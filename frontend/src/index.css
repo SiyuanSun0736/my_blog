@@ -366,6 +366,10 @@ a {
   background: rgba(36, 24, 15, 0.42);
 }
 
+.post-toc-list {
+  max-height: min(24rem, calc(100svh - 14rem));
+}
+
 @media (min-width: 1024px) {
   .sidebar-scroll {
     max-height: calc(100svh - 2.5rem);
@@ -380,7 +384,7 @@ a {
   }
 
   .post-toc-list {
-    max-height: calc(100svh - 5rem);
+    max-height: calc(100svh - 11rem);
   }
 }
 
