@@ -382,6 +382,12 @@ a {
 }
 
 @media (min-width: 1024px) {
+  .admin-side-rail {
+    position: sticky;
+    top: 1.25rem;
+    max-height: calc(100svh - 5rem);
+  }
+
   .sidebar-scroll {
     max-height: calc(100svh - 2.5rem);
     overflow-y: auto;

@@ -2141,7 +2141,7 @@ export function WritePage() {
           </CardBody>
         </Card>
 
-        <aside className="space-y-5 self-start lg:sticky lg:top-24 lg:max-h-[calc(100svh-7.5rem)] lg:overflow-y-auto lg:pr-1">
+        <aside className="admin-side-rail space-y-5 self-start lg:overflow-y-auto lg:pr-1">
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
               <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Content List</p>
