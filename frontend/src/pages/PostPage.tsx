@@ -350,16 +350,14 @@ export function PostPage() {
         </Card>
 
         <aside className="space-y-4 self-start sm:space-y-5 lg:sticky lg:top-24">
-          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
-            <CardBody className="gap-4 p-4 sm:p-5">
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">目录</p>
-                <p className="text-sm leading-7 text-[var(--muted)]">
-                  {tableOfContents.length > 0 ? "点击标题可跳到正文对应位置。" : "本篇正文没有可提取的章节标题。"}
-                </p>
-              </div>
+          {tableOfContents.length > 0 ? (
+            <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
+              <CardBody className="gap-4 p-4 sm:p-5">
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">目录</p>
+                  <p className="text-sm leading-7 text-[var(--muted)]">点击标题可跳到正文对应位置。</p>
+                </div>
 
-              {tableOfContents.length > 0 ? (
                 <nav aria-label="文章目录" className="max-h-[20rem] overflow-y-auto pr-1 sm:max-h-[24rem] lg:max-h-[calc(100svh-10rem)]">
                   <ol className="space-y-1.5">
                     {tableOfContents.map((heading) => (
@@ -374,9 +372,9 @@ export function PostPage() {
                     ))}
                   </ol>
                 </nav>
-              ) : null}
-            </CardBody>
-          </Card>
+              </CardBody>
+            </Card>
+          ) : null}
 
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardBody className="gap-3 p-4 sm:p-5">
