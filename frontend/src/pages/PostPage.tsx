@@ -176,7 +176,9 @@ export function PostPage() {
     }
 
     updateActiveHeadingFromHash();
-    updateActiveHeading();
+    if (!window.location.hash) {
+      updateActiveHeading();
+    }
     window.addEventListener("scroll", updateActiveHeading, { passive: true });
     window.addEventListener("resize", updateActiveHeading);
     window.addEventListener("hashchange", updateActiveHeadingFromHash);
@@ -204,15 +206,9 @@ export function PostPage() {
     const containerRect = container.getBoundingClientRect();
     const linkRect = activeLink.getBoundingClientRect();
     const scrollPadding = 12;
+    const targetScrollTop = container.scrollTop + linkRect.top - containerRect.top - scrollPadding;
 
-    if (linkRect.top < containerRect.top + scrollPadding) {
-      container.scrollTop -= containerRect.top + scrollPadding - linkRect.top;
-      return;
-    }
-
-    if (linkRect.bottom > containerRect.bottom - scrollPadding) {
-      container.scrollTop += linkRect.bottom - containerRect.bottom + scrollPadding;
-    }
+    container.scrollTop = Math.max(0, targetScrollTop);
   }, [activeHeadingId]);
 
   if (loading) {
