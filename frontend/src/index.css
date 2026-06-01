@@ -11,6 +11,9 @@
   --panel-strong: rgba(255, 248, 239, 0.92);
   --ink: #24180f;
   --muted: #625244;
+  --page-gutter: clamp(1rem, 1.1vw + 0.8rem, 2.5rem);
+  --shell-max-width: 100rem;
+  --reading-max-width: 92rem;
 }
 
 * {
@@ -54,6 +57,25 @@ a {
 
 #root {
   min-height: 100vh;
+}
+
+.page-shell {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+.page-frame,
+.reading-frame {
+  width: calc(100% - (var(--page-gutter) * 2));
+  margin-inline: auto;
+}
+
+.page-frame {
+  max-width: var(--shell-max-width);
+}
+
+.reading-frame {
+  max-width: var(--reading-max-width);
 }
 
 .display-type,
@@ -225,7 +247,68 @@ a {
   background: transparent;
   padding: 0;
   color: rgba(36, 24, 15, 0.92);
+  font-family: "SFMono-Regular", "SFMono", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
   line-height: 1.7;
+}
+
+.story-prose pre code.hljs {
+  color: #24292f;
+}
+
+.story-prose pre code .hljs-comment,
+.story-prose pre code .hljs-quote {
+  color: #6e7781;
+  font-style: italic;
+}
+
+.story-prose pre code .hljs-doctag,
+.story-prose pre code .hljs-formula,
+.story-prose pre code .hljs-keyword,
+.story-prose pre code .hljs-name,
+.story-prose pre code .hljs-selector-tag {
+  color: #cf222e;
+}
+
+.story-prose pre code .hljs-built_in,
+.story-prose pre code .hljs-builtin-name,
+.story-prose pre code .hljs-title,
+.story-prose pre code .hljs-type {
+  color: #8250df;
+}
+
+.story-prose pre code .hljs-attr,
+.story-prose pre code .hljs-attribute,
+.story-prose pre code .hljs-meta,
+.story-prose pre code .hljs-selector-id,
+.story-prose pre code .hljs-selector-class,
+.story-prose pre code .hljs-variable,
+.story-prose pre code .hljs-template-variable {
+  color: #953800;
+}
+
+.story-prose pre code .hljs-number,
+.story-prose pre code .hljs-literal,
+.story-prose pre code .hljs-symbol,
+.story-prose pre code .hljs-bullet {
+  color: #0550ae;
+}
+
+.story-prose pre code .hljs-string,
+.story-prose pre code .hljs-regexp,
+.story-prose pre code .hljs-addition {
+  color: #116329;
+}
+
+.story-prose pre code .hljs-deletion {
+  color: #82071e;
+}
+
+.story-prose pre code .hljs-emphasis {
+  font-style: italic;
+}
+
+.story-prose pre code .hljs-strong {
+  font-weight: 700;
 }
 
 .story-prose table {

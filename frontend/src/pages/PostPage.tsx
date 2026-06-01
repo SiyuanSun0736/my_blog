@@ -146,22 +146,22 @@ export function PostPage() {
   }
 
   return (
-    <article className="mx-auto max-w-5xl space-y-6 sm:space-y-8">
+    <article className="reading-frame space-y-5 sm:space-y-8">
       <div className="space-y-4 sm:space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link to="/" className="inline-flex text-sm font-medium text-[var(--muted)] transition hover:text-[var(--ink)]">
             返回首页文章流
           </Link>
           <a
             href={`/posts/${post.slug}/pdf`}
-            className="inline-flex rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+            className="inline-flex w-full justify-center rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70 sm:w-auto"
           >
             下载 PDF
           </a>
         </div>
         <div className="overflow-hidden rounded-[1.75rem] border border-black/10 bg-[var(--panel-strong)] shadow-[0_22px_60px_rgba(77,53,35,0.12)] sm:rounded-[2.25rem] sm:shadow-[0_32px_100px_rgba(77,53,35,0.12)]">
           <div className="h-3 w-full sm:h-4" style={{ background: post.accent }} />
-          <div className="space-y-6 px-4 py-5 sm:space-y-8 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+          <div className="space-y-5 px-4 py-5 sm:space-y-7 sm:px-6 sm:py-6 lg:px-8 lg:py-8 xl:px-10 xl:py-10">
             <div className="space-y-4">
               <p className="text-xs uppercase tracking-[0.32em] text-[var(--muted)]">Wanderlust Notes</p>
               <div className="flex flex-wrap gap-2">
@@ -180,15 +180,15 @@ export function PostPage() {
                 ))}
               </div>
 
-              <h1 className="display-type max-w-4xl text-[2.15rem] leading-[1.08] text-[var(--ink)] sm:text-5xl sm:leading-tight lg:text-6xl">
+              <h1 className="display-type max-w-5xl text-[clamp(2rem,5.8vw,4.6rem)] leading-[1.02] text-[var(--ink)] sm:leading-[1.06]">
                 {post.title}
               </h1>
-              <p className="max-w-3xl text-[0.98rem] leading-7 text-[var(--muted)] sm:text-lg sm:leading-8">
+              <p className="max-w-3xl text-base leading-7 text-[var(--muted)] sm:text-lg sm:leading-8">
                 {post.summary}
               </p>
             </div>
 
-            <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_clamp(16rem,24vw,20rem)]">
               <div className="grid gap-4 rounded-[1.35rem] border border-black/10 bg-white/65 p-4 sm:rounded-[1.75rem] sm:p-5 sm:grid-cols-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">发布时间</p>
@@ -216,9 +216,9 @@ export function PostPage() {
         </div>
       </div>
 
-      <div className="grid gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid gap-5 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_clamp(16rem,21vw,19rem)]">
         <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
-          <CardBody className="space-y-7 p-4 sm:space-y-8 sm:p-8 lg:p-10">
+          <CardBody className="space-y-6 p-4 sm:space-y-8 sm:p-7 lg:p-8 xl:p-10">
             <PostContent body={post.body} bodyFormat={post.bodyFormat} onHeadingsChange={setContentHeadings} />
 
             <Divider />
@@ -324,7 +324,7 @@ export function PostPage() {
           </CardBody>
         </Card>
 
-        <aside className="space-y-4 self-start sm:space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7.5rem)] lg:overflow-y-auto lg:pr-1">
+        <aside className="space-y-4 self-start sm:space-y-5 xl:sticky xl:top-24 xl:max-h-[calc(100svh-7.5rem)] xl:overflow-y-auto xl:pr-1">
           <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
             <CardBody className="gap-4 p-4 sm:p-5">
               <div className="space-y-2">
@@ -335,7 +335,7 @@ export function PostPage() {
               </div>
 
               {tableOfContents.length > 0 ? (
-                <nav aria-label="文章目录" className="max-h-[calc(100vh-9rem)] overflow-y-auto pr-1">
+                <nav aria-label="文章目录" className="max-h-[20rem] overflow-y-auto pr-1 sm:max-h-[24rem] xl:max-h-[calc(100svh-10rem)]">
                   <ol className="space-y-1.5">
                     {tableOfContents.map((heading) => (
                       <li key={heading.id}>

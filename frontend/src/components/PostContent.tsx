@@ -1,3 +1,4 @@
+import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import {
   isValidElement,
@@ -296,7 +297,11 @@ export function PostContent({ body, bodyFormat = "markdown", className, onHeadin
 
   return (
     <div ref={contentRef} className={cn("story-prose", className)}>
-      <ReactMarkdown components={{ pre: MarkdownPre }} rehypePlugins={[rehypeKatex]} remarkPlugins={[remarkMath, remarkGfm]}>
+      <ReactMarkdown
+        components={{ pre: MarkdownPre }}
+        rehypePlugins={[rehypeKatex, [rehypeHighlight, { ignoreMissing: true }]]}
+        remarkPlugins={[remarkMath, remarkGfm]}
+      >
         {body}
       </ReactMarkdown>
     </div>

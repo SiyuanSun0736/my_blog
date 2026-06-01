@@ -7,19 +7,19 @@ export function Shell() {
   const isArchive = location.pathname.startsWith("/archive");
 
   return (
-    <div className="page-shell min-h-screen text-[var(--ink)]">
+    <div className="page-shell text-[var(--ink)]">
       <header className="sticky top-0 z-20 border-b border-black/10 bg-[rgba(246,241,232,0.86)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <div>
+        <div className="page-frame flex flex-col gap-4 py-4 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 max-w-2xl">
             <Link to="/" className="brand-wordmark text-2xl text-[var(--ink)]">
               Wanderlust
             </Link>
-            <p className="mt-1 text-sm text-[var(--muted)]">
+            <p className="mt-1 max-w-[34rem] text-sm leading-6 text-[var(--muted)]">
               编译器、性能与系统工程笔记。
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 lg:w-auto lg:justify-end">
             <Chip color="warning" variant="flat" className="hidden sm:inline-flex">
               长期更新中
             </Chip>
@@ -27,8 +27,8 @@ export function Shell() {
               to="/"
               className={
                 isHome
-                  ? "rounded-full bg-[var(--ink)] px-5 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5"
-                  : "rounded-full border border-black/10 px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+                  ? "inline-flex flex-1 justify-center rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 sm:flex-none sm:px-5"
+                  : "inline-flex flex-1 justify-center rounded-full border border-black/10 px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70 sm:flex-none sm:px-5"
               }
             >
               文章
@@ -37,8 +37,8 @@ export function Shell() {
               to="/archive"
               className={
                 isArchive
-                  ? "rounded-full bg-[var(--ink)] px-5 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5"
-                  : "rounded-full border border-black/10 px-5 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+                  ? "inline-flex flex-1 justify-center rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 sm:flex-none sm:px-5"
+                  : "inline-flex flex-1 justify-center rounded-full border border-black/10 px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70 sm:flex-none sm:px-5"
               }
             >
               归档
@@ -47,11 +47,11 @@ export function Shell() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+      <main className="page-frame py-6 sm:py-8 lg:py-10 xl:py-12">
         <Outlet />
       </main>
 
-      <footer className="mx-auto flex max-w-6xl flex-col gap-3 px-4 pb-10 pt-2 text-sm text-[var(--muted)] sm:px-6 lg:px-8">
+      <footer className="page-frame flex flex-col gap-3 pb-8 pt-2 text-sm text-[var(--muted)] sm:pb-10">
         <div className="h-px w-full bg-black/10" />
         <p>Wanderlust 记录编译器、性能分析、深度学习工程、构建脚本和 Kubernetes 实践。</p>
       </footer>
