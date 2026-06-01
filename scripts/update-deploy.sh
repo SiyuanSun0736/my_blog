@@ -105,6 +105,31 @@ compose() {
   docker compose --env-file "$compose_env_file" "$@"
 }
 
+service_container_id() {
+  compose ps -q "$1" 2>/dev/null | head -n 1
+}
+
+service_running() {
+  container_id=$(service_container_id "$1")
+  if [ -z "$container_id" ]; then
+    return 1
+  fi
+
+  [ "$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)" = "running" ]
+}
+
+backup_services_running() {
+  backup_media_service="${BLOG_MEDIA_BACKUP_SERVICE:-blog-api}"
+
+  service_running mongodb || return 1
+
+  if [ "$backup_media_service" = "mongodb" ]; then
+    return 0
+  fi
+
+  service_running "$backup_media_service"
+}
+
 ensure_compose_available() {
   if ! docker compose version >/dev/null 2>&1; then
     echo "docker compose is not available." >&2
@@ -189,7 +214,11 @@ fi
 
 if [ "$skip_backup" -eq 0 ]; then
   announce_step "Backing up MongoDB before update..."
-  ./scripts/backup-mongodb.sh
+  if backup_services_running; then
+    ./scripts/backup-mongodb.sh
+  else
+    echo "Skipping backup because mongodb or ${BLOG_MEDIA_BACKUP_SERVICE:-blog-api} is not currently running. Start the stack first if you need a fresh backup before deploy." >&2
+  fi
 fi
 
 announce_step "Stopping running containers before deploy..."
