@@ -1,5 +1,5 @@
 import { Avatar, Card, CardBody, Chip, Divider, Spinner } from "../components/ui";
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { PostHeading } from "../components/PostContent";
 import { fetchPost, fetchPosts } from "../lib/api";
@@ -69,6 +69,7 @@ export function PostPage() {
   const [activeHeadingId, setActiveHeadingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const tableOfContentsRef = useRef<HTMLElement | null>(null);
 
   function formatPublishDate(dateString: string) {
     const date = new Date(dateString);
@@ -186,6 +187,33 @@ export function PostPage() {
       window.removeEventListener("hashchange", updateActiveHeadingFromHash);
     };
   }, [tableOfContentsSignature]);
+
+  useEffect(() => {
+    if (!activeHeadingId || !tableOfContentsRef.current) {
+      return;
+    }
+
+    const container = tableOfContentsRef.current;
+    const activeLink = Array.from(container.querySelectorAll<HTMLAnchorElement>("[data-toc-id]"))
+      .find((link) => link.dataset.tocId === activeHeadingId);
+
+    if (!activeLink) {
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const linkRect = activeLink.getBoundingClientRect();
+    const scrollPadding = 12;
+
+    if (linkRect.top < containerRect.top + scrollPadding) {
+      container.scrollTop -= containerRect.top + scrollPadding - linkRect.top;
+      return;
+    }
+
+    if (linkRect.bottom > containerRect.bottom - scrollPadding) {
+      container.scrollTop += linkRect.bottom - containerRect.bottom + scrollPadding;
+    }
+  }, [activeHeadingId]);
 
   if (loading) {
     return (
@@ -404,12 +432,13 @@ export function PostPage() {
                   <p className="text-sm leading-7 text-[var(--muted)]">点击标题可跳到正文对应位置。</p>
                 </div>
 
-                <nav aria-label="文章目录" className="post-toc-list overflow-y-auto pr-1">
+                <nav ref={tableOfContentsRef} aria-label="文章目录" className="post-toc-list overflow-y-auto pr-1">
                   <ol className="space-y-1.5">
                     {tableOfContents.map((heading) => (
                       <li key={heading.id}>
                         <a
                           href={`#${heading.id}`}
+                          data-toc-id={heading.id}
                           aria-current={activeHeadingId === heading.id ? "location" : undefined}
                           onClick={() => setActiveHeadingId(heading.id)}
                           className={`post-toc-link block rounded-[0.9rem] border px-3 py-2 text-sm leading-6 text-[var(--muted)] transition hover:bg-white/70 hover:text-[var(--ink)] ${tableOfContentsIndent(heading.level)} ${
