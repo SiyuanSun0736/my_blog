@@ -19,6 +19,79 @@ export function Shell() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    let stableScrollTop = window.scrollY;
+    let viewportWidth = window.innerWidth;
+    let viewportHeight = window.innerHeight;
+    let isResizing = false;
+    let resizeFrame: number | null = null;
+    let releaseTimer: number | null = null;
+
+    const getScroller = () => document.scrollingElement ?? document.documentElement;
+
+    const restoreScrollTop = () => {
+      const scroller = getScroller();
+      const maxScrollTop = Math.max(0, scroller.scrollHeight - window.innerHeight);
+      const nextScrollTop = Math.min(stableScrollTop, maxScrollTop);
+
+      if (Math.abs(window.scrollY - nextScrollTop) <= 1) {
+        return;
+      }
+
+      window.scrollTo({ top: nextScrollTop, left: window.scrollX, behavior: "auto" });
+      scroller.scrollTop = nextScrollTop;
+    };
+
+    const handleStableScroll = () => {
+      if (isResizing || window.innerWidth !== viewportWidth || window.innerHeight !== viewportHeight) {
+        return;
+      }
+
+      stableScrollTop = window.scrollY;
+    };
+
+    const handleResize = () => {
+      isResizing = true;
+      viewportWidth = window.innerWidth;
+      viewportHeight = window.innerHeight;
+
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
+
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = null;
+        restoreScrollTop();
+      });
+
+      if (releaseTimer !== null) {
+        window.clearTimeout(releaseTimer);
+      }
+
+      releaseTimer = window.setTimeout(() => {
+        restoreScrollTop();
+        isResizing = false;
+        stableScrollTop = window.scrollY;
+      }, 180);
+    };
+
+    window.addEventListener("scroll", handleStableScroll, { passive: true });
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
+
+      if (releaseTimer !== null) {
+        window.clearTimeout(releaseTimer);
+      }
+
+      window.removeEventListener("scroll", handleStableScroll);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
