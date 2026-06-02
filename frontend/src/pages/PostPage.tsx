@@ -180,12 +180,10 @@ export function PostPage() {
       updateActiveHeading();
     }
     window.addEventListener("scroll", updateActiveHeading, { passive: true });
-    window.addEventListener("resize", updateActiveHeading);
     window.addEventListener("hashchange", updateActiveHeadingFromHash);
 
     return () => {
       window.removeEventListener("scroll", updateActiveHeading);
-      window.removeEventListener("resize", updateActiveHeading);
       window.removeEventListener("hashchange", updateActiveHeadingFromHash);
     };
   }, [tableOfContentsSignature]);
