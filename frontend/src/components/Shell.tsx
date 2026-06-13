@@ -1,4 +1,5 @@
 import { Chip } from "./ui";
+import { LiquidGlassShaderLayer } from "./LiquidGlassShaderLayer";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -13,11 +14,11 @@ const GLASS_COLOR_MODE_STORAGE_KEY = "wanderlust-glass-color-mode";
 const DEFAULT_GLASS_HUE = 105;
 const GLASS_MENU_WIDTH = 336;
 const WALLPAPERS = [
-  { label: "壁纸 1", value: "07905b16e08767c9cc4719f0266b004b" },
-  { label: "壁纸 2", value: "4bdca906a520689e14a45007951472b6" },
-  { label: "壁纸 3", value: "7d47b283a1c99e02de58af14a5032f4f" },
-  { label: "壁纸 4", value: "9eb477638edf0a072a3ff4bdf9734880" },
-  { label: "壁纸 5", value: "d4fcc05bd8205c41fbe4f2645bf0c6b8" },
+  { label: "壁纸 1", value: "07905b16e08767c9cc4719f0266b004b", ambience: "148 200 77" },
+  { label: "壁纸 2", value: "4bdca906a520689e14a45007951472b6", ambience: "143 208 220" },
+  { label: "壁纸 3", value: "7d47b283a1c99e02de58af14a5032f4f", ambience: "199 174 232" },
+  { label: "壁纸 4", value: "9eb477638edf0a072a3ff4bdf9734880", ambience: "245 184 203" },
+  { label: "壁纸 5", value: "d4fcc05bd8205c41fbe4f2645bf0c6b8", ambience: "87 143 224" },
 ];
 
 function resolveStoredTheme(): ThemeMode {
@@ -80,7 +81,10 @@ export function Shell() {
   }, [themeMode]);
 
   useEffect(() => {
+    const wallpaper = WALLPAPERS.find((item) => item.value === glassWallpaper) ?? WALLPAPERS[0];
+
     document.documentElement.style.setProperty("--glass-wallpaper-image", `url("/wallpaper/optimized/${glassWallpaper}.webp")`);
+    document.documentElement.style.setProperty("--glass-ambient-rgb", wallpaper.ambience);
     window.localStorage.setItem(GLASS_WALLPAPER_STORAGE_KEY, glassWallpaper);
   }, [glassWallpaper]);
 
@@ -250,6 +254,7 @@ export function Shell() {
 
   return (
     <div className="page-shell text-[var(--ink)]">
+      <LiquidGlassShaderLayer />
       <header className="site-header border-b border-black/10">
         <div className="page-frame flex flex-col gap-4 py-4 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
           <Link to="/" className="brand-card liquid-glass-card">
