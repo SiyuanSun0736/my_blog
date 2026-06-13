@@ -4,14 +4,26 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
-type ThemeMode = "solid" | "liquid-glass";
+type ThemeMode = "solid" | "liquid-glass" | "frosted-glass";
 type GlassColorMode = "color" | "white";
+type GlassShaderEffects = {
+  fluid: boolean;
+  cursor: boolean;
+  ripple: boolean;
+};
 
 const THEME_STORAGE_KEY = "wanderlust-theme";
 const GLASS_WALLPAPER_STORAGE_KEY = "wanderlust-glass-wallpaper";
 const GLASS_HUE_STORAGE_KEY = "wanderlust-glass-hue";
 const GLASS_COLOR_MODE_STORAGE_KEY = "wanderlust-glass-color-mode";
+const GLASS_SHADER_EFFECTS_STORAGE_KEY = "wanderlust-glass-shader-effects";
+const DEFAULT_SOLID_HUE = 32;
 const DEFAULT_GLASS_HUE = 105;
+const DEFAULT_GLASS_SHADER_EFFECTS: GlassShaderEffects = {
+  fluid: true,
+  cursor: true,
+  ripple: true,
+};
 const GLASS_MENU_WIDTH = 336;
 const WALLPAPERS = [
   { label: "壁纸 1", value: "07905b16e08767c9cc4719f0266b004b", ambience: "148 200 77" },
@@ -26,7 +38,8 @@ function resolveStoredTheme(): ThemeMode {
     return "solid";
   }
 
-  return window.localStorage.getItem(THEME_STORAGE_KEY) === "liquid-glass" ? "liquid-glass" : "solid";
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return storedTheme === "liquid-glass" || storedTheme === "frosted-glass" ? storedTheme : "solid";
 }
 
 function resolveStoredWallpaper() {
@@ -60,6 +73,23 @@ function resolveStoredGlassColorMode(): GlassColorMode {
   return window.localStorage.getItem(GLASS_COLOR_MODE_STORAGE_KEY) === "white" ? "white" : "color";
 }
 
+function resolveStoredGlassShaderEffects(): GlassShaderEffects {
+  if (typeof window === "undefined") {
+    return DEFAULT_GLASS_SHADER_EFFECTS;
+  }
+
+  try {
+    const storedEffects = JSON.parse(window.localStorage.getItem(GLASS_SHADER_EFFECTS_STORAGE_KEY) ?? "{}") as Partial<GlassShaderEffects>;
+    return {
+      fluid: typeof storedEffects.fluid === "boolean" ? storedEffects.fluid : true,
+      cursor: typeof storedEffects.cursor === "boolean" ? storedEffects.cursor : true,
+      ripple: typeof storedEffects.ripple === "boolean" ? storedEffects.ripple : true,
+    };
+  } catch {
+    return DEFAULT_GLASS_SHADER_EFFECTS;
+  }
+}
+
 export function Shell() {
   const location = useLocation();
   const isHome = location.pathname === "/";
@@ -69,14 +99,16 @@ export function Shell() {
   const [glassWallpaper, setGlassWallpaper] = useState(resolveStoredWallpaper);
   const [glassHue, setGlassHue] = useState(resolveStoredHue);
   const [glassColorMode, setGlassColorMode] = useState<GlassColorMode>(resolveStoredGlassColorMode);
+  const [glassShaderEffects, setGlassShaderEffects] = useState<GlassShaderEffects>(resolveStoredGlassShaderEffects);
   const [glassMenuOpen, setGlassMenuOpen] = useState(false);
   const [glassMenuPosition, setGlassMenuPosition] = useState({ top: 0, left: 0 });
   const themeSwitchRef = useRef<HTMLDivElement>(null);
   const glassButtonRef = useRef<HTMLButtonElement>(null);
+  const frostedButtonRef = useRef<HTMLButtonElement>(null);
   const glassMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = themeMode;
+    document.documentElement.dataset.theme = themeMode === "solid" ? "solid" : "liquid-glass";
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
 
@@ -89,9 +121,9 @@ export function Shell() {
   }, [glassWallpaper]);
 
   useEffect(() => {
-    document.documentElement.style.setProperty("--dopamine-hue", String(glassHue));
+    document.documentElement.style.setProperty("--dopamine-hue", String(themeMode === "solid" ? DEFAULT_SOLID_HUE : glassHue));
     window.localStorage.setItem(GLASS_HUE_STORAGE_KEY, String(glassHue));
-  }, [glassHue]);
+  }, [glassHue, themeMode]);
 
   useEffect(() => {
     document.documentElement.dataset.glassColor = glassColorMode;
@@ -99,12 +131,24 @@ export function Shell() {
   }, [glassColorMode]);
 
   useEffect(() => {
-    if (!glassMenuOpen || themeMode !== "liquid-glass") {
+    document.documentElement.dataset.glassRender = themeMode === "frosted-glass" ? "frosted" : "shader";
+  }, [themeMode]);
+
+  useEffect(() => {
+    document.documentElement.dataset.glassFluid = glassShaderEffects.fluid ? "on" : "off";
+    document.documentElement.dataset.glassCursor = glassShaderEffects.cursor ? "on" : "off";
+    document.documentElement.dataset.glassRipple = glassShaderEffects.ripple ? "on" : "off";
+    window.localStorage.setItem(GLASS_SHADER_EFFECTS_STORAGE_KEY, JSON.stringify(glassShaderEffects));
+  }, [glassShaderEffects]);
+
+  useEffect(() => {
+    if (!glassMenuOpen || themeMode === "solid") {
       return;
     }
 
     const updateMenuPosition = () => {
-      const buttonRect = glassButtonRef.current?.getBoundingClientRect();
+      const activeButton = themeMode === "frosted-glass" ? frostedButtonRef.current : glassButtonRef.current;
+      const buttonRect = activeButton?.getBoundingClientRect();
       if (!buttonRect) {
         return;
       }
@@ -235,8 +279,9 @@ export function Shell() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const positionGlassMenu = () => {
-    const buttonRect = glassButtonRef.current?.getBoundingClientRect();
+  const positionGlassMenu = (targetButton?: HTMLButtonElement | null) => {
+    const activeButton = targetButton ?? (themeMode === "frosted-glass" ? frostedButtonRef.current : glassButtonRef.current);
+    const buttonRect = activeButton?.getBoundingClientRect();
     if (!buttonRect) {
       return;
     }
@@ -251,6 +296,15 @@ export function Shell() {
       left: Math.round(left),
     });
   };
+
+  const toggleGlassShaderEffect = (effect: keyof GlassShaderEffects) => {
+    setGlassShaderEffects((currentEffects) => ({
+      ...currentEffects,
+      [effect]: !currentEffects[effect],
+    }));
+  };
+
+  const enabledShaderEffectCount = Object.values(glassShaderEffects).filter(Boolean).length;
 
   return (
     <div className="page-shell text-[var(--ink)]">
@@ -271,7 +325,11 @@ export function Shell() {
                 aria-label="主题选项"
                 role="radiogroup"
               >
-                <span className={`theme-switch-thumb ${themeMode === "liquid-glass" ? "translate-x-full" : "translate-x-0"}`} />
+                <span
+                  className={`theme-switch-thumb ${
+                    themeMode === "liquid-glass" ? "translate-x-full" : themeMode === "frosted-glass" ? "translate-x-[200%]" : "translate-x-0"
+                  }`}
+                />
                 <button
                   type="button"
                   role="radio"
@@ -293,11 +351,26 @@ export function Shell() {
                   className="theme-switch-option theme-switch-glass-option"
                   onClick={() => {
                     setThemeMode("liquid-glass");
-                    positionGlassMenu();
+                    positionGlassMenu(glassButtonRef.current);
                     setGlassMenuOpen((open) => (themeMode === "liquid-glass" ? !open : true));
                   }}
                 >
                   玻璃
+                </button>
+                <button
+                  ref={frostedButtonRef}
+                  type="button"
+                  role="radio"
+                  aria-checked={themeMode === "frosted-glass"}
+                  aria-expanded={themeMode === "frosted-glass" && glassMenuOpen}
+                  className="theme-switch-option theme-switch-glass-option"
+                  onClick={() => {
+                    setThemeMode("frosted-glass");
+                    positionGlassMenu(frostedButtonRef.current);
+                    setGlassMenuOpen((open) => (themeMode === "frosted-glass" ? !open : true));
+                  }}
+                >
+                  毛玻璃
                 </button>
               </div>
             </div>
@@ -325,7 +398,7 @@ export function Shell() {
         </div>
       </header>
 
-      {themeMode === "liquid-glass" && glassMenuOpen ? (
+      {themeMode !== "solid" && glassMenuOpen ? (
         <div
           ref={glassMenuRef}
           className="glass-theme-popover liquid-glass-card"
@@ -383,6 +456,40 @@ export function Shell() {
               }}
             />
           </label>
+          {themeMode === "liquid-glass" ? (
+            <div className="glass-theme-section">
+            <div className="glass-theme-section-title">
+              <span>Shader 特效</span>
+              <strong>{enabledShaderEffectCount}/3</strong>
+            </div>
+            <div className="glass-effect-grid" aria-label="Shader 特效">
+              <button
+                type="button"
+                className="glass-effect-option"
+                data-active={glassShaderEffects.fluid}
+                onClick={() => toggleGlassShaderEffect("fluid")}
+              >
+                流体噪点
+              </button>
+              <button
+                type="button"
+                className="glass-effect-option"
+                data-active={glassShaderEffects.cursor}
+                onClick={() => toggleGlassShaderEffect("cursor")}
+              >
+                鼠标柔光
+              </button>
+              <button
+                type="button"
+                className="glass-effect-option"
+                data-active={glassShaderEffects.ripple}
+                onClick={() => toggleGlassShaderEffect("ripple")}
+              >
+                点击涟漪
+              </button>
+            </div>
+          </div>
+          ) : null}
         </div>
       ) : null}
 
