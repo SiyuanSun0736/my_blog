@@ -119,9 +119,6 @@ export function Shell() {
       <header className="site-header border-b border-black/10">
         <div className="page-frame flex flex-col gap-4 py-4 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
           <Link to="/" className="brand-card liquid-glass-card">
-            <span className="brand-icon-shell">
-              <img src="/brand-icon.png" alt="" className="brand-icon" />
-            </span>
             <span className="min-w-0">
               <span className="block truncate text-base font-semibold leading-6 text-[var(--ink)]">
                 Wanderlust

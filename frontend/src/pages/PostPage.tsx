@@ -1,4 +1,4 @@
-import { Avatar, Card, CardBody, Chip, Divider, Spinner } from "../components/ui";
+import { Card, CardBody, Chip, Divider, Spinner } from "../components/ui";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { PostHeading } from "../components/PostContent";
@@ -289,7 +289,9 @@ export function PostPage() {
               </div>
 
               <div className="flex items-center gap-3 rounded-[1.35rem] border border-black/10 bg-white/60 p-4 sm:gap-4 sm:rounded-[1.75rem]">
-                <Avatar name={post.author} color="primary" className="text-white" />
+                <span className="author-image-shell liquid-glass-control">
+                  <img src="/brand-icon.png" alt="" className="author-image" />
+                </span>
                 <div>
                   <p className="font-medium text-[var(--ink)]">{post.author}</p>
                   <p className="text-sm text-[var(--muted)]">工程日志作者</p>
