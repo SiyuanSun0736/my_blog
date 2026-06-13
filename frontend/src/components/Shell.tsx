@@ -5,6 +5,16 @@ import { useEffect, useState } from "react";
 type ThemeMode = "solid" | "liquid-glass";
 
 const THEME_STORAGE_KEY = "wanderlust-theme";
+const GLASS_WALLPAPER_STORAGE_KEY = "wanderlust-glass-wallpaper";
+const GLASS_HUE_STORAGE_KEY = "wanderlust-glass-hue";
+const DEFAULT_GLASS_HUE = 105;
+const WALLPAPERS = [
+  { label: "壁纸 1", value: "07905b16e08767c9cc4719f0266b004b.jpg" },
+  { label: "壁纸 2", value: "4bdca906a520689e14a45007951472b6.jpg" },
+  { label: "壁纸 3", value: "7d47b283a1c99e02de58af14a5032f4f.jpg" },
+  { label: "壁纸 4", value: "9eb477638edf0a072a3ff4bdf9734880.jpg" },
+  { label: "壁纸 5", value: "d4fcc05bd8205c41fbe4f2645bf0c6b8.jpg" },
+];
 
 function resolveStoredTheme(): ThemeMode {
   if (typeof window === "undefined") {
@@ -14,17 +24,51 @@ function resolveStoredTheme(): ThemeMode {
   return window.localStorage.getItem(THEME_STORAGE_KEY) === "liquid-glass" ? "liquid-glass" : "solid";
 }
 
+function resolveStoredWallpaper() {
+  if (typeof window === "undefined") {
+    return WALLPAPERS[0].value;
+  }
+
+  const storedWallpaper = window.localStorage.getItem(GLASS_WALLPAPER_STORAGE_KEY);
+  if (storedWallpaper && WALLPAPERS.some((wallpaper) => wallpaper.value === storedWallpaper)) {
+    return storedWallpaper;
+  }
+
+  return WALLPAPERS[0].value;
+}
+
+function resolveStoredHue() {
+  if (typeof window === "undefined") {
+    return DEFAULT_GLASS_HUE;
+  }
+
+  const storedHue = Number(window.localStorage.getItem(GLASS_HUE_STORAGE_KEY));
+  return Number.isFinite(storedHue) ? Math.min(330, Math.max(0, storedHue)) : DEFAULT_GLASS_HUE;
+}
+
 export function Shell() {
   const location = useLocation();
   const isHome = location.pathname === "/";
   const isArchive = location.pathname.startsWith("/archive");
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(resolveStoredTheme);
+  const [glassWallpaper, setGlassWallpaper] = useState(resolveStoredWallpaper);
+  const [glassHue, setGlassHue] = useState(resolveStoredHue);
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--glass-wallpaper-image", `url("/wallpaper/${glassWallpaper}")`);
+    window.localStorage.setItem(GLASS_WALLPAPER_STORAGE_KEY, glassWallpaper);
+  }, [glassWallpaper]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--dopamine-hue", String(glassHue));
+    window.localStorage.setItem(GLASS_HUE_STORAGE_KEY, String(glassHue));
+  }, [glassHue]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -119,17 +163,10 @@ export function Shell() {
       <header className="site-header border-b border-black/10">
         <div className="page-frame flex flex-col gap-4 py-4 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
           <Link to="/" className="brand-card liquid-glass-card">
-            <span className="min-w-0">
-              <span className="block truncate text-base font-semibold leading-6 text-[var(--ink)]">
-                Wanderlust
-              </span>
-              <span className="block truncate text-sm leading-5 text-[var(--muted)]">
-                工程日志作者
-              </span>
-            </span>
+            <span className="block truncate text-base font-semibold leading-6 text-[var(--ink)]">首页</span>
           </Link>
 
-          <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 lg:w-auto lg:justify-end">
+          <div className="header-actions flex w-full items-center gap-2 overflow-x-auto sm:gap-3 lg:w-auto lg:justify-end">
             <Chip color="warning" variant="flat" className="hidden sm:inline-flex">
               长期更新中
             </Chip>
@@ -158,12 +195,41 @@ export function Shell() {
                 玻璃
               </button>
             </div>
+            {themeMode === "liquid-glass" ? (
+              <div className="glass-theme-tools liquid-glass-control" aria-label="玻璃主题设置">
+                <label className="glass-wallpaper-select">
+                  <span>背景</span>
+                  <select
+                    value={glassWallpaper}
+                    onChange={(event) => setGlassWallpaper(event.target.value)}
+                  >
+                    {WALLPAPERS.map((wallpaper) => (
+                      <option key={wallpaper.value} value={wallpaper.value}>
+                        {wallpaper.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="glass-hue-control">
+                  <span>主题色相</span>
+                  <strong>{glassHue}</strong>
+                  <input
+                    type="range"
+                    min="0"
+                    max="330"
+                    step="15"
+                    value={glassHue}
+                    onChange={(event) => setGlassHue(Number(event.target.value))}
+                  />
+                </label>
+              </div>
+            ) : null}
             <Link
               to="/"
               className={
                 isHome
-                  ? "inline-flex flex-1 justify-center rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 sm:flex-none sm:px-5"
-                  : "inline-flex flex-1 justify-center rounded-full border border-black/10 px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70 sm:flex-none sm:px-5"
+                  ? "inline-flex shrink-0 justify-center rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 sm:px-5"
+                  : "inline-flex shrink-0 justify-center rounded-full border border-black/10 px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70 sm:px-5"
               }
             >
               文章
@@ -172,8 +238,8 @@ export function Shell() {
               to="/archive"
               className={
                 isArchive
-                  ? "inline-flex flex-1 justify-center rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 sm:flex-none sm:px-5"
-                  : "inline-flex flex-1 justify-center rounded-full border border-black/10 px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70 sm:flex-none sm:px-5"
+                  ? "inline-flex shrink-0 justify-center rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 sm:px-5"
+                  : "inline-flex shrink-0 justify-center rounded-full border border-black/10 px-4 py-2.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70 sm:px-5"
               }
             >
               归档

@@ -14,6 +14,11 @@
   --control-surface-hover: rgba(255, 255, 255, 0.94);
   --glass-border: rgba(36, 24, 15, 0.1);
   --glass-shadow: 0 18px 52px rgba(77, 53, 35, 0.1);
+  --dopamine-hue: 105;
+  --dopamine: hsl(var(--dopamine-hue) 78% 50%);
+  --dopamine-soft: hsl(var(--dopamine-hue) 88% 88%);
+  --dopamine-ink: hsl(var(--dopamine-hue) 56% 24%);
+  --glass-wallpaper-image: none;
   --ink: #24180f;
   --muted: #625244;
   --page-gutter: clamp(1rem, 1.1vw + 0.8rem, 2.5rem);
@@ -83,8 +88,12 @@ body::after {
 
 :root[data-theme="liquid-glass"] body {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(240, 244, 242, 0.92) 48%, rgba(234, 238, 236, 0.96) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(240, 244, 242, 0.86) 48%, rgba(234, 238, 236, 0.9) 100%),
+    var(--glass-wallpaper-image),
     #f3f5f3;
+  background-attachment: fixed, fixed, fixed;
+  background-position: center, center, center;
+  background-size: cover, cover, cover;
 }
 
 :root[data-theme="liquid-glass"] body::before {
@@ -106,7 +115,7 @@ a {
 }
 
 ::selection {
-  background: rgba(15, 118, 110, 0.2);
+  background: color-mix(in srgb, var(--dopamine) 24%, transparent);
   color: var(--ink);
 }
 
@@ -147,12 +156,13 @@ a {
 
 .brand-card {
   display: inline-flex;
-  width: min(100%, 13.5rem);
+  width: fit-content;
+  min-width: 7.5rem;
   align-items: center;
   border: 1px solid rgba(36, 24, 15, 0.1);
   border-radius: 999px;
   background: var(--panel);
-  padding: 0.9rem 1.35rem;
+  padding: 0.9rem 1.45rem;
   box-shadow: 0 14px 34px rgba(77, 53, 35, 0.08);
   backdrop-filter: blur(18px);
   transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
@@ -163,6 +173,18 @@ a {
   border-color: rgba(36, 24, 15, 0.18);
   background: var(--panel-strong);
   box-shadow: 0 18px 42px rgba(77, 53, 35, 0.12);
+}
+
+.header-actions {
+  scrollbar-width: none;
+}
+
+.header-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.header-actions > * {
+  flex-shrink: 0;
 }
 
 .author-image-shell {
@@ -194,7 +216,7 @@ a {
   position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  flex: 1 1 9rem;
+  flex: 0 0 9rem;
   min-width: 8.5rem;
   max-width: 10rem;
   border: 1px solid rgba(36, 24, 15, 0.1);
@@ -242,6 +264,89 @@ a {
 
 .theme-switch-option:focus-visible {
   box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0.4);
+}
+
+.glass-theme-tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 1.15rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.glass-wallpaper-select,
+.glass-hue-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.glass-wallpaper-select span,
+.glass-hue-control span {
+  color: var(--muted);
+}
+
+.glass-wallpaper-select select {
+  min-width: 5.8rem;
+  border: 0;
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.22)),
+    rgba(255, 255, 255, 0.28);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  outline: none;
+  padding: 0.42rem 0.7rem;
+}
+
+.glass-hue-control strong {
+  min-width: 2rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dopamine) 22%, white);
+  color: var(--dopamine-ink);
+  padding: 0.32rem 0.5rem;
+  text-align: center;
+}
+
+.glass-hue-control input {
+  width: 8.5rem;
+  accent-color: var(--dopamine);
+  cursor: pointer;
+}
+
+.glass-hue-control input[type="range"] {
+  appearance: none;
+  height: 0.62rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff8aa0, #ffd166, #72e38f, #64d7f0, #c89bff, #ff85bc);
+  box-shadow: inset 0 1px 2px rgba(36, 24, 15, 0.16);
+}
+
+.glass-hue-control input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  background: var(--dopamine);
+  box-shadow: 0 4px 12px rgba(36, 24, 15, 0.18);
+}
+
+.glass-hue-control input[type="range"]::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  background: var(--dopamine);
+  box-shadow: 0 4px 12px rgba(36, 24, 15, 0.18);
 }
 
 .glass-panel {
@@ -320,10 +425,10 @@ a {
 
 :root[data-theme="liquid-glass"] .theme-switch-thumb {
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.26)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.78), color-mix(in srgb, var(--dopamine) 18%, rgba(255, 255, 255, 0.26))),
     rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 10px 24px rgba(30, 47, 58, 0.14),
+    0 10px 24px color-mix(in srgb, var(--dopamine) 20%, rgba(30, 47, 58, 0.12)),
     inset 1px 1px 0 rgba(255, 255, 255, 0.9),
     inset -1px -1px 0 rgba(15, 93, 113, 0.1);
 }
@@ -343,6 +448,16 @@ a {
     inset 0 1px 0 rgba(255, 255, 255, 0.88),
     inset 1px 0 0 rgba(255, 255, 255, 0.72),
     inset -1px -1px 0 rgba(58, 83, 92, 0.1);
+}
+
+:root[data-theme="liquid-glass"] .story-prose a {
+  color: var(--dopamine-ink);
+  text-decoration-color: color-mix(in srgb, var(--dopamine) 62%, transparent);
+}
+
+:root[data-theme="liquid-glass"] .story-prose blockquote {
+  border-left-color: color-mix(in srgb, var(--dopamine) 46%, white);
+  background: color-mix(in srgb, var(--dopamine) 11%, transparent);
 }
 
 :root[data-theme="liquid-glass"] .liquid-glass-control::before {
@@ -536,17 +651,17 @@ a {
 :root[data-theme="liquid-glass"] .story-prose code {
   border: 1px solid rgba(255, 255, 255, 0.56);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.2)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.56), color-mix(in srgb, var(--dopamine) 10%, rgba(255, 255, 255, 0.2))),
     rgba(255, 255, 255, 0.24);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  color: rgba(30, 38, 36, 0.94);
+  color: var(--dopamine-ink);
 }
 
 :root[data-theme="liquid-glass"] .story-prose pre {
   overflow-x: auto;
   border-color: rgba(255, 255, 255, 0.64);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.18) 42%, rgba(255, 255, 255, 0.38)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.66), color-mix(in srgb, var(--dopamine) 7%, rgba(255, 255, 255, 0.18)) 42%, rgba(255, 255, 255, 0.38)),
     rgba(255, 255, 255, 0.26);
   backdrop-filter: blur(30px) saturate(1.8) contrast(1.03);
   box-shadow:
@@ -601,6 +716,45 @@ a {
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.44);
 }
 
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-comment,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-quote {
+  color: color-mix(in srgb, var(--muted) 72%, var(--dopamine));
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-keyword,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-name,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-selector-tag {
+  color: hsl(calc(var(--dopamine-hue) + 300) 78% 42%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-title,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-type,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-built_in {
+  color: hsl(calc(var(--dopamine-hue) + 35) 82% 36%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-attr,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-variable,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-meta {
+  color: hsl(calc(var(--dopamine-hue) + 235) 76% 42%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-number,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-literal,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-symbol {
+  color: hsl(calc(var(--dopamine-hue) + 185) 76% 38%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-string,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-regexp,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-addition {
+  color: hsl(var(--dopamine-hue) 66% 34%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-deletion {
+  color: hsl(calc(var(--dopamine-hue) + 320) 74% 42%);
+}
+
 :root[data-theme="liquid-glass"] .story-prose .story-code-copy {
   z-index: 3;
   border-color: rgba(255, 255, 255, 0.62);
@@ -620,6 +774,14 @@ a {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.3)),
     rgba(255, 255, 255, 0.42);
+}
+
+:root[data-theme="liquid-glass"] .story-prose .story-code-copy[data-state="success"] {
+  border-color: color-mix(in srgb, var(--dopamine) 38%, white);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--dopamine) 26%, white), rgba(255, 255, 255, 0.28)),
+    color-mix(in srgb, var(--dopamine) 16%, white);
+  color: var(--dopamine-ink);
 }
 
 .story-prose pre code .hljs-comment,
@@ -676,6 +838,53 @@ a {
 
 .story-prose pre code .hljs-strong {
   font-weight: 700;
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-comment,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-quote {
+  color: color-mix(in srgb, var(--muted) 72%, var(--dopamine));
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-doctag,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-formula,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-keyword,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-name,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-selector-tag {
+  color: hsl(calc(var(--dopamine-hue) + 300) 78% 42%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-built_in,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-builtin-name,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-title,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-type {
+  color: hsl(calc(var(--dopamine-hue) + 35) 82% 36%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-attr,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-attribute,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-meta,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-selector-id,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-selector-class,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-variable,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-template-variable {
+  color: hsl(calc(var(--dopamine-hue) + 235) 76% 42%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-number,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-literal,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-symbol,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-bullet {
+  color: hsl(calc(var(--dopamine-hue) + 185) 76% 38%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-string,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-regexp,
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-addition {
+  color: hsl(var(--dopamine-hue) 66% 34%);
+}
+
+:root[data-theme="liquid-glass"] .story-prose pre code .hljs-deletion {
+  color: hsl(calc(var(--dopamine-hue) + 320) 74% 42%);
 }
 
 .story-prose table {
@@ -741,21 +950,21 @@ a {
 }
 
 .post-toc-link-active {
-  border-color: rgba(15, 118, 110, 0.2);
-  background: rgba(15, 118, 110, 0.1);
+  border-color: rgba(120, 82, 48, 0.24);
+  background: rgba(186, 143, 96, 0.18);
   color: var(--ink);
-  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.08), 0 8px 18px rgba(36, 24, 15, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(120, 82, 48, 0.08), 0 8px 18px rgba(36, 24, 15, 0.05);
 }
 
 :root[data-theme="liquid-glass"] .post-toc-link:hover,
 :root[data-theme="liquid-glass"] .post-toc-link-active {
   border-color: rgba(255, 255, 255, 0.64);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.18) 48%, rgba(255, 255, 255, 0.36)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.58), color-mix(in srgb, var(--dopamine) 10%, rgba(255, 255, 255, 0.18)) 48%, rgba(255, 255, 255, 0.36)),
     rgba(255, 255, 255, 0.24);
   backdrop-filter: blur(18px) saturate(1.7);
   box-shadow:
-    0 10px 24px rgba(33, 52, 63, 0.1),
+    0 10px 24px color-mix(in srgb, var(--dopamine) 16%, rgba(33, 52, 63, 0.1)),
     inset 0 1px 0 rgba(255, 255, 255, 0.88),
     inset 1px 0 0 rgba(255, 255, 255, 0.68),
     inset -1px -1px 0 rgba(58, 83, 92, 0.08);
