@@ -2,11 +2,29 @@ import { Chip } from "./ui";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 
+type ThemeMode = "solid" | "liquid-glass";
+
+const THEME_STORAGE_KEY = "wanderlust-theme";
+
+function resolveStoredTheme(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "solid";
+  }
+
+  return window.localStorage.getItem(THEME_STORAGE_KEY) === "liquid-glass" ? "liquid-glass" : "solid";
+}
+
 export function Shell() {
   const location = useLocation();
   const isHome = location.pathname === "/";
   const isArchive = location.pathname.startsWith("/archive");
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(resolveStoredTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -98,7 +116,7 @@ export function Shell() {
 
   return (
     <div className="page-shell text-[var(--ink)]">
-      <header className="border-b border-black/10 bg-[rgba(246,241,232,0.86)] backdrop-blur-xl">
+      <header className="site-header border-b border-black/10">
         <div className="page-frame flex flex-col gap-4 py-4 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 max-w-2xl">
             <Link to="/" className="brand-wordmark text-2xl text-[var(--ink)]">
@@ -113,6 +131,18 @@ export function Shell() {
             <Chip color="warning" variant="flat" className="hidden sm:inline-flex">
               长期更新中
             </Chip>
+            <label className="theme-select-shell inline-flex flex-1 items-center justify-between gap-2 rounded-full border border-black/10 px-3 py-2 text-sm font-medium text-[var(--ink)] transition sm:flex-none">
+              <span className="text-[var(--muted)]">主题</span>
+              <select
+                aria-label="主题选项"
+                className="theme-select min-w-0 flex-1 bg-transparent text-sm font-medium text-[var(--ink)] outline-none sm:flex-none"
+                value={themeMode}
+                onChange={(event) => setThemeMode(event.target.value === "liquid-glass" ? "liquid-glass" : "solid")}
+              >
+                <option value="solid">纯色背景</option>
+                <option value="liquid-glass">液态玻璃</option>
+              </select>
+            </label>
             <Link
               to="/"
               className={
