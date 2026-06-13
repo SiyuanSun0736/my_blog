@@ -196,33 +196,45 @@ export function Shell() {
               </button>
             </div>
             {themeMode === "liquid-glass" ? (
-              <div className="glass-theme-tools liquid-glass-control" aria-label="玻璃主题设置">
-                <label className="glass-wallpaper-select">
-                  <span>背景</span>
-                  <select
-                    value={glassWallpaper}
-                    onChange={(event) => setGlassWallpaper(event.target.value)}
-                  >
-                    {WALLPAPERS.map((wallpaper) => (
-                      <option key={wallpaper.value} value={wallpaper.value}>
-                        {wallpaper.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="glass-hue-control">
-                  <span>主题色相</span>
-                  <strong>{glassHue}</strong>
-                  <input
-                    type="range"
-                    min="0"
-                    max="330"
-                    step="15"
-                    value={glassHue}
-                    onChange={(event) => setGlassHue(Number(event.target.value))}
-                  />
-                </label>
-              </div>
+              <details className="glass-theme-menu">
+                <summary className="glass-theme-trigger liquid-glass-control">设置</summary>
+                <div className="glass-theme-popover liquid-glass-card">
+                  <div className="glass-theme-section">
+                    <div className="glass-theme-section-title">
+                      <span>背景壁纸</span>
+                      <strong>{WALLPAPERS.find((wallpaper) => wallpaper.value === glassWallpaper)?.label ?? "壁纸"}</strong>
+                    </div>
+                    <div className="wallpaper-grid" role="listbox" aria-label="背景壁纸">
+                      {WALLPAPERS.map((wallpaper) => (
+                        <button
+                          key={wallpaper.value}
+                          type="button"
+                          className="wallpaper-option"
+                          data-active={glassWallpaper === wallpaper.value}
+                          onClick={() => setGlassWallpaper(wallpaper.value)}
+                        >
+                          <img src={`/wallpaper/${wallpaper.value}`} alt="" />
+                          <span>{wallpaper.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="glass-hue-control glass-theme-section">
+                    <span className="glass-theme-section-title">
+                      <span>主题色相</span>
+                      <strong>{glassHue}</strong>
+                    </span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="330"
+                      step="15"
+                      value={glassHue}
+                      onChange={(event) => setGlassHue(Number(event.target.value))}
+                    />
+                  </label>
+                </div>
+              </details>
             ) : null}
             <Link
               to="/"
