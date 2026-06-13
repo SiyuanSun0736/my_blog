@@ -18,7 +18,6 @@ export function PostCard({ post, highlightQuery }: PostCardProps) {
 
   return (
     <Card className="glass-panel overflow-hidden border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
-      <div className="h-2 w-full" style={{ background: post.accent }} />
       <CardHeader className="flex flex-col items-start gap-3 px-5 pb-0 pt-5">
         <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">Wanderlust Notes</p>
         <div>

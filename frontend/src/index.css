@@ -25,9 +25,9 @@
 }
 
 :root[data-theme="liquid-glass"] {
-  --surface: #eef4f0;
-  --panel: rgba(255, 255, 255, 0.3);
-  --panel-strong: rgba(255, 255, 255, 0.42);
+  --surface: #f3f5f3;
+  --panel: rgba(255, 255, 255, 0.34);
+  --panel-strong: rgba(255, 255, 255, 0.46);
   --header-surface: rgba(255, 255, 255, 0.3);
   --control-surface: rgba(255, 255, 255, 0.28);
   --control-surface-hover: rgba(255, 255, 255, 0.48);
@@ -83,30 +83,31 @@ body::after {
 
 :root[data-theme="liquid-glass"] body {
   background:
-    radial-gradient(circle at 9% 12%, rgba(255, 122, 89, 0.24), transparent 24rem),
-    radial-gradient(circle at 88% 10%, rgba(31, 130, 214, 0.2), transparent 27rem),
-    radial-gradient(circle at 78% 78%, rgba(12, 145, 124, 0.24), transparent 28rem),
-    linear-gradient(135deg, #f7fbf8 0%, #e8f4f6 44%, #f6efe6 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(240, 244, 242, 0.92) 48%, rgba(234, 238, 236, 0.96) 100%),
+    #f3f5f3;
 }
 
 :root[data-theme="liquid-glass"] body::before {
   background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.34), transparent 32%, rgba(255, 255, 255, 0.18) 58%, transparent 76%),
-    linear-gradient(rgba(255, 255, 255, 0.22) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+    linear-gradient(115deg, rgba(255, 255, 255, 0.22), transparent 36%, rgba(255, 255, 255, 0.12) 62%, transparent 82%),
+    linear-gradient(rgba(102, 116, 112, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(102, 116, 112, 0.04) 1px, transparent 1px);
   background-size: 100% 100%, 86px 86px, 86px 86px;
   mask-image: linear-gradient(180deg, black, transparent 88%);
 }
 
 :root[data-theme="liquid-glass"] body::after {
-  background:
-    radial-gradient(ellipse at 20% 24%, rgba(255, 255, 255, 0.42), transparent 22rem),
-    radial-gradient(ellipse at 68% 62%, rgba(255, 255, 255, 0.3), transparent 25rem);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.14));
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+::selection {
+  background: rgba(15, 118, 110, 0.2);
+  color: var(--ink);
 }
 
 #root {
@@ -142,6 +143,46 @@ a {
 
 .brand-wordmark {
   font-weight: 700;
+}
+
+.brand-card {
+  display: inline-flex;
+  width: min(100%, 16.5rem);
+  align-items: center;
+  gap: 0.9rem;
+  border: 1px solid rgba(36, 24, 15, 0.1);
+  border-radius: 999px;
+  background: var(--panel);
+  padding: 0.9rem 1.15rem;
+  box-shadow: 0 14px 34px rgba(77, 53, 35, 0.08);
+  backdrop-filter: blur(18px);
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.brand-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(36, 24, 15, 0.18);
+  background: var(--panel-strong);
+  box-shadow: 0 18px 42px rgba(77, 53, 35, 0.12);
+}
+
+.brand-icon-shell {
+  display: inline-flex;
+  width: 3.15rem;
+  height: 3.15rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 8px 18px rgba(36, 24, 15, 0.08);
+}
+
+.brand-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .site-header {
@@ -240,9 +281,8 @@ a {
   border-radius: inherit;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.92), transparent 20%, rgba(255, 255, 255, 0.26) 52%, transparent 72%),
-    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.68), transparent 18rem),
-    linear-gradient(90deg, rgba(255, 73, 105, 0.12), transparent 10%, transparent 90%, rgba(53, 189, 255, 0.14));
-  opacity: 0.8;
+    linear-gradient(90deg, rgba(255, 255, 255, 0.22), transparent 12%, transparent 88%, rgba(84, 107, 116, 0.08));
+  opacity: 0.68;
   pointer-events: none;
 }
 
@@ -308,8 +348,8 @@ a {
   border-radius: inherit;
   background:
     linear-gradient(110deg, rgba(255, 255, 255, 0.78), transparent 28%, rgba(255, 255, 255, 0.14) 54%, transparent 78%),
-    linear-gradient(90deg, rgba(255, 73, 105, 0.14), transparent 16%, transparent 84%, rgba(53, 189, 255, 0.16));
-  opacity: 0.72;
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 18%, transparent 84%, rgba(84, 107, 116, 0.08));
+  opacity: 0.58;
   pointer-events: none;
 }
 

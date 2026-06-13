@@ -118,14 +118,19 @@ export function Shell() {
     <div className="page-shell text-[var(--ink)]">
       <header className="site-header border-b border-black/10">
         <div className="page-frame flex flex-col gap-4 py-4 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 max-w-2xl">
-            <Link to="/" className="brand-wordmark text-2xl text-[var(--ink)]">
-              Wanderlust
-            </Link>
-            <p className="mt-1 max-w-[34rem] text-sm leading-6 text-[var(--muted)]">
-              编译器、性能与系统工程笔记。
-            </p>
-          </div>
+          <Link to="/" className="brand-card liquid-glass-card">
+            <span className="brand-icon-shell">
+              <img src="/brand-icon.png" alt="" className="brand-icon" />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-base font-semibold leading-6 text-[var(--ink)]">
+                Wanderlust
+              </span>
+              <span className="block truncate text-sm leading-5 text-[var(--muted)]">
+                工程日志作者
+              </span>
+            </span>
+          </Link>
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 lg:w-auto lg:justify-end">
             <Chip color="warning" variant="flat" className="hidden sm:inline-flex">

@@ -245,7 +245,6 @@ export function PostPage() {
           </a>
         </div>
         <div className="overflow-hidden rounded-[1.75rem] border border-black/10 bg-[var(--panel-strong)] shadow-[0_22px_60px_rgba(77,53,35,0.12)] sm:rounded-[2.25rem] sm:shadow-[0_32px_100px_rgba(77,53,35,0.12)]">
-          <div className="h-3 w-full sm:h-4" style={{ background: post.accent }} />
           <div className="space-y-5 px-4 py-5 sm:space-y-7 sm:px-6 sm:py-6 lg:px-8 lg:py-8 xl:px-10 xl:py-10">
             <div className="space-y-4">
               <p className="text-xs uppercase tracking-[0.32em] text-[var(--muted)]">Wanderlust Notes</p>
