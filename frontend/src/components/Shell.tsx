@@ -4,18 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 type ThemeMode = "solid" | "liquid-glass";
+type GlassColorMode = "color" | "white";
 
 const THEME_STORAGE_KEY = "wanderlust-theme";
 const GLASS_WALLPAPER_STORAGE_KEY = "wanderlust-glass-wallpaper";
 const GLASS_HUE_STORAGE_KEY = "wanderlust-glass-hue";
+const GLASS_COLOR_MODE_STORAGE_KEY = "wanderlust-glass-color-mode";
 const DEFAULT_GLASS_HUE = 105;
 const GLASS_MENU_WIDTH = 336;
 const WALLPAPERS = [
-  { label: "壁纸 1", value: "07905b16e08767c9cc4719f0266b004b.jpg" },
-  { label: "壁纸 2", value: "4bdca906a520689e14a45007951472b6.jpg" },
-  { label: "壁纸 3", value: "7d47b283a1c99e02de58af14a5032f4f.jpg" },
-  { label: "壁纸 4", value: "9eb477638edf0a072a3ff4bdf9734880.jpg" },
-  { label: "壁纸 5", value: "d4fcc05bd8205c41fbe4f2645bf0c6b8.jpg" },
+  { label: "壁纸 1", value: "07905b16e08767c9cc4719f0266b004b" },
+  { label: "壁纸 2", value: "4bdca906a520689e14a45007951472b6" },
+  { label: "壁纸 3", value: "7d47b283a1c99e02de58af14a5032f4f" },
+  { label: "壁纸 4", value: "9eb477638edf0a072a3ff4bdf9734880" },
+  { label: "壁纸 5", value: "d4fcc05bd8205c41fbe4f2645bf0c6b8" },
 ];
 
 function resolveStoredTheme(): ThemeMode {
@@ -32,8 +34,9 @@ function resolveStoredWallpaper() {
   }
 
   const storedWallpaper = window.localStorage.getItem(GLASS_WALLPAPER_STORAGE_KEY);
-  if (storedWallpaper && WALLPAPERS.some((wallpaper) => wallpaper.value === storedWallpaper)) {
-    return storedWallpaper;
+  const normalizedWallpaper = storedWallpaper?.replace(/\.(jpg|jpeg|webp|png)$/i, "");
+  if (normalizedWallpaper && WALLPAPERS.some((wallpaper) => wallpaper.value === normalizedWallpaper)) {
+    return normalizedWallpaper;
   }
 
   return WALLPAPERS[0].value;
@@ -48,6 +51,14 @@ function resolveStoredHue() {
   return Number.isFinite(storedHue) ? Math.min(330, Math.max(0, storedHue)) : DEFAULT_GLASS_HUE;
 }
 
+function resolveStoredGlassColorMode(): GlassColorMode {
+  if (typeof window === "undefined") {
+    return "color";
+  }
+
+  return window.localStorage.getItem(GLASS_COLOR_MODE_STORAGE_KEY) === "white" ? "white" : "color";
+}
+
 export function Shell() {
   const location = useLocation();
   const isHome = location.pathname === "/";
@@ -56,6 +67,7 @@ export function Shell() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(resolveStoredTheme);
   const [glassWallpaper, setGlassWallpaper] = useState(resolveStoredWallpaper);
   const [glassHue, setGlassHue] = useState(resolveStoredHue);
+  const [glassColorMode, setGlassColorMode] = useState<GlassColorMode>(resolveStoredGlassColorMode);
   const [glassMenuOpen, setGlassMenuOpen] = useState(false);
   const [glassMenuPosition, setGlassMenuPosition] = useState({ top: 0, left: 0 });
   const themeSwitchRef = useRef<HTMLDivElement>(null);
@@ -68,7 +80,7 @@ export function Shell() {
   }, [themeMode]);
 
   useEffect(() => {
-    document.documentElement.style.setProperty("--glass-wallpaper-image", `url("/wallpaper/${glassWallpaper}")`);
+    document.documentElement.style.setProperty("--glass-wallpaper-image", `url("/wallpaper/optimized/${glassWallpaper}.webp")`);
     window.localStorage.setItem(GLASS_WALLPAPER_STORAGE_KEY, glassWallpaper);
   }, [glassWallpaper]);
 
@@ -76,6 +88,11 @@ export function Shell() {
     document.documentElement.style.setProperty("--dopamine-hue", String(glassHue));
     window.localStorage.setItem(GLASS_HUE_STORAGE_KEY, String(glassHue));
   }, [glassHue]);
+
+  useEffect(() => {
+    document.documentElement.dataset.glassColor = glassColorMode;
+    window.localStorage.setItem(GLASS_COLOR_MODE_STORAGE_KEY, glassColorMode);
+  }, [glassColorMode]);
 
   useEffect(() => {
     if (!glassMenuOpen || themeMode !== "liquid-glass") {
@@ -328,7 +345,7 @@ export function Shell() {
                   data-active={glassWallpaper === wallpaper.value}
                   onClick={() => setGlassWallpaper(wallpaper.value)}
                 >
-                  <img src={`/wallpaper/${wallpaper.value}`} alt="" />
+                  <img src={`/wallpaper/thumbs/${wallpaper.value}.webp`} alt="" loading="lazy" decoding="async" />
                   <span>{wallpaper.label}</span>
                 </button>
               ))}
@@ -337,15 +354,28 @@ export function Shell() {
           <label className="glass-hue-control glass-theme-section">
             <span className="glass-theme-section-title">
               <span>主题色相</span>
-              <strong>{glassHue}</strong>
+              <strong>{glassColorMode === "white" ? "白色" : glassHue}</strong>
             </span>
+            <div className="glass-color-mode-row">
+              <button
+                type="button"
+                className="glass-color-mode-option"
+                data-active={glassColorMode === "white"}
+                onClick={() => setGlassColorMode((mode) => (mode === "white" ? "color" : "white"))}
+              >
+                白色
+              </button>
+            </div>
             <input
               type="range"
               min="0"
               max="330"
               step="15"
               value={glassHue}
-              onChange={(event) => setGlassHue(Number(event.target.value))}
+              onChange={(event) => {
+                setGlassColorMode("color");
+                setGlassHue(Number(event.target.value));
+              }}
             />
           </label>
         </div>
