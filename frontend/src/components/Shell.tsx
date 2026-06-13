@@ -4,7 +4,8 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
-type ThemeMode = "solid" | "liquid-glass" | "frosted-glass";
+type ThemeMode = "solid" | "liquid-glass" | "frosted-glass" | "thick-glass";
+type SolidPaletteMode = "light" | "dark";
 type GlassColorMode = "color" | "white";
 type GlassShaderEffects = {
   fluid: boolean;
@@ -13,6 +14,7 @@ type GlassShaderEffects = {
 };
 
 const THEME_STORAGE_KEY = "wanderlust-theme";
+const SOLID_PALETTE_STORAGE_KEY = "wanderlust-solid-palette";
 const GLASS_WALLPAPER_STORAGE_KEY = "wanderlust-glass-wallpaper";
 const GLASS_HUE_STORAGE_KEY = "wanderlust-glass-hue";
 const GLASS_COLOR_MODE_STORAGE_KEY = "wanderlust-glass-color-mode";
@@ -39,7 +41,15 @@ function resolveStoredTheme(): ThemeMode {
   }
 
   const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return storedTheme === "liquid-glass" || storedTheme === "frosted-glass" ? storedTheme : "solid";
+  return storedTheme === "liquid-glass" || storedTheme === "frosted-glass" || storedTheme === "thick-glass" ? storedTheme : "solid";
+}
+
+function resolveStoredSolidPalette(): SolidPaletteMode {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  return window.localStorage.getItem(SOLID_PALETTE_STORAGE_KEY) === "dark" ? "dark" : "light";
 }
 
 function resolveStoredWallpaper() {
@@ -96,6 +106,7 @@ export function Shell() {
   const isArchive = location.pathname.startsWith("/archive");
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(resolveStoredTheme);
+  const [solidPalette, setSolidPalette] = useState<SolidPaletteMode>(resolveStoredSolidPalette);
   const [glassWallpaper, setGlassWallpaper] = useState(resolveStoredWallpaper);
   const [glassHue, setGlassHue] = useState(resolveStoredHue);
   const [glassColorMode, setGlassColorMode] = useState<GlassColorMode>(resolveStoredGlassColorMode);
@@ -103,14 +114,21 @@ export function Shell() {
   const [glassMenuOpen, setGlassMenuOpen] = useState(false);
   const [glassMenuPosition, setGlassMenuPosition] = useState({ top: 0, left: 0 });
   const themeSwitchRef = useRef<HTMLDivElement>(null);
+  const solidButtonRef = useRef<HTMLButtonElement>(null);
   const glassButtonRef = useRef<HTMLButtonElement>(null);
   const frostedButtonRef = useRef<HTMLButtonElement>(null);
+  const thickButtonRef = useRef<HTMLButtonElement>(null);
   const glassMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode === "solid" ? "solid" : "liquid-glass";
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
+
+  useEffect(() => {
+    document.documentElement.dataset.solidPalette = solidPalette;
+    window.localStorage.setItem(SOLID_PALETTE_STORAGE_KEY, solidPalette);
+  }, [solidPalette]);
 
   useEffect(() => {
     const wallpaper = WALLPAPERS.find((item) => item.value === glassWallpaper) ?? WALLPAPERS[0];
@@ -131,7 +149,7 @@ export function Shell() {
   }, [glassColorMode]);
 
   useEffect(() => {
-    document.documentElement.dataset.glassRender = themeMode === "frosted-glass" ? "frosted" : "shader";
+    document.documentElement.dataset.glassRender = themeMode === "frosted-glass" ? "frosted" : themeMode === "thick-glass" ? "thick" : "shader";
   }, [themeMode]);
 
   useEffect(() => {
@@ -142,12 +160,19 @@ export function Shell() {
   }, [glassShaderEffects]);
 
   useEffect(() => {
-    if (!glassMenuOpen || themeMode === "solid") {
+    if (!glassMenuOpen) {
       return;
     }
 
     const updateMenuPosition = () => {
-      const activeButton = themeMode === "frosted-glass" ? frostedButtonRef.current : glassButtonRef.current;
+      const activeButton =
+        themeMode === "solid"
+          ? solidButtonRef.current
+          : themeMode === "frosted-glass"
+            ? frostedButtonRef.current
+            : themeMode === "thick-glass"
+              ? thickButtonRef.current
+              : glassButtonRef.current;
       const buttonRect = activeButton?.getBoundingClientRect();
       if (!buttonRect) {
         return;
@@ -280,7 +305,15 @@ export function Shell() {
   };
 
   const positionGlassMenu = (targetButton?: HTMLButtonElement | null) => {
-    const activeButton = targetButton ?? (themeMode === "frosted-glass" ? frostedButtonRef.current : glassButtonRef.current);
+    const activeButton =
+      targetButton ??
+      (themeMode === "solid"
+        ? solidButtonRef.current
+        : themeMode === "frosted-glass"
+          ? frostedButtonRef.current
+          : themeMode === "thick-glass"
+            ? thickButtonRef.current
+            : glassButtonRef.current);
     const buttonRect = activeButton?.getBoundingClientRect();
     if (!buttonRect) {
       return;
@@ -305,6 +338,7 @@ export function Shell() {
   };
 
   const enabledShaderEffectCount = Object.values(glassShaderEffects).filter(Boolean).length;
+  const themeSwitchIndex = themeMode === "liquid-glass" ? 1 : themeMode === "frosted-glass" ? 2 : themeMode === "thick-glass" ? 3 : 0;
 
   return (
     <div className="page-shell text-[var(--ink)]">
@@ -326,18 +360,20 @@ export function Shell() {
                 role="radiogroup"
               >
                 <span
-                  className={`theme-switch-thumb ${
-                    themeMode === "liquid-glass" ? "translate-x-full" : themeMode === "frosted-glass" ? "translate-x-[200%]" : "translate-x-0"
-                  }`}
+                  className="theme-switch-thumb"
+                  style={{ left: `calc(0.25rem + ${themeSwitchIndex * 25}%)` }}
                 />
                 <button
+                  ref={solidButtonRef}
                   type="button"
                   role="radio"
                   aria-checked={themeMode === "solid"}
-                  className="theme-switch-option"
+                  aria-expanded={themeMode === "solid" && glassMenuOpen}
+                  className="theme-switch-option theme-switch-glass-option"
                   onClick={() => {
                     setThemeMode("solid");
-                    setGlassMenuOpen(false);
+                    positionGlassMenu(solidButtonRef.current);
+                    setGlassMenuOpen((open) => (themeMode === "solid" ? !open : true));
                   }}
                 >
                   纯色
@@ -372,6 +408,21 @@ export function Shell() {
                 >
                   毛玻璃
                 </button>
+                <button
+                  ref={thickButtonRef}
+                  type="button"
+                  role="radio"
+                  aria-checked={themeMode === "thick-glass"}
+                  aria-expanded={themeMode === "thick-glass" && glassMenuOpen}
+                  className="theme-switch-option theme-switch-glass-option"
+                  onClick={() => {
+                    setThemeMode("thick-glass");
+                    positionGlassMenu(thickButtonRef.current);
+                    setGlassMenuOpen((open) => (themeMode === "thick-glass" ? !open : true));
+                  }}
+                >
+                  厚玻璃
+                </button>
               </div>
             </div>
             <Link
@@ -398,10 +449,10 @@ export function Shell() {
         </div>
       </header>
 
-      {themeMode !== "solid" && glassMenuOpen ? (
+      {glassMenuOpen ? (
         <div
           ref={glassMenuRef}
-          className="glass-theme-popover liquid-glass-card"
+          className={`glass-theme-popover ${themeMode === "solid" ? "solid-theme-popover" : "liquid-glass-card"}`}
           style={
             {
               "--glass-menu-top": `${glassMenuPosition.top}px`,
@@ -409,87 +460,116 @@ export function Shell() {
             } as CSSProperties
           }
         >
-          <div className="glass-theme-section">
-            <div className="glass-theme-section-title">
-              <span>背景壁纸</span>
-              <strong>{WALLPAPERS.find((wallpaper) => wallpaper.value === glassWallpaper)?.label ?? "壁纸"}</strong>
-            </div>
-            <div className="wallpaper-grid" role="listbox" aria-label="背景壁纸">
-              {WALLPAPERS.map((wallpaper) => (
-                <button
-                  key={wallpaper.value}
-                  type="button"
-                  className="wallpaper-option"
-                  data-active={glassWallpaper === wallpaper.value}
-                  onClick={() => setGlassWallpaper(wallpaper.value)}
-                >
-                  <img src={`/wallpaper/thumbs/${wallpaper.value}.webp`} alt="" loading="lazy" decoding="async" />
-                  <span>{wallpaper.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <label className="glass-hue-control glass-theme-section">
-            <span className="glass-theme-section-title">
-              <span>主题色相</span>
-              <strong>{glassColorMode === "white" ? "白色" : glassHue}</strong>
-            </span>
-            <div className="glass-color-mode-row">
-              <button
-                type="button"
-                className="glass-color-mode-option"
-                data-active={glassColorMode === "white"}
-                onClick={() => setGlassColorMode((mode) => (mode === "white" ? "color" : "white"))}
-              >
-                白色
-              </button>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="330"
-              step="15"
-              value={glassHue}
-              onChange={(event) => {
-                setGlassColorMode("color");
-                setGlassHue(Number(event.target.value));
-              }}
-            />
-          </label>
-          {themeMode === "liquid-glass" ? (
+          {themeMode === "solid" ? (
             <div className="glass-theme-section">
-            <div className="glass-theme-section-title">
-              <span>Shader 特效</span>
-              <strong>{enabledShaderEffectCount}/3</strong>
+              <div className="glass-theme-section-title">
+                <span>纯色配色</span>
+                <strong>{solidPalette === "dark" ? "深色" : "浅色"}</strong>
+              </div>
+              <div className="solid-palette-grid" aria-label="纯色配色">
+                <button
+                  type="button"
+                  className="glass-effect-option"
+                  data-active={solidPalette === "light"}
+                  onClick={() => setSolidPalette("light")}
+                >
+                  当前（浅色）
+                </button>
+                <button
+                  type="button"
+                  className="glass-effect-option"
+                  data-active={solidPalette === "dark"}
+                  onClick={() => setSolidPalette("dark")}
+                >
+                  深色
+                </button>
+              </div>
             </div>
-            <div className="glass-effect-grid" aria-label="Shader 特效">
-              <button
-                type="button"
-                className="glass-effect-option"
-                data-active={glassShaderEffects.fluid}
-                onClick={() => toggleGlassShaderEffect("fluid")}
-              >
-                流体噪点
-              </button>
-              <button
-                type="button"
-                className="glass-effect-option"
-                data-active={glassShaderEffects.cursor}
-                onClick={() => toggleGlassShaderEffect("cursor")}
-              >
-                鼠标柔光
-              </button>
-              <button
-                type="button"
-                className="glass-effect-option"
-                data-active={glassShaderEffects.ripple}
-                onClick={() => toggleGlassShaderEffect("ripple")}
-              >
-                点击涟漪
-              </button>
-            </div>
-          </div>
-          ) : null}
+          ) : (
+            <>
+              <div className="glass-theme-section">
+                <div className="glass-theme-section-title">
+                  <span>背景壁纸</span>
+                  <strong>{WALLPAPERS.find((wallpaper) => wallpaper.value === glassWallpaper)?.label ?? "壁纸"}</strong>
+                </div>
+                <div className="wallpaper-grid" role="listbox" aria-label="背景壁纸">
+                  {WALLPAPERS.map((wallpaper) => (
+                    <button
+                      key={wallpaper.value}
+                      type="button"
+                      className="wallpaper-option"
+                      data-active={glassWallpaper === wallpaper.value}
+                      onClick={() => setGlassWallpaper(wallpaper.value)}
+                    >
+                      <img src={`/wallpaper/thumbs/${wallpaper.value}.webp`} alt="" loading="lazy" decoding="async" />
+                      <span>{wallpaper.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="glass-hue-control glass-theme-section">
+                <span className="glass-theme-section-title">
+                  <span>主题色相</span>
+                  <strong>{glassColorMode === "white" ? "白色" : glassHue}</strong>
+                </span>
+                <div className="glass-color-mode-row">
+                  <button
+                    type="button"
+                    className="glass-color-mode-option"
+                    data-active={glassColorMode === "white"}
+                    onClick={() => setGlassColorMode((mode) => (mode === "white" ? "color" : "white"))}
+                  >
+                    白色
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="330"
+                  step="15"
+                  value={glassHue}
+                  onChange={(event) => {
+                    setGlassColorMode("color");
+                    setGlassHue(Number(event.target.value));
+                  }}
+                />
+              </label>
+              {themeMode === "liquid-glass" ? (
+                <div className="glass-theme-section">
+                  <div className="glass-theme-section-title">
+                    <span>Shader 特效</span>
+                    <strong>{enabledShaderEffectCount}/3</strong>
+                  </div>
+                  <div className="glass-effect-grid" aria-label="Shader 特效">
+                    <button
+                      type="button"
+                      className="glass-effect-option"
+                      data-active={glassShaderEffects.fluid}
+                      onClick={() => toggleGlassShaderEffect("fluid")}
+                    >
+                      流体噪点
+                    </button>
+                    <button
+                      type="button"
+                      className="glass-effect-option"
+                      data-active={glassShaderEffects.cursor}
+                      onClick={() => toggleGlassShaderEffect("cursor")}
+                    >
+                      鼠标柔光
+                    </button>
+                    <button
+                      type="button"
+                      className="glass-effect-option"
+                      data-active={glassShaderEffects.ripple}
+                      onClick={() => toggleGlassShaderEffect("ripple")}
+                    >
+                      点击涟漪
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       ) : null}
 
