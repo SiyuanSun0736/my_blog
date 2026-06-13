@@ -82,7 +82,7 @@ export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(f
   { className, ...props },
   ref,
 ) {
-  return <div ref={ref} className={cn("rounded-[1.75rem]", className)} {...props} />;
+  return <div ref={ref} className={cn("liquid-glass-card rounded-[1.75rem]", className)} {...props} />;
 });
 
 export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(function CardHeader(
@@ -134,6 +134,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={resolvedDisabled}
       className={cn(
         "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium outline-none transition duration-200 focus-visible:ring-2 focus-visible:ring-black/10 disabled:pointer-events-none disabled:opacity-50",
+        "liquid-glass-control",
         size === "sm" ? "px-3 py-1.5 text-sm" : "px-5 py-3 text-sm",
         radius === "full" ? "rounded-full" : "rounded-[1rem]",
         buttonVariantClass(variant, color),
@@ -166,6 +167,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       ref={ref}
       className={cn(
         "w-full border border-black/10 bg-white/70 px-4 py-3 text-sm text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)]/80 focus:border-black/30 focus:bg-white",
+        "liquid-glass-control",
         radius === "full" ? "rounded-full" : "rounded-[1rem]",
         className,
       )}
@@ -226,6 +228,7 @@ export function Chip({ children, className, color = "default", size = "md", vari
     <span
       className={cn(
         "inline-flex items-center justify-center rounded-full font-medium",
+        "liquid-glass-control",
         size === "sm" ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm",
         chipVariantClass(variant, color),
         className,
@@ -247,6 +250,7 @@ export function Avatar({ className, color = "default", name, ...props }: AvatarP
     <div
       className={cn(
         "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+        "liquid-glass-control",
         color === "primary" ? "bg-[var(--ink)] text-white" : "bg-white/70 text-[var(--ink)]",
         className,
       )}

@@ -131,18 +131,31 @@ export function Shell() {
             <Chip color="warning" variant="flat" className="hidden sm:inline-flex">
               长期更新中
             </Chip>
-            <label className="theme-select-shell inline-flex flex-1 items-center justify-between gap-2 rounded-full border border-black/10 px-3 py-2 text-sm font-medium text-[var(--ink)] transition sm:flex-none">
-              <span className="text-[var(--muted)]">主题</span>
-              <select
-                aria-label="主题选项"
-                className="theme-select min-w-0 flex-1 bg-transparent text-sm font-medium text-[var(--ink)] outline-none sm:flex-none"
-                value={themeMode}
-                onChange={(event) => setThemeMode(event.target.value === "liquid-glass" ? "liquid-glass" : "solid")}
+            <div
+              className="theme-switch liquid-glass-control"
+              aria-label="主题选项"
+              role="radiogroup"
+            >
+              <span className={`theme-switch-thumb ${themeMode === "liquid-glass" ? "translate-x-full" : "translate-x-0"}`} />
+              <button
+                type="button"
+                role="radio"
+                aria-checked={themeMode === "solid"}
+                className="theme-switch-option"
+                onClick={() => setThemeMode("solid")}
               >
-                <option value="solid">纯色背景</option>
-                <option value="liquid-glass">液态玻璃</option>
-              </select>
-            </label>
+                纯色
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={themeMode === "liquid-glass"}
+                className="theme-switch-option"
+                onClick={() => setThemeMode("liquid-glass")}
+              >
+                玻璃
+              </button>
+            </div>
             <Link
               to="/"
               className={

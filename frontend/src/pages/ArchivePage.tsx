@@ -250,8 +250,7 @@ export function ArchivePage() {
 
   return (
     <div className="space-y-8 lg:space-y-10">
-      <section className="overflow-hidden rounded-[2.25rem] border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
-        <div className="h-3 w-full bg-[linear-gradient(90deg,#0f766e_0%,#d96c3d_100%)]" />
+      <section className="glass-panel overflow-hidden rounded-[2.25rem] border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
         <div className="space-y-5 px-6 py-7 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
           <Chip color="secondary" variant="flat">
             时间线归档

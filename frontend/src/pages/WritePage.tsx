@@ -1550,8 +1550,7 @@ export function WritePage() {
   if (!accessVerified) {
     return (
       <div className="mx-auto max-w-4xl">
-        <Card className="overflow-hidden border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
-          <div className="h-3 w-full bg-[linear-gradient(90deg,#0f766e_0%,#f59e0b_100%)]" />
+        <Card className="glass-panel overflow-hidden border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
           <CardHeader className="flex flex-col items-start gap-4 px-6 pb-0 pt-6 sm:px-8 sm:pt-8">
             <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Admin Console</p>
             <div className="max-w-2xl space-y-4">
@@ -1696,8 +1695,7 @@ export function WritePage() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_380px]">
-        <Card className="overflow-hidden border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
-          <div className="h-3 w-full bg-[linear-gradient(90deg,#0f766e_0%,#f59e0b_100%)]" />
+        <Card className="glass-panel overflow-hidden border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
           <CardHeader className="flex flex-col items-start gap-4 px-6 pb-0 pt-6 sm:px-8 sm:pt-8">
             <p className="text-sm uppercase tracking-[0.28em] text-[var(--muted)]">Admin Workspace</p>
             <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
