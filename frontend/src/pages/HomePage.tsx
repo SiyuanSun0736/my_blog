@@ -362,7 +362,7 @@ export function HomePage() {
               </div>
             </CardHeader>
             <CardBody className="gap-4 px-6 pb-6 pt-5">
-              <div className="rounded-[1.5rem] border border-black/10 bg-white/75 p-5 text-sm leading-7 text-[var(--muted)]">
+              <div className="glass-inset rounded-[1.5rem] border border-black/10 bg-white/75 p-5 text-sm leading-7 text-[var(--muted)]">
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">GitHub</p>
                 <a
                   href={GITHUB_PROFILE_URL}
@@ -399,25 +399,25 @@ export function HomePage() {
             </CardHeader>
             <CardBody className="gap-4 px-6 pb-6 pt-5">
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
+                <div className="glass-inset rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
                   <p className="text-sm font-semibold text-[var(--ink)]">Compiler</p>
                   <p className="mt-2 text-sm leading-7 text-[var(--muted)]">SSA、IR lowering、pass 顺序与代码生成细节。</p>
                 </div>
-                <div className="rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
+                <div className="glass-inset rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
                   <p className="text-sm font-semibold text-[var(--ink)]">Perf</p>
                   <p className="mt-2 text-sm leading-7 text-[var(--muted)]">flamegraph、cache 行为、回归定位与 microbenchmark。</p>
                 </div>
-                <div className="rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
+                <div className="glass-inset rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
                   <p className="text-sm font-semibold text-[var(--ink)]">Deep Learning</p>
                   <p className="mt-2 text-sm leading-7 text-[var(--muted)]">训练流水线、CUDA 资源预算和可恢复的实验流程。</p>
                 </div>
-                <div className="rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
+                <div className="glass-inset rounded-[1.25rem] border border-black/10 bg-white/70 p-4">
                   <p className="text-sm font-semibold text-[var(--ink)]">Build / K8s</p>
                   <p className="mt-2 text-sm leading-7 text-[var(--muted)]">Makefile、发布脚本、集群排障与运行手册。</p>
                 </div>
               </div>
 
-              <div className="rounded-[1.5rem] border border-black/10 bg-white/75 p-5">
+              <div className="glass-inset rounded-[1.5rem] border border-black/10 bg-white/75 p-5">
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Hot Tags</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {topTags.slice(0, 4).map(([tag, count]) => (
@@ -425,7 +425,7 @@ export function HomePage() {
                       key={tag}
                       type="button"
                       onClick={() => setKeyword(tag)}
-                      className="rounded-full border border-black/10 bg-white/80 px-3 py-1.5 text-sm text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30"
+                      className="glass-inset rounded-full border border-black/10 bg-white/80 px-3 py-1.5 text-sm text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30"
                     >
                       #{tag} · {count}
                     </button>

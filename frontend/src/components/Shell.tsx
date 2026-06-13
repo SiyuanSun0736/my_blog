@@ -1,6 +1,7 @@
 import { Chip } from "./ui";
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 type ThemeMode = "solid" | "liquid-glass";
 
@@ -8,6 +9,7 @@ const THEME_STORAGE_KEY = "wanderlust-theme";
 const GLASS_WALLPAPER_STORAGE_KEY = "wanderlust-glass-wallpaper";
 const GLASS_HUE_STORAGE_KEY = "wanderlust-glass-hue";
 const DEFAULT_GLASS_HUE = 105;
+const GLASS_MENU_WIDTH = 336;
 const WALLPAPERS = [
   { label: "壁纸 1", value: "07905b16e08767c9cc4719f0266b004b.jpg" },
   { label: "壁纸 2", value: "4bdca906a520689e14a45007951472b6.jpg" },
@@ -54,6 +56,11 @@ export function Shell() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(resolveStoredTheme);
   const [glassWallpaper, setGlassWallpaper] = useState(resolveStoredWallpaper);
   const [glassHue, setGlassHue] = useState(resolveStoredHue);
+  const [glassMenuOpen, setGlassMenuOpen] = useState(false);
+  const [glassMenuPosition, setGlassMenuPosition] = useState({ top: 0, left: 0 });
+  const themeSwitchRef = useRef<HTMLDivElement>(null);
+  const glassButtonRef = useRef<HTMLButtonElement>(null);
+  const glassMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
@@ -69,6 +76,55 @@ export function Shell() {
     document.documentElement.style.setProperty("--dopamine-hue", String(glassHue));
     window.localStorage.setItem(GLASS_HUE_STORAGE_KEY, String(glassHue));
   }, [glassHue]);
+
+  useEffect(() => {
+    if (!glassMenuOpen || themeMode !== "liquid-glass") {
+      return;
+    }
+
+    const updateMenuPosition = () => {
+      const buttonRect = glassButtonRef.current?.getBoundingClientRect();
+      if (!buttonRect) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const menuWidth = Math.min(GLASS_MENU_WIDTH, window.innerWidth - viewportPadding * 2);
+      const centeredLeft = buttonRect.left + buttonRect.width / 2 - menuWidth / 2;
+      const left = Math.min(window.innerWidth - viewportPadding - menuWidth, Math.max(viewportPadding, centeredLeft));
+
+      setGlassMenuPosition({
+        top: Math.round(buttonRect.bottom + 4),
+        left: Math.round(left),
+      });
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!themeSwitchRef.current?.contains(target) && !glassMenuRef.current?.contains(target)) {
+        setGlassMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setGlassMenuOpen(false);
+      }
+    };
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [glassMenuOpen, themeMode]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -158,6 +214,23 @@ export function Shell() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const positionGlassMenu = () => {
+    const buttonRect = glassButtonRef.current?.getBoundingClientRect();
+    if (!buttonRect) {
+      return;
+    }
+
+    const viewportPadding = 16;
+    const menuWidth = Math.min(GLASS_MENU_WIDTH, window.innerWidth - viewportPadding * 2);
+    const centeredLeft = buttonRect.left + buttonRect.width / 2 - menuWidth / 2;
+    const left = Math.min(window.innerWidth - viewportPadding - menuWidth, Math.max(viewportPadding, centeredLeft));
+
+    setGlassMenuPosition({
+      top: Math.round(buttonRect.bottom + 4),
+      left: Math.round(left),
+    });
+  };
+
   return (
     <div className="page-shell text-[var(--ink)]">
       <header className="site-header border-b border-black/10">
@@ -170,72 +243,42 @@ export function Shell() {
             <Chip color="warning" variant="flat" className="hidden sm:inline-flex">
               长期更新中
             </Chip>
-            <div
-              className="theme-switch liquid-glass-control"
-              aria-label="主题选项"
-              role="radiogroup"
-            >
-              <span className={`theme-switch-thumb ${themeMode === "liquid-glass" ? "translate-x-full" : "translate-x-0"}`} />
-              <button
-                type="button"
-                role="radio"
-                aria-checked={themeMode === "solid"}
-                className="theme-switch-option"
-                onClick={() => setThemeMode("solid")}
+            <div className="theme-switch-wrap" ref={themeSwitchRef}>
+              <div
+                className="theme-switch liquid-glass-control"
+                aria-label="主题选项"
+                role="radiogroup"
               >
-                纯色
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={themeMode === "liquid-glass"}
-                className="theme-switch-option"
-                onClick={() => setThemeMode("liquid-glass")}
-              >
-                玻璃
-              </button>
+                <span className={`theme-switch-thumb ${themeMode === "liquid-glass" ? "translate-x-full" : "translate-x-0"}`} />
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={themeMode === "solid"}
+                  className="theme-switch-option"
+                  onClick={() => {
+                    setThemeMode("solid");
+                    setGlassMenuOpen(false);
+                  }}
+                >
+                  纯色
+                </button>
+                <button
+                  ref={glassButtonRef}
+                  type="button"
+                  role="radio"
+                  aria-checked={themeMode === "liquid-glass"}
+                  aria-expanded={themeMode === "liquid-glass" && glassMenuOpen}
+                  className="theme-switch-option theme-switch-glass-option"
+                  onClick={() => {
+                    setThemeMode("liquid-glass");
+                    positionGlassMenu();
+                    setGlassMenuOpen((open) => (themeMode === "liquid-glass" ? !open : true));
+                  }}
+                >
+                  玻璃
+                </button>
+              </div>
             </div>
-            {themeMode === "liquid-glass" ? (
-              <details className="glass-theme-menu">
-                <summary className="glass-theme-trigger liquid-glass-control">设置</summary>
-                <div className="glass-theme-popover liquid-glass-card">
-                  <div className="glass-theme-section">
-                    <div className="glass-theme-section-title">
-                      <span>背景壁纸</span>
-                      <strong>{WALLPAPERS.find((wallpaper) => wallpaper.value === glassWallpaper)?.label ?? "壁纸"}</strong>
-                    </div>
-                    <div className="wallpaper-grid" role="listbox" aria-label="背景壁纸">
-                      {WALLPAPERS.map((wallpaper) => (
-                        <button
-                          key={wallpaper.value}
-                          type="button"
-                          className="wallpaper-option"
-                          data-active={glassWallpaper === wallpaper.value}
-                          onClick={() => setGlassWallpaper(wallpaper.value)}
-                        >
-                          <img src={`/wallpaper/${wallpaper.value}`} alt="" />
-                          <span>{wallpaper.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <label className="glass-hue-control glass-theme-section">
-                    <span className="glass-theme-section-title">
-                      <span>主题色相</span>
-                      <strong>{glassHue}</strong>
-                    </span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="330"
-                      step="15"
-                      value={glassHue}
-                      onChange={(event) => setGlassHue(Number(event.target.value))}
-                    />
-                  </label>
-                </div>
-              </details>
-            ) : null}
             <Link
               to="/"
               className={
@@ -259,6 +302,54 @@ export function Shell() {
           </div>
         </div>
       </header>
+
+      {themeMode === "liquid-glass" && glassMenuOpen ? (
+        <div
+          ref={glassMenuRef}
+          className="glass-theme-popover liquid-glass-card"
+          style={
+            {
+              "--glass-menu-top": `${glassMenuPosition.top}px`,
+              "--glass-menu-left": `${glassMenuPosition.left}px`,
+            } as CSSProperties
+          }
+        >
+          <div className="glass-theme-section">
+            <div className="glass-theme-section-title">
+              <span>背景壁纸</span>
+              <strong>{WALLPAPERS.find((wallpaper) => wallpaper.value === glassWallpaper)?.label ?? "壁纸"}</strong>
+            </div>
+            <div className="wallpaper-grid" role="listbox" aria-label="背景壁纸">
+              {WALLPAPERS.map((wallpaper) => (
+                <button
+                  key={wallpaper.value}
+                  type="button"
+                  className="wallpaper-option"
+                  data-active={glassWallpaper === wallpaper.value}
+                  onClick={() => setGlassWallpaper(wallpaper.value)}
+                >
+                  <img src={`/wallpaper/${wallpaper.value}`} alt="" />
+                  <span>{wallpaper.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="glass-hue-control glass-theme-section">
+            <span className="glass-theme-section-title">
+              <span>主题色相</span>
+              <strong>{glassHue}</strong>
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="330"
+              step="15"
+              value={glassHue}
+              onChange={(event) => setGlassHue(Number(event.target.value))}
+            />
+          </label>
+        </div>
+      ) : null}
 
       <main className="page-frame py-6 sm:py-8 lg:py-10 xl:py-12">
         <Outlet />
