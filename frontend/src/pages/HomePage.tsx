@@ -274,27 +274,18 @@ export function HomePage() {
                   <p className="text-xl font-semibold text-[var(--ink)]">
                     {latestPost ? formatPublishDate(latestPost.publishedAt) : "等待加载"}
                   </p>
-                  <p className="text-sm leading-6 text-[var(--muted)]">
-                    先把最近一次发布放在最上面，方便从最新实验、复盘或修订开始读。
-                  </p>
                 </CardBody>
               </Card>
               <Card className="border border-black/10 bg-white/70 shadow-none">
                 <CardBody className="gap-2 p-5">
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">内容规模</p>
                   <p className="text-3xl font-semibold text-[var(--ink)]">{sortedPosts.length || 0}</p>
-                  <p className="text-sm leading-6 text-[var(--muted)]">
-                    篇记录，拆成 {Object.keys(categoryCounts).length || 0} 个栏目，方便按问题域而不是按时间硬翻。
-                  </p>
                 </CardBody>
               </Card>
               <Card className="border border-black/10 bg-white/70 shadow-none">
                 <CardBody className="gap-2 p-5">
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">阅读节奏</p>
                   <p className="text-3xl font-semibold text-[var(--ink)]">{averageReadMinutes || 0} 分钟</p>
-                  <p className="text-sm leading-6 text-[var(--muted)]">
-                    单篇平均时长，尽量控制在一次完整 review、通勤或 benchmark 复盘里能读完。
-                  </p>
                 </CardBody>
               </Card>
             </div>
