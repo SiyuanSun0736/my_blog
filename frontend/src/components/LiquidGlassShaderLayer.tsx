@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-const MAX_RECTS = 48;
+const MAX_RECTS = 32;
 const WALLPAPER_IDS = [
   "07905b16e08767c9cc4719f0266b004b",
   "4bdca906a520689e14a45007951472b6",
@@ -74,6 +74,12 @@ void main() {
     vec2 center = rect.xy + rect.zw * 0.5;
     vec2 local = frag - center;
     float radius = u_radii[i];
+
+    vec2 looseBounds = abs(local) - rect.zw * 0.5 - vec2(22.0);
+    if (looseBounds.x > 0.0 || looseBounds.y > 0.0) {
+      continue;
+    }
+
     float dist = roundedBoxSdf(local, rect.zw * 0.5, radius);
     float mask = 1.0 - smoothstep(0.0, 1.25, dist);
 
@@ -98,28 +104,28 @@ void main() {
     refracted.g = sampleWallpaper(uv).g;
     refracted.b = sampleWallpaper(uv - vec2(chroma, -chroma * 0.4)).b;
 
-    vec3 tint = mix(refracted, u_tint, 0.018);
+    vec3 tint = mix(refracted, u_tint, 0.008);
     float topLight = smoothstep(0.85, -0.4, local.y / max(rect.w, 1.0)) * smoothstep(0.75, -0.4, local.x / max(rect.z, 1.0));
     float bottomShade = smoothstep(-0.2, 0.95, local.y / max(rect.w, 1.0)) * smoothstep(-0.3, 0.95, local.x / max(rect.z, 1.0));
     float spec = pow(max(dot(normalize(vec2(-0.55, -0.85)), -n), 0.0), 18.0);
     float caustic = sin(local.x * 0.045 + u_time * 0.7) * cos(local.y * 0.035 - u_time * 0.45) * 0.5 + 0.5;
 
     vec3 glass = tint;
-    glass += vec3(0.34) * topLight * 0.12;
-    glass += vec3(1.0) * spec * 0.34;
-    glass += u_tint * caustic * curve * 0.035;
-    glass -= vec3(0.14, 0.16, 0.18) * bottomShade * 0.08;
-    glass += vec3(1.0) * rim * 0.3;
-    glass += vec3(0.75, 0.88, 1.0) * edge * 0.18;
+    glass += vec3(0.34) * topLight * 0.08;
+    glass += vec3(1.0) * spec * 0.24;
+    glass += u_tint * caustic * curve * 0.018;
+    glass -= vec3(0.14, 0.16, 0.18) * bottomShade * 0.05;
+    glass += vec3(1.0) * rim * 0.2;
+    glass += vec3(0.75, 0.88, 1.0) * edge * 0.12;
 
-    float centerAlpha = curve * 0.045;
-    float edgeAlpha = rim * 0.22 + edge * 0.12;
-    float alpha = mask * (centerAlpha + edgeAlpha + spec * 0.12);
+    float centerAlpha = curve * 0.018;
+    float edgeAlpha = rim * 0.14 + edge * 0.08;
+    float alpha = mask * (centerAlpha + edgeAlpha + spec * 0.08);
     finalColor = mix(finalColor, glass, alpha);
     finalAlpha = max(finalAlpha, alpha);
   }
 
-  gl_FragColor = vec4(finalColor, clamp(finalAlpha, 0.0, 0.34));
+  gl_FragColor = vec4(finalColor, clamp(finalAlpha, 0.0, 0.22));
 }
 `;
 
@@ -211,6 +217,7 @@ function collectRects() {
       };
     })
     .filter((rect): rect is NonNullable<typeof rect> => rect !== null)
+    .sort((left, right) => right.width * right.height - left.width * left.height)
     .slice(0, MAX_RECTS);
 }
 
@@ -260,6 +267,49 @@ export function LiquidGlassShaderLayer() {
     let imageSize: [number, number] = [1, 1];
     let frame = 0;
     let lastWallpaper = "";
+    let rectsDirty = true;
+    let sizeDirty = true;
+    let activeUntil = performance.now() + 700;
+    let lastDrawTime = 0;
+    let resizeTimer = 0;
+    let rectCount = 0;
+    const rectData = new Float32Array(MAX_RECTS * 4);
+    const radiusData = new Float32Array(MAX_RECTS);
+
+    const markActive = (duration = 280) => {
+      rectsDirty = true;
+      activeUntil = Math.max(activeUntil, performance.now() + duration);
+    };
+
+    const markResize = () => {
+      sizeDirty = true;
+      markActive(420);
+      if (resizeTimer) {
+        window.clearTimeout(resizeTimer);
+      }
+      resizeTimer = window.setTimeout(() => {
+        sizeDirty = true;
+        rectsDirty = true;
+        activeUntil = Math.max(activeUntil, performance.now() + 240);
+      }, 120);
+    };
+
+    const refreshRects = (dpr: number) => {
+      rectData.fill(0);
+      radiusData.fill(0);
+
+      const rects = collectRects();
+      rectCount = rects.length;
+      rects.forEach((rect, index) => {
+        rectData[index * 4] = rect.x * dpr;
+        rectData[index * 4 + 1] = rect.y * dpr;
+        rectData[index * 4 + 2] = rect.width * dpr;
+        rectData[index * 4 + 3] = rect.height * dpr;
+        radiusData[index] = rect.radius * dpr;
+      });
+
+      rectsDirty = false;
+    };
 
     const loadTexture = () => {
       const wallpaper = getWallpaperId();
@@ -280,30 +330,35 @@ export function LiquidGlassShaderLayer() {
     };
 
     const render = (time: number) => {
+      const isLiquid = document.documentElement.dataset.theme === "liquid-glass";
+      const active = time < activeUntil || rectsDirty || sizeDirty;
+      const minFrameMs = isLiquid ? (active ? 0 : 1000 / 10) : 1000 / 2;
+
+      if (document.hidden || time - lastDrawTime < minFrameMs) {
+        frame = window.requestAnimationFrame(render);
+        return;
+      }
+
+      lastDrawTime = time;
       loadTexture();
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const width = Math.max(1, Math.floor(window.innerWidth * dpr));
       const height = Math.max(1, Math.floor(window.innerHeight * dpr));
-      if (canvas.width !== width || canvas.height !== height) {
+      if (sizeDirty || canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
         canvas.style.width = `${window.innerWidth}px`;
         canvas.style.height = `${window.innerHeight}px`;
+        sizeDirty = false;
+        rectsDirty = true;
       }
 
-      const isLiquid = document.documentElement.dataset.theme === "liquid-glass";
-      const rects = isLiquid ? collectRects() : [];
-      const rectData = new Float32Array(MAX_RECTS * 4);
-      const radiusData = new Float32Array(MAX_RECTS);
-
-      rects.forEach((rect, index) => {
-        rectData[index * 4] = rect.x * dpr;
-        rectData[index * 4 + 1] = rect.y * dpr;
-        rectData[index * 4 + 2] = rect.width * dpr;
-        rectData[index * 4 + 3] = rect.height * dpr;
-        radiusData[index] = rect.radius * dpr;
-      });
+      if (isLiquid && rectsDirty) {
+        refreshRects(dpr);
+      } else if (!isLiquid) {
+        rectCount = 0;
+      }
 
       const [r, g, b] = readAmbientColor();
 
@@ -323,7 +378,7 @@ export function LiquidGlassShaderLayer() {
       gl.uniform2f(resolutionLocation, width, height);
       gl.uniform2f(imageResolutionLocation, imageSize[0], imageSize[1]);
       gl.uniform1f(timeLocation, time / 1000);
-      gl.uniform1i(rectCountLocation, rects.length);
+      gl.uniform1i(rectCountLocation, rectCount);
       gl.uniform4fv(rectsLocation, rectData);
       gl.uniform1fv(radiiLocation, radiusData);
       gl.uniform3f(tintLocation, r, g, b);
@@ -332,10 +387,40 @@ export function LiquidGlassShaderLayer() {
       frame = window.requestAnimationFrame(render);
     };
 
+    const handleScroll = () => markActive(220);
+    const handleResize = () => markResize();
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        markResize();
+      }
+    };
+    const scrollOptions: AddEventListenerOptions = { passive: true, capture: true };
+    const resizeOptions: AddEventListenerOptions = { passive: true };
+    const mutationObserver = new MutationObserver(() => markActive(500));
+    const resizeObserver = new ResizeObserver(() => markResize());
+
+    window.addEventListener("scroll", handleScroll, scrollOptions);
+    window.addEventListener("resize", handleResize, resizeOptions);
+    document.addEventListener("visibilitychange", handleVisibility);
+    mutationObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style", "data-theme"],
+      childList: true,
+      subtree: true,
+    });
+    resizeObserver.observe(document.documentElement);
+    resizeObserver.observe(document.body);
+
     frame = window.requestAnimationFrame(render);
 
     return () => {
       window.cancelAnimationFrame(frame);
+      window.clearTimeout(resizeTimer);
+      window.removeEventListener("scroll", handleScroll, scrollOptions);
+      window.removeEventListener("resize", handleResize, resizeOptions);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      mutationObserver.disconnect();
+      resizeObserver.disconnect();
       gl.deleteTexture(texture);
       gl.deleteBuffer(positionBuffer);
       gl.deleteProgram(program);

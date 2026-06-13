@@ -1929,3 +1929,33 @@ a {
     padding-inline: 0.15rem;
   }
 }
+
+:root[data-theme="liquid-glass"] .liquid-glass-shader-layer {
+  opacity: 0.9;
+}
+
+:root[data-theme="liquid-glass"] :where(.glass-panel, .liquid-glass-card, .liquid-glass-control, .glass-inset, .story-prose pre, .post-toc-link:hover, .post-toc-link-active, .bg-white\/90, .bg-white\/80, .bg-white\/75, .bg-white\/70, .bg-white\/65, .bg-white\/60, .bg-white\/55, .bg-white\/50, .bg-white\/40) {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.012) !important;
+}
+
+:root[data-theme="liquid-glass"] :where(.glass-panel, .liquid-glass-card) {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  outline-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="liquid-glass"] :where(.liquid-glass-control, .glass-inset, .story-prose pre, .post-toc-link:hover, .post-toc-link-active) {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+:root[data-theme="liquid-glass"] :where(.bg-\[var\(--ink\)\], .bg-emerald-600) {
+  background: color-mix(in srgb, rgb(var(--glass-ambient-rgb)) 4%, rgba(10, 8, 6, 0.24)) !important;
+  backdrop-filter: none !important;
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08) !important;
+}
