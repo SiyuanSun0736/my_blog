@@ -108,7 +108,7 @@ vec3 rippleWave(vec2 frag) {
 
     vec2 delta = frag - ripple.xy;
     float dist = length(delta);
-    float maxReach = 210.0 * u_pixelRatio;
+    float maxReach = 260.0 * u_pixelRatio;
     float distanceGate = 1.0 - smoothstep(maxReach - 24.0 * u_pixelRatio, maxReach, dist);
     if (distanceGate <= 0.001) {
       continue;
@@ -116,19 +116,57 @@ vec3 rippleWave(vec2 frag) {
 
     vec2 dir = delta / max(dist, 1.0);
     float radius = age * 470.0 * u_pixelRatio;
-    float band = 12.0 * u_pixelRatio;
+    float band = 15.0 * u_pixelRatio;
     float ring = 1.0 - smoothstep(0.0, band, abs(dist - radius));
     float inner = 1.0 - smoothstep(0.0, band * 1.7, abs(dist - radius + band * 1.1));
     float outer = 1.0 - smoothstep(0.0, band * 1.9, abs(dist - radius - band * 1.2));
     float shoulder = exp(-abs(dist - radius) * 0.02 / u_pixelRatio);
     float fade = pow(1.0 - age / 1.45, 1.9) * ripple.w;
-    float wave = (ring * 1.34 + outer * 0.34 - inner * 0.54 - shoulder * 0.18) * fade * distanceGate;
+    float pressLife = 1.0 - smoothstep(0.0, 0.62, age);
+    float pressRadius = (58.0 + age * 64.0) * u_pixelRatio;
+    float pressBowl = exp(-(dist * dist) / max(pressRadius * pressRadius, 1.0)) * pressLife * ripple.w;
+    float pressRim = exp(-abs(dist - pressRadius * 0.88) / max(12.0 * u_pixelRatio, 1.0)) * pressLife * ripple.w;
+    float rebound = sin(clamp(age / 0.62, 0.0, 1.0) * 3.1415926536) * pressLife;
+    float wave = (ring * 1.72 + outer * 0.52 - inner * 0.62 - shoulder * 0.12) * fade * distanceGate;
+    float press = (pressBowl * 0.78 - pressRim * 0.16) * distanceGate;
 
-    offset += dir * wave * 0.018;
-    strength += wave;
+    offset += dir * wave * 0.024 - dir * press * (0.026 + rebound * 0.018) + dir * pressRim * rebound * 0.009;
+    strength += wave * 1.12 + pressBowl * (0.56 + rebound * 0.32) + pressRim * 0.18;
   }
 
   return vec3(offset, strength);
+}
+
+float rippleGlow(vec2 frag) {
+  float glow = 0.0;
+
+  for (int i = 0; i < MAX_RIPPLES; i++) {
+    if (i >= u_rippleCount) {
+      break;
+    }
+
+    vec4 ripple = u_ripples[i];
+    float age = u_time - ripple.z;
+    if (age < 0.0 || age > 1.18) {
+      continue;
+    }
+
+    float dist = length(frag - ripple.xy);
+    float progress = clamp(age / 1.18, 0.0, 1.0);
+    float maxGlowReach = 228.0 * u_pixelRatio;
+    float reachGate = 1.0 - smoothstep(maxGlowReach - 22.0 * u_pixelRatio, maxGlowReach, dist);
+    float radius = progress * maxGlowReach;
+    float band = mix(14.0, 3.5, progress) * u_pixelRatio;
+    float ring = 1.0 - smoothstep(0.0, band, abs(dist - radius));
+    float innerRing = 1.0 - smoothstep(0.0, band * 1.24, abs(dist - radius + band * 0.92));
+    float outerHalo = 1.0 - smoothstep(0.0, band * 1.36, abs(dist - radius - band * 0.7));
+    float pressFlash = exp(-(dist * dist) / max(pow((42.0 + age * 20.0) * u_pixelRatio, 2.0), 1.0)) * (1.0 - smoothstep(0.0, 0.28, age));
+    float fade = pow(1.0 - progress, 1.22) * ripple.w * reachGate;
+
+    glow += (ring * 1.48 + innerRing * 0.26 + outerHalo * 0.1 + pressFlash * 0.5) * fade;
+  }
+
+  return clamp(glow, 0.0, 1.0);
 }
 
 vec2 coverUv(vec2 uv, vec2 canvas, vec2 imageSize) {
@@ -220,6 +258,7 @@ void main() {
   vec3 finalColor = vec3(0.0);
   float finalAlpha = 0.0;
   vec3 ripple = rippleWave(frag) * u_effects.y;
+  float globalRippleGlow = rippleGlow(frag) * u_effects.y;
 
   for (int i = 0; i < MAX_RECTS; i++) {
     if (i >= u_rectCount) {
@@ -323,6 +362,8 @@ void main() {
     float hoverPressure = exp(-(mouseDist * mouseDist) / max(pressureRadius * pressureRadius, 1.0)) * u_mouseStrength * u_effects.x * insideMask;
     float pressureT = clamp(mouseDist / max(pressureRadius, 1.0), 0.0, 1.0);
     float pressureLip = smoothstep(0.12, 0.42, pressureT) * (1.0 - smoothstep(0.54, 1.0, pressureT)) * hoverPressure;
+    float pressureBowl = exp(-pressureT * pressureT * 4.2) * hoverPressure;
+    float pressureRefract = clamp(pressureLip * 0.62 + pressureBowl * 0.22, 0.0, 1.0);
 
     float lightSide = clamp(dot(boundaryNormal, normalize(vec2(-0.62, 0.78))) * 0.5 + 0.5, 0.0, 1.0);
     float keyLight = pow(lightSide, 1.32);
@@ -367,15 +408,23 @@ void main() {
       tangentNormal * ((flowThread - fineThread + liquidThread * 0.6) * (6.0 + largeSurface * 13.0) / u_resolution) +
       boundaryNormal * ((movingCrest - movingUmbra) * (5.0 + largeSurface * 10.0) / u_resolution) +
       flowWarp * (0.00055 + largeSurface * 0.00105) +
-      -mouseDir * pressureLip * (4.0 + largeSurface * 5.0) / u_resolution +
-      rippleDir * rippleSurface * (0.006 + largeSurface * 0.006) +
+      -mouseDir * pressureRefract * (4.8 + largeSurface * 8.5) / u_resolution +
+      mouseDir * pressureLip * (0.8 + largeSurface * 1.6) / u_resolution +
+      rippleDir * rippleSurface * (0.012 + largeSurface * 0.014) +
       q * paneLens * (0.00004 + largeSurface * 0.00008);
 
     vec2 uv = clamp(v_uv + refractOffset, vec2(0.002), vec2(0.998));
     vec3 base = sampleWallpaper(v_uv);
+    float baseLuma = dot(base, vec3(0.299, 0.587, 0.114));
+    float colorDensity = smoothstep(0.04, 0.36, length(base - vec3(baseLuma)));
+    float shadowWarmth = pow(clamp(1.0 - baseLuma, 0.0, 1.0), 1.55);
+    float midtoneWarmth = smoothstep(0.82, 0.28, baseLuma);
+    float sunlightWarmth = clamp(0.012 + shadowWarmth * 0.86 + midtoneWarmth * colorDensity * 0.34, 0.012, 0.95);
+    vec3 adaptiveLight = mix(vec3(1.0, 0.998, 0.99), vec3(1.0, 0.7, 0.2), sunlightWarmth);
     float chroma = (outerSpec + rollingSpec + cornerSpec) * 0.00036 + outerLip * 0.00008;
-    float softness = 0.00016 + opticalThickness * 0.00034 + pressureLip * 0.00068;
-    vec3 refracted = samplePrism(uv, -opticalNormal, chroma + flowCaustic * 0.00022, softness);
+    float softness = 0.00016 + opticalThickness * 0.00034 + pressureLip * 0.00068 + rippleSurface * 0.00028;
+    vec2 interactionNormal = normalize(opticalNormal + mouseDir * pressureRefract * 0.36 + rippleDir * rippleSurface * 0.1);
+    vec3 refracted = samplePrism(uv, -interactionNormal, chroma + flowCaustic * 0.00022 + pressureRefract * tubeFace * 0.00018 + rippleSurface * 0.00008, softness);
     vec3 refractedNear = samplePrism(
       clamp(v_uv - opticalNormal * ((outerLip - innerLip) * 0.0018 + flowCaustic * 0.0012), vec2(0.002), vec2(0.998)),
       opticalNormal,
@@ -413,10 +462,12 @@ void main() {
     vec3 environmentGlint = vec3(0.86, 1.0, 0.96) * (flowCaustic + pathSweep * 0.28) * opticalThickness * 0.018;
     vec3 absorption = vec3(0.06, 0.09, 0.08) * (darkEdge * 0.045 + movingUmbra * 0.035);
     float pressureSun = exp(-pressureT * pressureT * 5.2) * hoverPressure;
+    float adaptiveSunStrength = 1.0 + sunlightWarmth * 0.52;
     vec3 mouseLight =
-      vec3(1.0, 0.98, 0.88) * pressureSun * 0.05 +
-      vec3(1.0) * pressureLip * 0.05;
-    vec3 rippleLight = vec3(1.0, 0.98, 0.9) * max(localRipple.z, 0.0) * tubeFace * 0.06;
+      adaptiveLight * pressureSun * 0.064 * adaptiveSunStrength +
+      mix(adaptiveLight, vec3(1.0), 0.24) * pressureLip * 0.06 * adaptiveSunStrength;
+    float visibleRipple = max(max(localRipple.z, 0.0) * tubeFace, globalRippleGlow * insideMask * (0.5 + tubeFace * 0.86));
+    vec3 rippleLight = mix(adaptiveLight, vec3(1.0), 0.02) * visibleRipple * (0.42 + sunlightWarmth * 0.2);
     vec3 glassComposite = max(vec3(0.0), backgroundBend + whiteSpec + sideVolume + dispersion + environmentGlint + mouseLight + rippleLight - absorption);
     float sourceAlpha = clamp(
       opticalThickness * 0.018 +
@@ -440,6 +491,7 @@ void main() {
       0.0,
       0.92
     );
+    sourceAlpha = clamp(sourceAlpha + globalRippleGlow * insideMask * 0.11, 0.0, 0.92);
     vec3 premul = finalColor * finalAlpha;
     premul = glassComposite * sourceAlpha + premul * (1.0 - sourceAlpha);
     finalAlpha = sourceAlpha + finalAlpha * (1.0 - sourceAlpha);
