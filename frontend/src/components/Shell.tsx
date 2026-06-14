@@ -537,25 +537,17 @@ export function Shell() {
               {themeMode === "liquid-glass" ? (
                 <div className="glass-theme-section">
                   <div className="glass-theme-section-title">
-                    <span>Shader 特效</span>
+                    <span>折射特效</span>
                     <strong>{enabledShaderEffectCount}/3</strong>
                   </div>
-                  <div className="glass-effect-grid" aria-label="Shader 特效">
-                    <button
-                      type="button"
-                      className="glass-effect-option"
-                      data-active={glassShaderEffects.fluid}
-                      onClick={() => toggleGlassShaderEffect("fluid")}
-                    >
-                      流体噪点
-                    </button>
+                  <div className="glass-effect-grid" aria-label="折射特效">
                     <button
                       type="button"
                       className="glass-effect-option"
                       data-active={glassShaderEffects.cursor}
                       onClick={() => toggleGlassShaderEffect("cursor")}
                     >
-                      鼠标柔光
+                      悬停折射
                     </button>
                     <button
                       type="button"
@@ -563,7 +555,15 @@ export function Shell() {
                       data-active={glassShaderEffects.ripple}
                       onClick={() => toggleGlassShaderEffect("ripple")}
                     >
-                      点击涟漪
+                      点击波纹
+                    </button>
+                    <button
+                      type="button"
+                      className="glass-effect-option"
+                      data-active={glassShaderEffects.fluid}
+                      onClick={() => toggleGlassShaderEffect("fluid")}
+                    >
+                      边缘漫射
                     </button>
                   </div>
                 </div>

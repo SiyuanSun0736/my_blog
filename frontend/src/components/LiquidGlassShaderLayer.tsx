@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 const MAX_RECTS = 32;
 const MAX_RIPPLES = 6;
+const GLASS_TARGET_SELECTOR = ".glass-panel, .liquid-glass-card, .liquid-glass-control, .glass-inset, .story-prose pre, .post-toc-link-active";
 const WALLPAPER_IDS = [
   "07905b16e08767c9cc4719f0266b004b",
   "4bdca906a520689e14a45007951472b6",
@@ -82,7 +83,7 @@ float fbm(vec2 p) {
 
 vec3 rippleWave(vec2 frag) {
   vec2 offset = vec2(0.0);
-  float light = 0.0;
+  float strength = 0.0;
 
   for (int i = 0; i < MAX_RIPPLES; i++) {
     if (i >= u_rippleCount) {
@@ -91,30 +92,33 @@ vec3 rippleWave(vec2 frag) {
 
     vec4 ripple = u_ripples[i];
     float age = u_time - ripple.z;
-    if (age < 0.0 || age > 1.8) {
+    if (age < 0.0 || age > 1.45) {
       continue;
     }
 
     vec2 delta = frag - ripple.xy;
     float dist = length(delta);
-    float maxReach = 190.0 * u_pixelRatio;
-    float distanceGate = 1.0 - smoothstep(maxReach - 34.0 * u_pixelRatio, maxReach, dist);
+    float maxReach = 210.0 * u_pixelRatio;
+    float distanceGate = 1.0 - smoothstep(maxReach - 24.0 * u_pixelRatio, maxReach, dist);
     if (distanceGate <= 0.001) {
       continue;
     }
 
     vec2 dir = delta / max(dist, 1.0);
-    float radius = age * 520.0;
-    float ring = 1.0 - smoothstep(0.0, 34.0, abs(dist - radius));
-    float softTrail = exp(-abs(dist - radius) * 0.012);
-    float fade = pow(1.0 - age / 1.8, 1.7) * ripple.w;
-    float wave = (ring * 0.95 + softTrail * 0.16) * fade * distanceGate;
+    float radius = age * 470.0 * u_pixelRatio;
+    float band = 12.0 * u_pixelRatio;
+    float ring = 1.0 - smoothstep(0.0, band, abs(dist - radius));
+    float inner = 1.0 - smoothstep(0.0, band * 1.7, abs(dist - radius + band * 1.1));
+    float outer = 1.0 - smoothstep(0.0, band * 1.9, abs(dist - radius - band * 1.2));
+    float shoulder = exp(-abs(dist - radius) * 0.02 / u_pixelRatio);
+    float fade = pow(1.0 - age / 1.45, 1.9) * ripple.w;
+    float wave = (ring * 1.34 + outer * 0.34 - inner * 0.54 - shoulder * 0.18) * fade * distanceGate;
 
-    offset += dir * wave * 0.0065;
-    light += wave;
+    offset += dir * wave * 0.018;
+    strength += abs(wave);
   }
 
-  return vec3(offset, light);
+  return vec3(offset, strength);
 }
 
 vec2 coverUv(vec2 uv, vec2 canvas, vec2 imageSize) {
@@ -137,20 +141,28 @@ vec3 sampleWallpaper(vec2 uv) {
   return texture2D(u_image, texUv).rgb;
 }
 
+vec3 samplePrism(vec2 uv, vec2 normal, float chroma, float softness) {
+  vec2 dir = normalize(normal + vec2(0.0001, -0.0001));
+  vec2 tangent = vec2(-dir.y, dir.x);
+  vec3 spread;
+  spread.r = sampleWallpaper(uv + dir * chroma + tangent * chroma * 0.28).r;
+  spread.g = sampleWallpaper(uv - dir * chroma * 0.12).g;
+  spread.b = sampleWallpaper(uv - dir * chroma - tangent * chroma * 0.2).b;
+
+  vec3 softened =
+    spread * 0.68 +
+    sampleWallpaper(uv + tangent * softness) * 0.12 +
+    sampleWallpaper(uv - tangent * softness) * 0.12 +
+    sampleWallpaper(uv - dir * softness * 0.65) * 0.08;
+
+  return softened;
+}
+
 void main() {
   vec2 frag = v_uv * u_resolution;
   vec3 finalColor = vec3(0.0);
   float finalAlpha = 0.0;
-  vec2 fluidUv = vec2(v_uv.x * u_resolution.x / max(u_resolution.y, 1.0), v_uv.y);
-  float globalFluid = mix(0.5, fbm(fluidUv * 2.8 + vec2(u_time * 0.075, -u_time * 0.052)), u_effects.x);
-  float fluidDetail = fbm(fluidUv * 7.2 + vec2(-u_time * 0.08, u_time * 0.055));
-  float ribbonPhase = sin((fluidUv.x * 4.2 + fluidUv.y * 6.1 + globalFluid * 5.4 + u_time * 0.32) * 3.14159);
-  float fluidRibbon = smoothstep(0.7, 0.99, ribbonPhase) * (1.0 - smoothstep(0.86, 1.0, fluidDetail));
-  float fluidMist = smoothstep(0.48, 0.9, fluidDetail);
-  float globalVeil = (fluidRibbon * 0.42 + fluidMist * 0.1) * u_effects.x;
-  float mouseDistance = length((frag - u_mouse) / max(u_resolution.y, 1.0));
-  float mouseGlow = exp(-mouseDistance * mouseDistance * 22.0) * u_mouseStrength * u_effects.y;
-  vec3 ripple = rippleWave(frag) * u_effects.z;
+  vec3 ripple = rippleWave(frag) * u_effects.y;
 
   for (int i = 0; i < MAX_RECTS; i++) {
     if (i >= u_rectCount) {
@@ -162,7 +174,7 @@ void main() {
     vec2 local = frag - center;
     float radius = u_radii[i];
 
-    vec2 looseBounds = abs(local) - rect.zw * 0.5 - vec2(22.0);
+    vec2 looseBounds = abs(local) - rect.zw * 0.5 - vec2(24.0 * u_pixelRatio);
     if (looseBounds.x > 0.0 || looseBounds.y > 0.0) {
       continue;
     }
@@ -179,23 +191,33 @@ void main() {
     vec2 n = normalize(local / max(rect.zw * 0.5, vec2(1.0)));
     float curve = 1.0 - smoothstep(0.0, 0.95, length(local / max(rect.zw * 0.5, vec2(1.0))));
 
-    vec2 localUv = local * 0.008 + vec2(u_time * 0.035, -u_time * 0.024);
-    float liquidA = fbm(localUv + globalFluid * 0.25);
-    float liquidB = fbm(localUv * 1.34 + vec2(8.1, -4.7) - globalFluid * 0.18);
-    float waveA = sin((local.x + local.y) * 0.014 + u_time * 0.42 + liquidA * 2.1);
-    float waveB = cos(local.y * 0.02 - u_time * 0.36 + liquidB * 2.0);
-    vec2 flow = vec2(waveA, waveB) * 0.0016 + vec2(liquidA - 0.5, liquidB - 0.5) * 0.0038;
-    vec2 mousePull = normalize(frag - u_mouse) * mouseGlow * 0.009;
-    vec2 refractOffset = n * (0.012 + rim * 0.018) + flow + ripple.xy * mask + mousePull * mask;
+    vec2 localUv = local * 0.006 + vec2(u_time * 0.018, -u_time * 0.014);
+    float liquidA = fbm(localUv + vec2(2.1, -1.3));
+    float liquidB = fbm(localUv * 1.42 + vec2(8.1, -4.7));
+    float waveA = sin((local.x + local.y) * 0.012 + u_time * 0.22 + liquidA * 1.2);
+    float waveB = cos(local.y * 0.016 - u_time * 0.18 + liquidB * 1.1);
+    vec2 microFlow = vec2(waveA, waveB) * 0.00085 + vec2(liquidA - 0.5, liquidB - 0.5) * 0.00165;
+
+    vec2 mouseDelta = frag - u_mouse;
+    float mouseDist = length(mouseDelta);
+    vec2 mouseDir = mouseDelta / max(mouseDist, 1.0);
+    float pressureRadius = 132.0 * u_pixelRatio;
+    float hoverPressure = exp(-(mouseDist * mouseDist) / max(pressureRadius * pressureRadius, 1.0)) * u_mouseStrength * u_effects.x * mask;
+    float pressureWell = (1.0 - smoothstep(0.0, pressureRadius, mouseDist)) * hoverPressure;
+    float pressureDimple = pow(pressureWell, 1.45);
+    vec2 lensNormal = normalize(n * (0.5 + rim * 1.2) + mouseDir * pressureDimple * 2.2 + normalize(ripple.xy + vec2(0.0001)) * ripple.z * 1.6);
+    vec2 pressOffset = mouseDir * pressureDimple * (0.034 + curve * 0.032);
+    vec2 refractOffset = n * (0.012 + rim * 0.022) + microFlow + ripple.xy * mask * 1.28 + pressOffset;
 
     vec2 uv = v_uv + refractOffset;
-    float chroma = 0.0024 + rim * 0.0035;
-    vec3 refracted;
-    refracted.r = sampleWallpaper(uv + vec2(chroma, -chroma * 0.4)).r;
-    refracted.g = sampleWallpaper(uv).g;
-    refracted.b = sampleWallpaper(uv - vec2(chroma, -chroma * 0.4)).b;
+    vec3 base = sampleWallpaper(v_uv);
+    float distortionEnergy = clamp(length(refractOffset) * 44.0 + hoverPressure * 0.95 + ripple.z * 0.8 + rim * 0.24, 0.0, 1.0);
+    float chroma = 0.0026 + rim * 0.0065 + hoverPressure * 0.006 + ripple.z * 0.0042;
+    float softness = (0.0012 + pressureDimple * 0.0026 + ripple.z * 0.0018) * u_effects.x;
+    vec3 refracted = samplePrism(uv, lensNormal, chroma, softness);
 
-    vec3 tint = mix(refracted, u_tint, 0.008);
+    vec3 shifted = base + (refracted - base) * (3.25 + hoverPressure * 3.4 + ripple.z * 2.4);
+    vec3 tint = mix(shifted, u_tint, 0.004 + rim * 0.018);
     float topLight = smoothstep(0.85, -0.4, local.y / max(rect.w, 1.0)) * smoothstep(0.75, -0.4, local.x / max(rect.z, 1.0));
     float bottomShade = smoothstep(-0.2, 0.95, local.y / max(rect.w, 1.0)) * smoothstep(-0.3, 0.95, local.x / max(rect.z, 1.0));
     float spec = pow(max(dot(normalize(vec2(-0.55, -0.85)), -n), 0.0), 18.0);
@@ -204,32 +226,32 @@ void main() {
       liquidA,
       0.58
     );
+    float edgeDiffuse = (rim * 0.34 + edge * 0.12) * u_effects.z;
+    float pressureSpec = pow(max(1.0 - mouseDist / max(pressureRadius, 1.0), 0.0), 3.0) * hoverPressure;
+    float grazing = pow(1.0 - clamp(dot(lensNormal, normalize(vec2(-0.35, -0.94))), 0.0, 1.0), 2.0) * distortionEnergy;
+    float brightRidge = smoothstep(0.16, 0.82, distortionEnergy) * (rim * 0.45 + pressureSpec * 0.65 + ripple.z * 0.18);
+    float darkRidge = smoothstep(0.18, 0.9, distortionEnergy) * bottomShade * 0.22;
 
     vec3 glass = tint;
-    glass += vec3(0.34) * topLight * 0.08;
-    glass += vec3(1.0) * spec * 0.24;
-    glass += u_tint * caustic * curve * 0.018;
-    glass += vec3(1.0, 0.96, 0.88) * mouseGlow * mask * 0.42;
-    glass += vec3(1.0, 0.98, 0.92) * ripple.z * mask * 0.13;
-    glass -= vec3(0.14, 0.16, 0.18) * bottomShade * 0.05;
-    glass += vec3(1.0) * rim * 0.2;
-    glass += vec3(0.75, 0.88, 1.0) * edge * 0.12;
+    glass += vec3(0.34) * topLight * 0.06;
+    glass += vec3(1.0) * spec * 0.18;
+    glass += vec3(1.0) * pressureSpec * 0.16;
+    glass += vec3(0.92, 0.98, 1.0) * grazing * 0.07;
+    glass += vec3(1.0, 0.97, 0.9) * brightRidge * 0.12;
+    glass += u_tint * caustic * curve * 0.014;
+    glass += mix(u_tint, vec3(1.0), 0.3) * edgeDiffuse;
+    glass -= vec3(0.14, 0.16, 0.18) * (bottomShade * 0.052 + darkRidge);
+    glass += vec3(1.0) * rim * 0.12;
+    glass += vec3(0.75, 0.88, 1.0) * edge * 0.06;
 
     float centerAlpha = curve * 0.018;
-    float edgeAlpha = rim * 0.14 + edge * 0.08;
-    float alpha = mask * (centerAlpha + edgeAlpha + spec * 0.08 + mouseGlow * 0.2 + ripple.z * 0.06);
+    float edgeAlpha = rim * 0.12 + edge * 0.058 + edgeDiffuse * 0.2;
+    float alpha = mask * (centerAlpha + edgeAlpha + spec * 0.06 + distortionEnergy * 0.18 + hoverPressure * 0.18 + ripple.z * 0.13);
     finalColor = mix(finalColor, glass, alpha);
     finalAlpha = max(finalAlpha, alpha);
   }
 
-  vec3 fluidColor = mix(u_tint, vec3(1.0), 0.1 + fluidRibbon * 0.12);
-  vec3 mouseColor = vec3(1.0, 0.96, 0.88);
-  vec3 rippleColor = vec3(1.0, 0.98, 0.92);
-  vec3 ambientGlow = fluidColor * globalVeil * 0.16 + mouseColor * mouseGlow * 0.44 + rippleColor * ripple.z * 0.06;
-  finalColor += ambientGlow;
-  finalAlpha = max(finalAlpha, globalVeil * 0.14 + mouseGlow * 0.34 + ripple.z * 0.07);
-
-  gl_FragColor = vec4(finalColor, clamp(finalAlpha, 0.0, 0.42));
+  gl_FragColor = vec4(finalColor, clamp(finalAlpha, 0.0, 0.48));
 }
 `;
 
@@ -312,15 +334,7 @@ function readAmbientColor() {
 }
 
 function collectRects() {
-  const selectors = [
-    ".glass-panel",
-    ".liquid-glass-card",
-    ".liquid-glass-control",
-    ".glass-inset",
-    ".story-prose pre",
-    ".post-toc-link-active",
-  ];
-  const elements = Array.from(document.querySelectorAll<HTMLElement>(selectors.join(",")));
+  const elements = Array.from(document.querySelectorAll<HTMLElement>(GLASS_TARGET_SELECTOR));
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
 
@@ -405,6 +419,7 @@ export function LiquidGlassShaderLayer() {
     let rectCount = 0;
     let rippleCursor = 0;
     let rippleCount = 0;
+    let hoveringGlass = false;
     const mouse = {
       x: window.innerWidth * 0.5,
       y: window.innerHeight * 0.5,
@@ -484,10 +499,11 @@ export function LiquidGlassShaderLayer() {
 
     const render = (time: number) => {
       const isLiquid = document.documentElement.dataset.theme === "liquid-glass";
-      const isShaderGlass = document.documentElement.dataset.glassRender !== "frosted";
-      const fluidEnabled = document.documentElement.dataset.glassFluid !== "off";
+      const isShaderGlass = document.documentElement.dataset.glassRender === "shader";
+      const cursorEnabled = document.documentElement.dataset.glassCursor !== "off";
+      const edgeDiffuseEnabled = document.documentElement.dataset.glassFluid !== "off";
       const active = time < activeUntil || rectsDirty || sizeDirty;
-      const idleFps = fluidEnabled ? 24 : 10;
+      const idleFps = edgeDiffuseEnabled ? 10 : 6;
       const minFrameMs = isLiquid && isShaderGlass ? (active ? 0 : 1000 / idleFps) : 1000 / 2;
 
       if (document.hidden || time - lastDrawTime < minFrameMs) {
@@ -513,7 +529,9 @@ export function LiquidGlassShaderLayer() {
       mouse.x += (mouse.targetX - mouse.x) * 0.16;
       mouse.y += (mouse.targetY - mouse.y) * 0.16;
       mouse.strength += (mouse.targetStrength - mouse.strength) * 0.12;
-      mouse.targetStrength *= 0.985;
+      if (!hoveringGlass || !cursorEnabled || !isShaderGlass) {
+        mouse.targetStrength *= 0.92;
+      }
 
       if (isLiquid && isShaderGlass && rectsDirty) {
         refreshRects(dpr);
@@ -544,9 +562,9 @@ export function LiquidGlassShaderLayer() {
       gl.uniform1f(mouseStrengthLocation, mouse.strength);
       gl.uniform3f(
         effectsLocation,
-        isShaderGlass && fluidEnabled ? 1 : 0,
         isShaderGlass && document.documentElement.dataset.glassCursor !== "off" ? 1 : 0,
         isShaderGlass && document.documentElement.dataset.glassRipple !== "off" ? 1 : 0,
+        isShaderGlass && edgeDiffuseEnabled ? 1 : 0,
       );
       gl.uniform1i(rectCountLocation, rectCount);
       gl.uniform4fv(rectsLocation, rectData);
@@ -561,29 +579,38 @@ export function LiquidGlassShaderLayer() {
 
     const handleScroll = () => markActive(220);
     const handleResize = () => markResize();
+    const isInsideGlassTarget = (event: PointerEvent) => {
+      const target = event.target;
+      return target instanceof Element && target.closest(GLASS_TARGET_SELECTOR) !== null;
+    };
     const handlePointerMove = (event: PointerEvent) => {
-      if (document.documentElement.dataset.glassRender === "frosted" || document.documentElement.dataset.glassCursor === "off") {
+      if (document.documentElement.dataset.glassRender !== "shader" || document.documentElement.dataset.glassCursor === "off" || !isInsideGlassTarget(event)) {
+        hoveringGlass = false;
+        mouse.targetStrength = 0;
         return;
       }
 
+      hoveringGlass = true;
       mouse.targetX = event.clientX;
       mouse.targetY = event.clientY;
       mouse.targetStrength = 1;
-      activeUntil = Math.max(activeUntil, performance.now() + 900);
+      activeUntil = Math.max(activeUntil, performance.now() + 1400);
     };
     const handlePointerLeave = () => {
+      hoveringGlass = false;
       mouse.targetStrength = 0;
       activeUntil = Math.max(activeUntil, performance.now() + 360);
     };
     const handlePointerDown = (event: PointerEvent) => {
-      if (document.documentElement.dataset.glassRender === "frosted" || document.documentElement.dataset.glassRipple === "off") {
+      if (document.documentElement.dataset.glassRender !== "shader" || document.documentElement.dataset.glassRipple === "off" || !isInsideGlassTarget(event)) {
         return;
       }
 
       mouse.targetX = event.clientX;
       mouse.targetY = event.clientY;
+      hoveringGlass = true;
       mouse.targetStrength = 1;
-      addRipple(event.clientX, event.clientY, event.pointerType === "mouse" ? 1 : 1.18);
+      addRipple(event.clientX, event.clientY, event.pointerType === "mouse" ? 1.18 : 1.32);
     };
     const handleVisibility = () => {
       if (!document.hidden) {
@@ -603,7 +630,7 @@ export function LiquidGlassShaderLayer() {
     document.addEventListener("visibilitychange", handleVisibility);
     mutationObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class", "style", "data-theme"],
+      attributeFilter: ["class", "style", "data-theme", "data-glass-render", "data-glass-fluid", "data-glass-cursor", "data-glass-ripple", "data-glass-color"],
       childList: true,
       subtree: true,
     });

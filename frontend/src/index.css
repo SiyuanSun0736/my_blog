@@ -201,7 +201,7 @@ a {
   height: 100vh;
   pointer-events: none;
   opacity: 0;
-  mix-blend-mode: screen;
+  mix-blend-mode: normal;
   transition: opacity 220ms ease;
 }
 
