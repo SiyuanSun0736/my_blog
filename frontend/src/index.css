@@ -205,8 +205,38 @@ a {
   transition: opacity 220ms ease;
 }
 
+.liquid-glass-sunlight {
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at var(--glass-sun-x, 50vw) var(--glass-sun-y, 50vh),
+      rgba(255, 250, 230, 0.66) 0,
+      rgba(255, 239, 188, 0.5) 2.8rem,
+      rgba(247, 219, 132, 0.28) 6rem,
+      rgba(236, 202, 108, 0.13) 9.6rem,
+      rgba(255, 241, 202, 0.045) 13.5rem,
+      transparent 18rem);
+  filter: saturate(1.02) brightness(0.98);
+  mix-blend-mode: screen;
+  transition: opacity 120ms ease;
+}
+
 :root[data-theme="liquid-glass"] .liquid-glass-shader-layer {
-  opacity: 0.96;
+  opacity: 1;
+  mix-blend-mode: normal;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] .liquid-glass-sunlight {
+  opacity: calc(var(--glass-sun-strength, 0) * 0.66);
+}
+
+:root[data-theme="liquid-glass"][data-glass-cursor="off"] .liquid-glass-sunlight,
+:root[data-theme="liquid-glass"][data-glass-render="frosted"] .liquid-glass-sunlight,
+:root[data-theme="liquid-glass"][data-glass-render="thick"] .liquid-glass-sunlight {
+  opacity: 0;
 }
 
 .page-shell {
@@ -669,8 +699,7 @@ a {
     var(--panel);
   backdrop-filter: blur(8px) saturate(1.36) contrast(1.035) brightness(1.02);
   box-shadow:
-    0 34px 70px var(--liquid-shadow),
-    0 14px 30px rgba(4, 14, 22, 0.035),
+    0 16px 34px rgba(4, 14, 22, 0.02),
     0 1px 0 rgba(255, 255, 255, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     inset 12px 12px 30px rgba(255, 255, 255, 0.068),
@@ -709,7 +738,6 @@ a {
   border-radius: inherit;
   border: 1px solid var(--liquid-edge);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, rgb(var(--glass-ambient-rgb)) 10%, rgba(255, 255, 255, 0.26)),
     inset 1px 1px 0 rgba(255, 255, 255, 0.72),
     inset -1px -1px 0 rgba(255, 255, 255, 0.18),
     inset 2px 2px 0 rgba(255, 255, 255, 0.16),
@@ -718,8 +746,7 @@ a {
     inset -22px 0 30px color-mix(in srgb, var(--liquid-shade) 72%, transparent),
     inset 0 18px 26px rgba(255, 255, 255, 0.2),
     inset 0 -22px 34px var(--liquid-shade),
-    inset 0 0 38px var(--liquid-glow),
-    0 0 0 1px rgba(255, 255, 255, 0.16);
+    inset 0 0 38px var(--liquid-glow);
   opacity: 1;
   pointer-events: none;
 }
@@ -2239,10 +2266,6 @@ a {
   }
 }
 
-:root[data-theme="liquid-glass"] .liquid-glass-shader-layer {
-  opacity: 0.96;
-}
-
 :root[data-theme="liquid-glass"][data-glass-render="frosted"] .liquid-glass-shader-layer {
   opacity: 0;
 }
@@ -2255,8 +2278,7 @@ a {
   background: transparent !important;
   backdrop-filter: none !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.012) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
 }
 
 :root[data-theme="liquid-glass"] :where(.glass-panel, .liquid-glass-card) {
@@ -2360,4 +2382,309 @@ a {
     0 14px 34px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     inset 0 -1px 0 rgba(0, 0, 0, 0.18) !important;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.glass-panel, .liquid-glass-card) {
+  position: relative;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  border-color: transparent !important;
+  outline: 0 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    outline-color 180ms ease;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.liquid-glass-control, .glass-inset, .story-prose pre, .post-toc-link:hover, .post-toc-link-active, .bg-white\/90, .bg-white\/80, .bg-white\/75, .bg-white\/70, .bg-white\/65, .bg-white\/60, .bg-white\/55, .bg-white\/50, .bg-white\/40) {
+  position: relative;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  border-color: transparent !important;
+  outline: 0 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(
+  .border-black\/10,
+  .border-black\/20,
+  .border-black\/30,
+  .border-dashed,
+  .shadow-\[0_18px_60px_rgba\(75\,54\,34\,0\.08\)\],
+  .shadow-\[0_24px_80px_rgba\(75\,54\,34\,0\.08\)\],
+  .shadow-\[0_30px_90px_rgba\(77\,53\,35\,0\.12\)\],
+  .shadow-\[8px_8px_0_rgba\(36\,24\,15\,0\.9\)\]
+) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.glass-panel, .liquid-glass-card):hover {
+  border-color: transparent !important;
+  outline-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.glass-panel, .liquid-glass-card)::before,
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.glass-panel, .liquid-glass-card)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.glass-panel, .liquid-glass-card)::before {
+  z-index: 2;
+  padding: var(--shader-rim-width, clamp(0.14rem, 0.28vw, 0.26rem));
+  background:
+    linear-gradient(112deg, transparent 0%, transparent 34%, rgba(255, 255, 255, 0.78) 42%, rgba(255, 255, 255, 0.18) 48%, transparent 58%, transparent 100%),
+    linear-gradient(292deg, transparent 0%, transparent 38%, rgba(255, 255, 255, 0.48) 46%, rgba(255, 255, 255, 0.12) 53%, transparent 64%, transparent 100%),
+    radial-gradient(34% 22% at 18% 4%, rgba(255, 255, 255, 0.95), transparent 76%),
+    radial-gradient(28% 24% at 96% 92%, rgba(255, 255, 255, 0.42), transparent 74%),
+    radial-gradient(38% 18% at 14% 0%, rgba(255, 255, 255, 0.9), transparent 78%),
+    radial-gradient(26% 18% at 34% 92%, rgba(7, 24, 22, 0.07), transparent 72%),
+    radial-gradient(18% 26% at 92% 48%, rgba(7, 24, 22, 0.055), transparent 74%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.035) 34%, transparent 78%, rgba(255, 255, 255, 0.14));
+  background-size:
+    260% 260%,
+    220% 220%,
+    180% 180%,
+    170% 170%,
+    150% 150%,
+    190% 190%,
+    180% 180%,
+    100% 100%;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    inset 5px 4px 10px rgba(255, 255, 255, 0.18),
+    0 0 18px rgba(255, 255, 255, 0.12);
+  opacity: var(--shader-rim-opacity, 0.34) !important;
+  animation: shader-liquid-rim-flow var(--shader-rim-speed, 7.5s) linear infinite;
+  filter: brightness(1.16) saturate(1.12);
+  will-change: background-position, filter;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.glass-panel, .liquid-glass-card)::after {
+  z-index: 2;
+  inset: var(--shader-inner-inset, clamp(0.08rem, 0.2vw, 0.14rem));
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    inset 1px 0 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.1);
+  opacity: var(--shader-inner-opacity, 0.24) !important;
+  background:
+    linear-gradient(110deg, transparent 0%, transparent 42%, rgba(255, 255, 255, 0.34) 50%, transparent 60%, transparent 100%),
+    radial-gradient(46% 26% at 16% 0%, rgba(255, 255, 255, 0.18), transparent 72%),
+    radial-gradient(32% 22% at 88% 92%, rgba(255, 255, 255, 0.08), transparent 76%);
+  background-size: 240% 240%, 100% 100%, 100% 100%;
+  animation: shader-liquid-inner-glint var(--shader-inner-speed, 9s) ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.glass-panel > *, .liquid-glass-card > *) {
+  position: relative;
+  z-index: 3;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.liquid-glass-control, .glass-inset)::before,
+:root[data-theme="liquid-glass"][data-glass-render="shader"] .post-toc-link-active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  padding: var(--shader-control-rim-width, clamp(0.22rem, 0.52vw, 0.52rem));
+  background:
+    linear-gradient(112deg, transparent 0%, transparent 32%, rgba(255, 255, 255, 0.72) 43%, rgba(255, 255, 255, 0.14) 52%, transparent 64%, transparent 100%),
+    radial-gradient(42% 28% at 14% 0%, rgba(255, 255, 255, 0.76), transparent 74%),
+    radial-gradient(24% 18% at 84% 86%, rgba(7, 24, 22, 0.055), transparent 74%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.045) 36%, transparent 82%, rgba(255, 255, 255, 0.12));
+  background-size: 230% 230%, 160% 160%, 170% 170%, 100% 100%;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    inset 4px 4px 10px rgba(255, 255, 255, 0.16);
+  opacity: var(--shader-control-rim-opacity, 0.42) !important;
+  animation: shader-liquid-rim-flow var(--shader-control-rim-speed, 6.5s) linear infinite;
+  filter: brightness(1.12);
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+@keyframes shader-liquid-rim-flow {
+  0% {
+    background-position: -145% 28%, 118% 78%, 8% 0%, 92% 100%, 0% 0%, 22% 96%, 92% 42%, 0% 0%;
+    filter: brightness(1.08) saturate(1.08);
+  }
+
+  38% {
+    background-position: 18% 48%, 42% 34%, 64% 18%, 32% 72%, 0% 0%, 62% 84%, 78% 58%, 0% 0%;
+    filter: brightness(1.26) saturate(1.16);
+  }
+
+  70% {
+    background-position: 112% 64%, -36% 18%, 96% 46%, 12% 20%, 0% 0%, 78% 94%, 90% 34%, 0% 0%;
+    filter: brightness(1.18) saturate(1.12);
+  }
+
+  100% {
+    background-position: 238% 82%, -156% 44%, 8% 0%, 92% 100%, 0% 0%, 22% 96%, 92% 42%, 0% 0%;
+    filter: brightness(1.1) saturate(1.08);
+  }
+}
+
+@keyframes shader-liquid-inner-glint {
+  0% {
+    background-position: -140% 30%, 0% 0%, 0% 0%;
+  }
+
+  52% {
+    background-position: 70% 55%, 0% 0%, 0% 0%;
+  }
+
+  100% {
+    background-position: 230% 76%, 0% 0%, 0% 0%;
+  }
+}
+
+.liquid-home-hero {
+  position: relative;
+  isolation: isolate;
+}
+
+:root[data-theme="liquid-glass"] .liquid-home-hero {
+  gap: clamp(0.85rem, 1.4vw, 1.45rem);
+  min-height: min(47rem, calc(100svh - 8.5rem));
+}
+
+:root[data-theme="liquid-glass"] .liquid-hero-main,
+:root[data-theme="liquid-glass"] .liquid-profile-card,
+:root[data-theme="liquid-glass"] .liquid-focus-card {
+  border-radius: clamp(2rem, 3vw, 3.2rem);
+}
+
+:root[data-theme="liquid-glass"] .liquid-hero-main {
+  min-height: min(44rem, calc(100svh - 9rem));
+}
+
+:root[data-theme="liquid-glass"] .liquid-hero-main > :first-child {
+  padding-top: clamp(3rem, 8svh, 6.25rem);
+}
+
+:root[data-theme="liquid-glass"] .liquid-hero-main .display-type {
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.32), 0 14px 44px rgba(0, 18, 28, 0.08);
+}
+
+:root[data-theme="liquid-glass"] .liquid-stat-tile,
+:root[data-theme="liquid-glass"] .liquid-featured-shelf {
+  position: relative;
+  overflow: hidden;
+}
+
+:root[data-theme="liquid-glass"] .liquid-stat-tile {
+  min-height: 8rem;
+  border-radius: clamp(1.35rem, 2vw, 2.1rem);
+}
+
+:root[data-theme="liquid-glass"] .liquid-featured-shelf {
+  border-radius: clamp(1.6rem, 2.4vw, 2.6rem);
+}
+
+:root[data-theme="liquid-glass"] .liquid-profile-card {
+  align-self: start;
+  transform: translateY(0.5rem);
+}
+
+:root[data-theme="liquid-glass"] .liquid-profile-avatar {
+  border-color: color-mix(in srgb, rgb(var(--glass-ambient-rgb)) 24%, rgba(24, 20, 18, 0.86));
+  box-shadow:
+    0 18px 38px rgba(0, 16, 24, 0.16),
+    8px 8px 0 color-mix(in srgb, rgb(var(--glass-ambient-rgb)) 16%, rgba(20, 16, 12, 0.78)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+:root[data-theme="liquid-glass"] .liquid-focus-card {
+  transform: translateY(-0.35rem);
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.liquid-hero-main, .liquid-profile-card, .liquid-focus-card, .liquid-stat-tile, .liquid-featured-shelf) {
+  border-color: transparent !important;
+  outline: 0 !important;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.brand-card, .theme-switch) {
+  --shader-rim-width: clamp(0.3rem, 0.68vw, 0.64rem);
+  --shader-rim-opacity: 0.46;
+  --shader-inner-inset: clamp(0.18rem, 0.45vw, 0.4rem);
+  --shader-inner-opacity: 0.26;
+  --shader-control-rim-width: clamp(0.2rem, 0.46vw, 0.4rem);
+  --shader-control-rim-opacity: 0.36;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] .liquid-hero-main {
+  --shader-rim-width: clamp(0.28rem, 0.58vw, 0.52rem);
+  --shader-rim-opacity: 0.48;
+  --shader-rim-speed: 6.8s;
+  --shader-inner-inset: clamp(0.12rem, 0.26vw, 0.22rem);
+  --shader-inner-opacity: 0.25;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.liquid-profile-card, .liquid-focus-card) {
+  --shader-rim-width: clamp(0.24rem, 0.5vw, 0.44rem);
+  --shader-rim-opacity: 0.44;
+  --shader-rim-speed: 7.2s;
+  --shader-inner-inset: clamp(0.1rem, 0.22vw, 0.2rem);
+  --shader-inner-opacity: 0.22;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.liquid-stat-tile, .liquid-featured-shelf) {
+  --shader-rim-width: clamp(0.18rem, 0.38vw, 0.32rem);
+  --shader-rim-opacity: 0.38;
+  --shader-rim-speed: 6.2s;
+  --shader-inner-inset: clamp(0.08rem, 0.18vw, 0.14rem);
+  --shader-inner-opacity: 0.2;
+  --shader-control-rim-width: clamp(0.16rem, 0.34vw, 0.28rem);
+  --shader-control-rim-opacity: 0.32;
+}
+
+:root[data-theme="liquid-glass"][data-glass-render="shader"] :where(.liquid-profile-card, .liquid-focus-card, .liquid-hero-main) .glass-inset {
+  --shader-control-rim-width: clamp(0.16rem, 0.34vw, 0.3rem);
+  --shader-control-rim-opacity: 0.36;
+  --shader-control-rim-speed: 5.8s;
+}
+
+@media (max-width: 768px) {
+  :root[data-theme="liquid-glass"] .liquid-home-hero {
+    min-height: auto;
+  }
+
+  :root[data-theme="liquid-glass"] .liquid-hero-main {
+    min-height: 36rem;
+  }
+
+  :root[data-theme="liquid-glass"] .liquid-profile-card,
+  :root[data-theme="liquid-glass"] .liquid-focus-card {
+    transform: none;
+  }
+
 }

@@ -217,8 +217,8 @@ export function HomePage() {
 
   return (
     <div className="space-y-10 lg:space-y-12">
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.9fr)]">
-        <Card className="glass-panel overflow-hidden border border-black/10 bg-[var(--panel-strong)] shadow-[0_30px_90px_rgba(77,53,35,0.12)]">
+      <section className="liquid-home-hero grid gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.9fr)]">
+        <Card className="liquid-hero-main glass-panel overflow-hidden border border-black/10 bg-[var(--panel-strong)]">
           <CardHeader className="flex flex-col items-start gap-4 px-6 pb-0 pt-6 sm:px-8 sm:pt-8">
             <div className="max-w-3xl space-y-4">
               <p className="font-mono text-sm uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -267,31 +267,31 @@ export function HomePage() {
               ) : null}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Card className="border border-black/10 bg-white/70 shadow-none">
-                <CardBody className="gap-2 p-5">
+            <div className="liquid-stat-grid grid gap-4 sm:grid-cols-3">
+              <div className="liquid-stat-tile glass-inset rounded-[1.4rem] border border-black/10 bg-white/70 p-5">
+                <div className="flex flex-col gap-2">
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">最近更新</p>
                   <p className="text-xl font-semibold text-[var(--ink)]">
                     {latestPost ? formatPublishDate(latestPost.publishedAt) : "等待加载"}
                   </p>
-                </CardBody>
-              </Card>
-              <Card className="border border-black/10 bg-white/70 shadow-none">
-                <CardBody className="gap-2 p-5">
+                </div>
+              </div>
+              <div className="liquid-stat-tile glass-inset rounded-[1.4rem] border border-black/10 bg-white/70 p-5">
+                <div className="flex flex-col gap-2">
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">内容规模</p>
                   <p className="text-3xl font-semibold text-[var(--ink)]">{sortedPosts.length || 0}</p>
-                </CardBody>
-              </Card>
-              <Card className="border border-black/10 bg-white/70 shadow-none">
-                <CardBody className="gap-2 p-5">
+                </div>
+              </div>
+              <div className="liquid-stat-tile glass-inset rounded-[1.4rem] border border-black/10 bg-white/70 p-5">
+                <div className="flex flex-col gap-2">
                   <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">阅读节奏</p>
                   <p className="text-3xl font-semibold text-[var(--ink)]">{averageReadMinutes || 0} 分钟</p>
-                </CardBody>
-              </Card>
+                </div>
+              </div>
             </div>
 
             {featuredShelfPosts.length > 0 ? (
-              <div className="rounded-[1.75rem] border border-black/10 bg-[rgba(15,118,110,0.08)] p-5 text-sm leading-7 text-[var(--muted)] sm:p-6">
+              <div className="liquid-featured-shelf glass-inset rounded-[1.75rem] border border-black/10 bg-[rgba(15,118,110,0.08)] p-5 text-sm leading-7 text-[var(--muted)] sm:p-6">
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                   {featuredPosts.length > 0 ? "先读这几篇" : "先看这些"}
                 </p>
@@ -323,11 +323,11 @@ export function HomePage() {
         </Card>
 
         <div className="grid gap-6">
-          <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
+          <Card className="liquid-profile-card glass-panel border border-black/10">
             <CardHeader className="flex flex-col items-start gap-4 px-6 pb-0 pt-6">
               <p className="font-mono text-sm tracking-[0.18em] text-[var(--muted)]">PROFILE</p>
               <div className="grid w-full gap-5 sm:grid-cols-[144px_minmax(0,1fr)] sm:items-start">
-                <div className="aspect-square overflow-hidden rounded-[2rem] border-2 border-black shadow-[8px_8px_0_rgba(36,24,15,0.9)]">
+                <div className="liquid-profile-avatar aspect-square overflow-hidden rounded-[2rem] border-2 border-black shadow-[8px_8px_0_rgba(36,24,15,0.9)]">
                   <img
                     src={AVATAR_URL}
                     alt="Wanderlust 的头像"
@@ -383,7 +383,7 @@ export function HomePage() {
             </CardBody>
           </Card>
 
-          <Card className="glass-panel border border-black/10 shadow-[0_24px_80px_rgba(75,54,34,0.08)]">
+          <Card className="liquid-focus-card glass-panel border border-black/10">
             <CardHeader className="flex flex-col items-start gap-2 px-6 pb-0 pt-6">
               <p className="font-mono text-sm tracking-[0.18em] text-[var(--muted)]">FOCUS MAP</p>
               <h2 className="display-type text-3xl text-[var(--ink)]">当前关注</h2>
@@ -440,7 +440,7 @@ export function HomePage() {
             </p>
           </div>
 
-          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
+          <Card className="glass-panel border border-black/10">
             <CardBody className="gap-5 p-5 sm:p-6">
               <div className="space-y-2">
                 <p className="text-sm font-medium text-[var(--ink)]">关键词搜索</p>
@@ -559,7 +559,7 @@ export function HomePage() {
         </div>
 
         <aside className="sidebar-scroll space-y-5 self-start">
-          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
+          <Card className="glass-panel border border-black/10">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
               <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">Columns</p>
               <h3 className="display-type text-3xl text-[var(--ink)]">栏目入口</h3>
@@ -585,7 +585,7 @@ export function HomePage() {
             </CardBody>
           </Card>
 
-          <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
+          <Card className="glass-panel border border-black/10">
             <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
               <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">High-Signal Tags</p>
               <h3 className="display-type text-3xl text-[var(--ink)]">高频标签</h3>
@@ -644,7 +644,7 @@ export function HomePage() {
           {archivePreviewGroups.map((group) => (
             <Card
               key={group.key}
-              className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]"
+              className="glass-panel border border-black/10"
             >
               <CardHeader className="flex items-center justify-between gap-3 px-5 pb-0 pt-5">
                 <div>

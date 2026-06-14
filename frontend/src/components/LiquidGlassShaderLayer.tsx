@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 const MAX_RECTS = 32;
 const MAX_RIPPLES = 6;
 const GLASS_TARGET_SELECTOR = ".glass-panel, .liquid-glass-card, .liquid-glass-control, .glass-inset, .story-prose pre, .post-toc-link-active";
+const GLASS_SHADER_EXCLUDE_SELECTOR = ".glass-theme-popover, .solid-theme-popover";
 const WALLPAPER_IDS = [
   "07905b16e08767c9cc4719f0266b004b",
   "4bdca906a520689e14a45007951472b6",
@@ -40,13 +41,22 @@ uniform vec4 u_rects[MAX_RECTS];
 uniform float u_radii[MAX_RECTS];
 uniform int u_rippleCount;
 uniform vec4 u_ripples[MAX_RIPPLES];
-uniform vec3 u_tint;
 
 varying vec2 v_uv;
 
 float roundedBoxSdf(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+
+vec2 roundedBoxNormal(vec2 p, vec2 b, float r) {
+  float e = max(0.72 * u_pixelRatio, 0.72);
+  vec2 dx = vec2(e, 0.0);
+  vec2 dy = vec2(0.0, e);
+  return normalize(vec2(
+    roundedBoxSdf(p + dx, b, r) - roundedBoxSdf(p - dx, b, r),
+    roundedBoxSdf(p + dy, b, r) - roundedBoxSdf(p - dy, b, r)
+  ) + vec2(0.0001));
 }
 
 float hash(vec2 p) {
@@ -173,105 +183,230 @@ void main() {
     vec2 center = rect.xy + rect.zw * 0.5;
     vec2 local = frag - center;
     float radius = u_radii[i];
+    float minDim = min(rect.z, rect.w);
+    float largeSurface = smoothstep(56.0 * u_pixelRatio, 320.0 * u_pixelRatio, minDim);
+    float glassWidth = mix(5.0, 24.0, largeSurface) * u_pixelRatio;
 
-    vec2 looseBounds = abs(local) - rect.zw * 0.5 - vec2(24.0 * u_pixelRatio);
+    vec2 looseBounds = abs(local) - rect.zw * 0.5 - vec2(glassWidth + 6.0 * u_pixelRatio);
     if (looseBounds.x > 0.0 || looseBounds.y > 0.0) {
       continue;
     }
 
     float dist = roundedBoxSdf(local, rect.zw * 0.5, radius);
-    float mask = 1.0 - smoothstep(0.0, 1.25, dist);
+    float aa = max(1.0 * u_pixelRatio, 0.001);
+    float tubeHalf = glassWidth * mix(0.62, 0.78, largeSurface);
+    float rimDist = dist + tubeHalf * 0.34;
+    float tubeMask = 1.0 - smoothstep(tubeHalf - aa, tubeHalf + aa, abs(rimDist));
+    float insideMask = 1.0 - smoothstep(0.0, aa, dist);
+    float paneMask = smoothstep(tubeHalf * 0.95, tubeHalf * 1.8, -dist) * insideMask;
+    float opticalMask = max(tubeMask, paneMask * 0.004);
 
-    if (mask <= 0.001) {
+    if (opticalMask <= 0.001) {
       continue;
     }
 
-    float interiorDepth = smoothstep(7.0 * u_pixelRatio, 78.0 * u_pixelRatio, -dist);
+    vec2 boundaryNormal = roundedBoxNormal(local, rect.zw * 0.5, radius);
+    vec2 tangentNormal = vec2(-boundaryNormal.y, boundaryNormal.x);
+    float tubeSigned = clamp(rimDist / max(tubeHalf, 1.0), -1.0, 1.0);
+    float tubeSection = sqrt(max(1.0 - tubeSigned * tubeSigned, 0.0)) * tubeMask;
+    float tubeFace = pow(tubeSection, 0.38) * tubeMask;
+    float tubeWall = pow(max(1.0 - tubeSection, 0.0), 0.22) * tubeMask;
+    float outerLip = exp(-abs(rimDist - tubeHalf) / max(0.8 * u_pixelRatio, 0.001)) * tubeMask;
+    float innerLip = exp(-abs(rimDist + tubeHalf) / max(0.9 * u_pixelRatio, 0.001)) * tubeMask * insideMask;
+    float outerPinch = exp(-abs(rimDist - tubeHalf * 0.72) / max(1.8 * u_pixelRatio, 0.001)) * tubeMask;
+    float innerPinch = exp(-abs(rimDist + tubeHalf * 0.72) / max(2.0 * u_pixelRatio, 0.001)) * tubeMask * insideMask;
+    float outerShoulder = exp(-abs(rimDist - tubeHalf * 0.42) / max(4.2 * u_pixelRatio, 0.001)) * tubeMask;
+    float innerShoulder = exp(-abs(rimDist + tubeHalf * 0.44) / max(4.6 * u_pixelRatio, 0.001)) * tubeMask * insideMask;
+    float centerCaustic = exp(-abs(rimDist) / max(3.8 * u_pixelRatio, 0.001)) * tubeFace;
+    float opticalThickness = clamp(tubeFace * 0.98 + tubeWall * 0.72 + outerPinch * 0.48 + innerPinch * 0.4, 0.0, 1.0);
+    float cornerEnergy = pow(clamp(abs(boundaryNormal.x * boundaryNormal.y) * 2.0, 0.0, 1.0), 0.58) * tubeMask;
+    float straightEnergy = pow(clamp(1.0 - abs(boundaryNormal.x * boundaryNormal.y) * 1.85, 0.0, 1.0), 1.25) * tubeMask;
+
+    float interiorDepth = smoothstep(tubeHalf * 1.1, tubeHalf * 3.2, -dist) * insideMask;
     vec3 localRipple = vec3(ripple.xy, ripple.z) * interiorDepth;
-    float rippleAmount = abs(localRipple.z);
-    float edge = 1.0 - smoothstep(-7.0, 1.0, dist);
-    float rim = smoothstep(-18.0, 0.0, dist) * mask;
     vec2 halfSize = max(rect.zw * 0.5, vec2(1.0));
     vec2 q = local / halfSize;
     float qLen = clamp(length(q), 0.0, 1.35);
-    float domeHeight = pow(clamp(1.0 - qLen * qLen * 0.72, 0.0, 1.0), 0.58);
-    float domeSlopeAmount = smoothstep(0.08, 0.92, qLen) * (0.36 + domeHeight * 0.64);
-    vec2 domeSlope = q * domeSlopeAmount;
-    vec2 edgeSlope = normalize(q + vec2(0.0001)) * pow(rim, 1.25) * 1.15;
-    vec2 lensSlope = domeSlope + edgeSlope;
-    vec2 n = normalize(lensSlope + vec2(0.0001, -0.0001));
-    float curve = domeHeight;
+    float paneLens = pow(clamp(1.0 - qLen * qLen * 0.76, 0.0, 1.0), 0.74) * paneMask * 0.22;
 
     vec2 localUv = local * 0.006 + vec2(u_time * 0.018, -u_time * 0.014);
     float liquidA = fbm(localUv + vec2(2.1, -1.3));
     float liquidB = fbm(localUv * 1.42 + vec2(8.1, -4.7));
-    float waveA = sin((local.x + local.y) * 0.012 + u_time * 0.22 + liquidA * 1.2);
-    float waveB = cos(local.y * 0.016 - u_time * 0.18 + liquidB * 1.1);
-    vec2 microFlow = vec2(waveA, waveB) * 0.00085 + vec2(liquidA - 0.5, liquidB - 0.5) * 0.00165;
+    float liquidC = fbm(localUv * 0.72 + vec2(-u_time * 0.012, u_time * 0.016));
+    float highlightNoise = liquidA * 0.52 + liquidB * 0.32 + liquidC * 0.16;
+    float tangentCoord = dot(local, tangentNormal);
+    float flowPhase = tangentCoord * 0.04 + u_time * 1.42 + highlightNoise * 6.2;
+    float counterFlowPhase = tangentCoord * 0.074 - u_time * 1.05 + local.x * 0.007 - local.y * 0.004;
+    float flowCarrier = pow(clamp(0.5 + 0.5 * sin(flowPhase), 0.0, 1.0), 8.5);
+    float counterCarrier = pow(clamp(0.5 + 0.5 * sin(counterFlowPhase + sin(flowPhase * 0.37) * 1.4), 0.0, 1.0), 11.0);
+    float movingThreadCenter = sin(flowPhase * 0.41 + counterFlowPhase * 0.18) * 0.38;
+    float flowThread = exp(-abs(tubeSigned - movingThreadCenter) / 0.15) * flowCarrier * tubeFace * u_effects.z;
+    float fineThread = exp(-abs(tubeSigned + movingThreadCenter * 0.72) / 0.064) * counterCarrier * tubeMask * u_effects.z;
+    float liquidThread = exp(-abs(tubeSigned - sin(flowPhase * 0.21 - u_time * 0.46) * 0.62) / 0.22) * pow(highlightNoise, 1.65) * tubeFace * u_effects.z;
+    float flowCaustic = (flowThread * 1.65 + fineThread * 1.05 + liquidThread * 0.86) * (0.5 + cornerEnergy * 1.35 + straightEnergy * 0.46);
+    float shadowPhase = tangentCoord * 0.028 - u_time * 1.18 + highlightNoise * 5.1;
+    float slowShadowPhase = tangentCoord * 0.014 + u_time * 0.54 + liquidB * 4.6;
+    float shadowWave =
+      pow(clamp(0.5 + 0.5 * sin(shadowPhase), 0.0, 1.0), 2.6) * 0.62 +
+      pow(clamp(0.5 + 0.5 * cos(slowShadowPhase), 0.0, 1.0), 3.8) * 0.38;
+    float shadowValley = pow(clamp(1.0 - shadowWave, 0.0, 1.0), 2.1) * tubeMask;
+    float shadowCrest = pow(clamp(shadowWave, 0.0, 1.0), 2.35) * tubeFace;
+    float edgePulse = (shadowCrest * 0.72 - shadowValley * 0.42) * u_effects.z;
+    float cylinderSlope = tubeSigned / max(tubeSection, 0.18);
+    vec2 opticalNormal = normalize(
+      boundaryNormal * (cylinderSlope * (1.25 + edgePulse * 0.24) + tubeSigned * 0.5) +
+      tangentNormal * ((highlightNoise - 0.5) * 0.62 + (flowThread - fineThread + liquidThread) * 1.15)
+    );
+    vec2 flowWarp = vec2(0.0);
+    vec2 flowUv = frag / max(u_resolution, vec2(1.0));
+    for (float wave = 1.0; wave < 5.0; wave += 1.0) {
+      flowWarp += vec2(
+        sin((flowUv.x + flowUv.y) * 5.2 * wave + u_time * (0.18 + wave * 0.035)),
+        cos((flowUv.x - flowUv.y) * 4.8 * wave - u_time * (0.16 + wave * 0.028))
+      ) / wave;
+    }
+    flowWarp *= (tubeMask * 0.9 + paneMask * 0.004) * u_effects.z;
 
     vec2 mouseDelta = frag - u_mouse;
     float mouseDist = length(mouseDelta);
     vec2 mouseDir = mouseDelta / max(mouseDist, 1.0);
-    float pressureRadius = 132.0 * u_pixelRatio;
-    float hoverPressure = exp(-(mouseDist * mouseDist) / max(pressureRadius * pressureRadius, 1.0)) * u_mouseStrength * u_effects.x * mask;
-    float pressureWell = (1.0 - smoothstep(0.0, pressureRadius, mouseDist)) * hoverPressure;
-    float pressureDimple = pow(pressureWell, 1.45);
-    vec2 pressureSlope = mouseDir * pressureDimple * (1.65 + domeHeight * 0.8);
-    vec2 rippleSlope = normalize(localRipple.xy + vec2(0.0001)) * localRipple.z * 1.45;
-    vec2 lensNormal = normalize(lensSlope * 1.25 + pressureSlope + rippleSlope + vec2(0.0001));
-    vec2 pressOffset = pressureSlope * (0.018 + domeHeight * 0.016);
-    vec2 domeOffset = lensSlope * (0.013 + rim * 0.013 + (1.0 - domeHeight) * 0.01);
-    vec2 refractOffset = domeOffset + microFlow * (0.35 + domeSlopeAmount) + localRipple.xy * mask * 1.18 + pressOffset;
+    float pressureRadius = mix(84.0, 230.0, largeSurface) * u_pixelRatio;
+    float hoverPressure = exp(-(mouseDist * mouseDist) / max(pressureRadius * pressureRadius, 1.0)) * u_mouseStrength * u_effects.x * insideMask;
+    float pressureT = clamp(mouseDist / max(pressureRadius, 1.0), 0.0, 1.0);
+    float pressureLip = smoothstep(0.12, 0.42, pressureT) * (1.0 - smoothstep(0.54, 1.0, pressureT)) * hoverPressure;
 
-    vec2 uv = v_uv + refractOffset;
+    float lightSide = clamp(dot(boundaryNormal, normalize(vec2(-0.62, -0.78))) * 0.5 + 0.5, 0.0, 1.0);
+    float keyLight = pow(lightSide, 1.32);
+    float lowerReflection = pow(clamp(dot(boundaryNormal, normalize(vec2(0.18, 0.98))) * 0.5 + 0.5, 0.0, 1.0), 1.8);
+    float sideShade = pow(1.0 - keyLight, 1.28) * opticalThickness;
+    float topRun = exp(-abs(boundaryNormal.y + 1.0) / 0.22) * tubeMask;
+    float backRun = (
+      exp(-abs(boundaryNormal.x - 1.0) / 0.32) +
+      exp(-abs(boundaryNormal.y - 1.0) / 0.32)
+    ) * tubeMask;
+    float brokenBackRun = backRun * (0.16 + pow(highlightNoise, 2.35) * 0.42 + shadowValley * 0.28);
+    float keyRun = clamp(topRun * 0.96 + cornerEnergy * 0.34 + shadowCrest * 0.18, 0.0, 1.0);
+    vec2 boxHalf = rect.zw * 0.5;
+    float topDistance = local.y + boxHalf.y - radius * 0.32;
+    float rightDistance = boxHalf.x - local.x - radius * 0.32;
+    float bottomDistance = boxHalf.y - local.y - radius * 0.32;
+    float topSweep = exp(-abs(topDistance - tubeHalf * 0.1) / max(5.2 * u_pixelRatio, 0.001)) * smoothstep(-boxHalf.x + radius * 0.55, boxHalf.x - radius * 0.45, local.x) * tubeMask;
+    float innerGlowRail = exp(-abs(topDistance - tubeHalf * 0.64) / max(7.0 * u_pixelRatio, 0.001)) * topRun * (0.68 + shadowCrest * 0.32);
+    float brokenRailMask = pow(highlightNoise, 2.6) * pow(clamp(0.5 + 0.5 * sin(tangentCoord * 0.038 + u_time * 0.76 + liquidB * 4.8), 0.0, 1.0), 2.9);
+    float lowerRail =
+      (
+        exp(-abs(bottomDistance - tubeHalf * 0.52) / max(7.2 * u_pixelRatio, 0.001)) +
+        exp(-abs(rightDistance - tubeHalf * 0.52) / max(7.2 * u_pixelRatio, 0.001))
+      ) * brokenRailMask * 0.34;
+    float grazingSheet = clamp(topSweep * 0.98 + innerGlowRail * 0.48 + flowCaustic * 0.16, 0.0, 1.0) * (0.28 + keyLight * 0.58);
+    float cornerBloom = cornerEnergy * pow(clamp(outerLip + innerLip + outerShoulder + centerCaustic * 0.85, 0.0, 1.0), 0.52) * (0.26 + keyLight * 0.56);
+    float backRim = lowerRail * brokenBackRun * opticalThickness * (0.12 + lowerReflection * 0.16);
+    float outerSpec = outerLip * (0.08 + keyLight * 2.35 + keyRun * 1.18);
+    float outerBroadSpec = (outerShoulder + outerPinch * 0.92) * (0.035 + keyLight * 0.86 + keyRun * 0.48);
+    float innerSpec = innerLip * (0.04 + keyLight * 1.1 + keyRun * 0.5);
+    float innerBroadSpec = (innerShoulder + innerPinch * 0.86) * (0.022 + keyLight * 0.36 + keyRun * 0.22);
+    float rollingSpec = flowCaustic * (0.08 + keyLight * 0.28 + keyRun * 0.22 + cornerEnergy * 0.18);
+    float straightSpec = straightEnergy * tubeFace * (0.016 + keyLight * 0.24 + keyRun * 0.16);
+    float cornerSpec = cornerEnergy * (outerLip * 0.68 + outerShoulder * 0.36 + centerCaustic * 0.3 + innerLip * 0.32) * (0.08 + keyLight * 0.62 + keyRun * 0.26);
+    float faceSheen = tubeFace * (0.008 + keyLight * 0.16 + keyRun * 0.1);
+    float movingUmbra = shadowValley * (0.11 + brokenBackRun * 0.16 + cornerEnergy * 0.14 + straightEnergy * 0.045) * opticalThickness;
+    float movingCrest = shadowCrest * (0.2 + keyRun * 0.3 + cornerEnergy * 0.2) * opticalThickness;
+    float darkEdge = movingUmbra * 0.44 + backRim * 0.08 + (outerPinch + innerPinch) * shadowValley * 0.018;
+
+    vec2 rippleDir = normalize(localRipple.xy + vec2(0.0001));
+    float rippleSurface = localRipple.z * interiorDepth;
+    float refractionPixels =
+      tubeFace * (36.0 + largeSurface * 86.0) +
+      tubeWall * (26.0 + largeSurface * 62.0) +
+      flowCaustic * (16.0 + largeSurface * 34.0) +
+      outerPinch * (13.0 + largeSurface * 26.0) +
+      innerPinch * (9.0 + largeSurface * 18.0);
+    vec2 refractOffset =
+      -opticalNormal * (refractionPixels / u_resolution) +
+      boundaryNormal * (tubeSigned * (12.0 + largeSurface * 28.0) * tubeMask / u_resolution) +
+      tangentNormal * ((highlightNoise - 0.5) * opticalThickness * (1.6 + largeSurface * 3.4) / u_resolution) +
+      tangentNormal * ((flowThread - fineThread + liquidThread * 0.6) * (6.0 + largeSurface * 13.0) / u_resolution) +
+      boundaryNormal * ((movingCrest - movingUmbra) * (5.0 + largeSurface * 10.0) / u_resolution) +
+      flowWarp * (0.00055 + largeSurface * 0.00105) +
+      -mouseDir * pressureLip * (4.0 + largeSurface * 5.0) / u_resolution +
+      rippleDir * rippleSurface * (0.006 + largeSurface * 0.006) +
+      q * paneLens * (0.00004 + largeSurface * 0.00008);
+
+    vec2 uv = clamp(v_uv + refractOffset, vec2(0.002), vec2(0.998));
     vec3 base = sampleWallpaper(v_uv);
-    float distortionEnergy = clamp(length(refractOffset) * 44.0 + hoverPressure * 0.95 + rippleAmount * 0.8 + rim * 0.24, 0.0, 1.0);
-    float chroma = 0.0026 + rim * 0.0065 + hoverPressure * 0.006 + rippleAmount * 0.0042;
-    float softness = (0.0012 + pressureDimple * 0.0026 + rippleAmount * 0.0018) * u_effects.x;
-    vec3 refracted = samplePrism(uv, lensNormal, chroma, softness);
-
-    vec3 shifted = base + (refracted - base) * (3.25 + hoverPressure * 3.4 + rippleAmount * 2.4);
-    vec3 tint = mix(shifted, u_tint, 0.004 + rim * 0.018);
-    float topLight = smoothstep(0.85, -0.4, local.y / max(rect.w, 1.0)) * smoothstep(0.75, -0.4, local.x / max(rect.z, 1.0));
-    float bottomShade = smoothstep(-0.2, 0.95, local.y / max(rect.w, 1.0)) * smoothstep(-0.3, 0.95, local.x / max(rect.z, 1.0));
-    float spec = pow(max(dot(normalize(vec2(-0.55, -0.85)), -n), 0.0), 18.0);
-    float caustic = mix(
-      sin(local.x * 0.045 + u_time * 0.7) * cos(local.y * 0.035 - u_time * 0.45) * 0.5 + 0.5,
-      liquidA,
-      0.58
+    float chroma = (outerSpec + rollingSpec + cornerSpec) * 0.00036 + outerLip * 0.00008;
+    float softness = 0.00016 + opticalThickness * 0.00034 + pressureLip * 0.00068;
+    vec3 refracted = samplePrism(uv, -opticalNormal, chroma + flowCaustic * 0.00022, softness);
+    vec3 refractedNear = samplePrism(
+      clamp(v_uv - opticalNormal * ((outerLip - innerLip) * 0.0018 + flowCaustic * 0.0012), vec2(0.002), vec2(0.998)),
+      opticalNormal,
+      chroma * 0.58,
+      softness * 0.72
     );
-    float edgeDiffuse = (rim * 0.34 + edge * 0.12) * u_effects.z;
-    float pressureSpec = pow(max(1.0 - mouseDist / max(pressureRadius, 1.0), 0.0), 3.0) * hoverPressure;
-    float grazing = pow(1.0 - clamp(dot(lensNormal, normalize(vec2(-0.35, -0.94))), 0.0, 1.0), 2.0) * distortionEnergy;
-    float rippleCrest = max(localRipple.z, 0.0);
-    float rippleTrough = max(-localRipple.z, 0.0);
-    float rippleSheen = smoothstep(0.025, 0.22, rippleAmount) * interiorDepth;
-    float brightRidge = smoothstep(0.16, 0.82, distortionEnergy) * (rim * 0.45 + pressureSpec * 0.65 + rippleCrest * 0.28);
-    float darkRidge = smoothstep(0.18, 0.9, distortionEnergy) * bottomShade * 0.22;
+    float bendAmount = clamp(tubeFace * 1.12 + tubeWall * 0.72 + centerCaustic * 0.42 + flowCaustic * 0.7 + paneLens * 0.004, 0.0, 0.98);
+    vec3 backgroundBend = base + (refracted - base) * bendAmount * (1.36 + tubeFace * 0.62) + (refractedNear - base) * clamp(flowCaustic + centerCaustic * 0.22, 0.0, 0.54);
 
-    vec3 glass = tint;
-    glass += vec3(0.34) * topLight * 0.06;
-    glass += vec3(1.0) * spec * 0.18;
-    glass += vec3(1.0) * pressureSpec * 0.16;
-    glass += vec3(0.92, 0.98, 1.0) * grazing * 0.07;
-    glass += vec3(1.0, 0.97, 0.9) * brightRidge * 0.12;
-    glass += vec3(1.0, 0.96, 0.86) * rippleCrest * 0.22;
-    glass -= vec3(0.12, 0.16, 0.2) * rippleTrough * 0.24;
-    glass += mix(u_tint, vec3(1.0), 0.38) * rippleSheen * 0.055;
-    glass += u_tint * caustic * curve * 0.014;
-    glass += mix(u_tint, vec3(1.0), 0.3) * edgeDiffuse;
-    glass -= vec3(0.14, 0.16, 0.18) * (bottomShade * 0.052 + darkRidge);
-    glass += vec3(1.0) * rim * 0.12;
-    glass += vec3(0.75, 0.88, 1.0) * edge * 0.06;
+    float outerDispersion = outerSpec * (0.055 + keyLight * 0.085);
+    float innerDispersion = innerSpec * 0.035;
+    vec3 dispersion =
+      vec3(1.0, 0.68, 0.3) * outerDispersion * 0.016 +
+      vec3(0.34, 0.86, 1.0) * innerDispersion * 0.01;
 
-    float centerAlpha = curve * 0.018;
-    float edgeAlpha = rim * 0.12 + edge * 0.058 + edgeDiffuse * 0.2;
-    float alpha = mask * (centerAlpha + edgeAlpha + spec * 0.06 + distortionEnergy * 0.18 + hoverPressure * 0.18 + rippleAmount * 0.14);
-    finalColor = mix(finalColor, glass, alpha);
-    finalAlpha = max(finalAlpha, alpha);
+    vec3 whiteSpec =
+      vec3(1.0) * outerSpec * 0.92 +
+      vec3(1.0) * outerBroadSpec * 0.52 +
+      vec3(0.96, 1.0, 1.0) * innerSpec * 0.64 +
+      vec3(0.9, 0.99, 1.0) * innerBroadSpec * 0.36 +
+      vec3(1.0, 0.99, 0.94) * rollingSpec * 0.62 +
+      vec3(1.0) * cornerSpec * 0.68 +
+      vec3(1.0, 0.99, 0.92) * grazingSheet * 0.92 +
+      vec3(1.0) * cornerBloom * 0.58 +
+      vec3(0.95, 1.0, 1.0) * straightSpec * 0.72 +
+      vec3(1.0) * faceSheen * 0.82 +
+      vec3(1.0, 0.98, 0.9) * flowThread * 0.88 +
+      vec3(0.82, 0.96, 1.0) * fineThread * 0.54 +
+      vec3(1.0, 0.98, 0.86) * liquidThread * 0.48 +
+      vec3(1.0, 0.98, 0.9) * movingCrest * 0.66;
+    vec3 sideVolume =
+      vec3(0.56, 0.82, 0.72) * sideShade * (0.025 + lowerReflection * 0.036) +
+      vec3(0.14, 0.27, 0.24) * (darkEdge * 0.038 + outerShoulder * brokenBackRun * 0.006 + innerShoulder * brokenBackRun * 0.005) +
+      vec3(0.08, 0.13, 0.11) * movingUmbra * 0.075;
+    vec3 environmentGlint = vec3(0.42, 0.88, 0.86) * lowerReflection * opticalThickness * 0.036;
+    vec3 absorption = vec3(0.06, 0.09, 0.08) * (darkEdge * 0.24 + sideShade * 0.045 + movingUmbra * 0.28 + (outerPinch + innerPinch) * brokenBackRun * 0.01);
+    float pressureSun = exp(-pressureT * pressureT * 5.2) * hoverPressure;
+    vec3 mouseLight =
+      vec3(1.0, 0.98, 0.88) * pressureSun * 0.05 +
+      vec3(1.0) * pressureLip * 0.05;
+    vec3 rippleLight = vec3(1.0, 0.98, 0.9) * max(localRipple.z, 0.0) * tubeFace * 0.06;
+    vec3 glassComposite = max(vec3(0.0), backgroundBend + whiteSpec + sideVolume + dispersion + environmentGlint + mouseLight + rippleLight - absorption);
+    float sourceAlpha = clamp(
+      opticalThickness * 0.035 +
+      paneLens * 0.00005 +
+      tubeWall * 0.012 +
+      sideShade * 0.018 +
+      outerSpec * 0.78 +
+      outerBroadSpec * 0.46 +
+      innerSpec * 0.58 +
+      innerBroadSpec * 0.32 +
+      rollingSpec * 0.42 +
+      flowCaustic * 0.36 +
+      movingUmbra * 0.22 +
+      movingCrest * 0.18 +
+      cornerSpec * 0.22 +
+      grazingSheet * 0.38 +
+      cornerBloom * 0.18 +
+      straightSpec * 0.18 +
+      pressureSun * 0.012,
+      0.0,
+      0.92
+    );
+    vec3 premul = finalColor * finalAlpha;
+    premul = glassComposite * sourceAlpha + premul * (1.0 - sourceAlpha);
+    finalAlpha = sourceAlpha + finalAlpha * (1.0 - sourceAlpha);
+    finalColor = premul / max(finalAlpha, 0.001);
   }
 
-  gl_FragColor = vec4(finalColor, clamp(finalAlpha, 0.0, 0.48));
+  gl_FragColor = vec4(finalColor, clamp(finalAlpha, 0.0, 0.94));
 }
 `;
 
@@ -323,36 +458,6 @@ function getWallpaperId() {
   return value && WALLPAPER_IDS.includes(value) ? value : WALLPAPER_IDS[0];
 }
 
-function readAmbientColor() {
-  const colorMode = document.documentElement.dataset.glassColor;
-  if (colorMode === "white") {
-    return [1, 1, 1] as const;
-  }
-
-  const hue = Number(getComputedStyle(document.documentElement).getPropertyValue("--dopamine-hue").trim());
-  const normalizedHue = Number.isFinite(hue) ? hue / 60 : 105 / 60;
-  const chroma = 0.72;
-  const x = chroma * (1 - Math.abs((normalizedHue % 2) - 1));
-  const m = 0.22;
-  let color: [number, number, number] = [0, 0, 0];
-
-  if (normalizedHue < 1) {
-    color = [chroma, x, 0];
-  } else if (normalizedHue < 2) {
-    color = [x, chroma, 0];
-  } else if (normalizedHue < 3) {
-    color = [0, chroma, x];
-  } else if (normalizedHue < 4) {
-    color = [0, x, chroma];
-  } else if (normalizedHue < 5) {
-    color = [x, 0, chroma];
-  } else {
-    color = [chroma, 0, x];
-  }
-
-  return [color[0] + m, color[1] + m, color[2] + m] as const;
-}
-
 function collectRects() {
   const elements = Array.from(document.querySelectorAll<HTMLElement>(GLASS_TARGET_SELECTOR));
   const viewportWidth = window.innerWidth;
@@ -360,6 +465,10 @@ function collectRects() {
 
   return elements
     .map((element) => {
+      if (element.closest(GLASS_SHADER_EXCLUDE_SELECTOR)) {
+        return null;
+      }
+
       const rect = element.getBoundingClientRect();
       if (rect.width < 8 || rect.height < 8 || rect.bottom < 0 || rect.right < 0 || rect.top > viewportHeight || rect.left > viewportWidth) {
         return null;
@@ -413,7 +522,6 @@ export function LiquidGlassShaderLayer() {
     const radiiLocation = gl.getUniformLocation(program, "u_radii[0]");
     const rippleCountLocation = gl.getUniformLocation(program, "u_rippleCount");
     const ripplesLocation = gl.getUniformLocation(program, "u_ripples[0]");
-    const tintLocation = gl.getUniformLocation(program, "u_tint");
     const imageLocation = gl.getUniformLocation(program, "u_image");
 
     const positionBuffer = gl.createBuffer();
@@ -549,6 +657,9 @@ export function LiquidGlassShaderLayer() {
       mouse.x += (mouse.targetX - mouse.x) * 0.16;
       mouse.y += (mouse.targetY - mouse.y) * 0.16;
       mouse.strength += (mouse.targetStrength - mouse.strength) * 0.12;
+      document.documentElement.style.setProperty("--glass-sun-x", `${mouse.x}px`);
+      document.documentElement.style.setProperty("--glass-sun-y", `${mouse.y}px`);
+      document.documentElement.style.setProperty("--glass-sun-strength", String(isLiquid && isShaderGlass && cursorEnabled ? Math.min(1, mouse.strength) : 0));
       if (!hoveringGlass || !cursorEnabled || !isShaderGlass) {
         mouse.targetStrength *= 0.92;
       }
@@ -558,8 +669,6 @@ export function LiquidGlassShaderLayer() {
       } else if (!isLiquid || !isShaderGlass) {
         rectCount = 0;
       }
-
-      const [r, g, b] = readAmbientColor();
 
       gl.viewport(0, 0, width, height);
       gl.clearColor(0, 0, 0, 0);
@@ -591,7 +700,6 @@ export function LiquidGlassShaderLayer() {
       gl.uniform1fv(radiiLocation, radiusData);
       gl.uniform1i(rippleCountLocation, rippleCount);
       gl.uniform4fv(ripplesLocation, rippleData);
-      gl.uniform3f(tintLocation, r, g, b);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
       frame = window.requestAnimationFrame(render);
@@ -601,7 +709,7 @@ export function LiquidGlassShaderLayer() {
     const handleResize = () => markResize();
     const isInsideGlassTarget = (event: PointerEvent) => {
       const target = event.target;
-      return target instanceof Element && target.closest(GLASS_TARGET_SELECTOR) !== null;
+      return target instanceof Element && target.closest(GLASS_TARGET_SELECTOR) !== null && target.closest(GLASS_SHADER_EXCLUDE_SELECTOR) === null;
     };
     const handlePointerMove = (event: PointerEvent) => {
       if (document.documentElement.dataset.glassRender !== "shader" || document.documentElement.dataset.glassCursor === "off" || !isInsideGlassTarget(event)) {
@@ -676,5 +784,10 @@ export function LiquidGlassShaderLayer() {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="liquid-glass-shader-layer" aria-hidden="true" />;
+  return (
+    <>
+      <canvas ref={canvasRef} className="liquid-glass-shader-layer" aria-hidden="true" />
+      <div className="liquid-glass-sunlight" aria-hidden="true" />
+    </>
+  );
 }

@@ -17,7 +17,7 @@ export function WriterPanel({
   hint = "适合贴 benchmark 结果、实验日志、runbook 和现成的 Markdown 草稿。",
 }: WriterPanelProps) {
   return (
-    <Card className="glass-panel border border-black/10 shadow-[0_18px_60px_rgba(75,54,34,0.08)]">
+    <Card className="glass-panel border border-black/10">
       <CardHeader className="flex flex-col items-start gap-2 px-5 pb-0 pt-5">
         <p className="text-sm uppercase tracking-[0.24em] text-[var(--muted)]">{eyebrow}</p>
         <h3 className="display-type text-3xl text-[var(--ink)]">{title}</h3>
