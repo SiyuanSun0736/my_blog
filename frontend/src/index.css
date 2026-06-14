@@ -2505,6 +2505,7 @@ a {
 
 :root[data-theme="liquid-glass"] .liquid-hero-main {
   min-height: min(44rem, calc(100svh - 9rem));
+  background: transparent !important;
 }
 
 :root[data-theme="liquid-glass"] .liquid-hero-main > :first-child {

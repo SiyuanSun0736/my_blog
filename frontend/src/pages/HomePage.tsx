@@ -218,7 +218,7 @@ export function HomePage() {
   return (
     <div className="space-y-10 lg:space-y-12">
       <section className="liquid-home-hero grid gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.9fr)]">
-        <Card className="liquid-hero-main glass-panel overflow-hidden border border-black/10 bg-[var(--panel-strong)]">
+        <Card className="liquid-hero-main glass-panel overflow-hidden border border-black/10 bg-transparent">
           <CardHeader className="flex flex-col items-start gap-4 px-6 pb-0 pt-6 sm:px-8 sm:pt-8">
             <div className="max-w-3xl space-y-4">
               <p className="font-mono text-sm uppercase tracking-[0.28em] text-[var(--muted)]">
