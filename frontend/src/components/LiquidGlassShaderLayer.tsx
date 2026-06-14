@@ -168,6 +168,53 @@ vec3 samplePrism(vec2 uv, vec2 normal, float chroma, float softness) {
   return softened;
 }
 
+float roundedRectPathCoord(vec2 p, vec2 b, float r) {
+  float safeRadius = min(r, min(b.x, b.y) - 0.001);
+  vec2 straight = max(b - vec2(safeRadius), vec2(0.001));
+  float topLen = straight.x * 2.0;
+  float sideLen = straight.y * 2.0;
+  float quarter = safeRadius * 1.5707963268;
+  float pathLen = topLen * 2.0 + sideLen * 2.0 + quarter * 4.0;
+
+  if (p.x >= straight.x && p.y >= straight.y) {
+    vec2 d = normalize(p - vec2(straight.x, straight.y) + vec2(0.0001));
+    float angle = atan(d.y, d.x);
+    return mod(quarter + topLen + (1.5707963268 - angle) * safeRadius, pathLen);
+  }
+
+  if (p.x >= straight.x && p.y <= -straight.y) {
+    vec2 d = normalize(p - vec2(straight.x, -straight.y) + vec2(0.0001));
+    float angle = atan(d.y, d.x);
+    return mod(quarter * 2.0 + topLen + sideLen + (0.0 - angle) * safeRadius, pathLen);
+  }
+
+  if (p.x <= -straight.x && p.y <= -straight.y) {
+    vec2 d = normalize(p - vec2(-straight.x, -straight.y) + vec2(0.0001));
+    float angle = atan(d.y, d.x);
+    return mod(quarter * 3.0 + topLen * 2.0 + sideLen + (-1.5707963268 - angle) * safeRadius, pathLen);
+  }
+
+  if (p.x <= -straight.x && p.y >= straight.y) {
+    vec2 d = normalize(p - vec2(-straight.x, straight.y) + vec2(0.0001));
+    float angle = atan(d.y, d.x);
+    return mod(quarter * 4.0 + topLen * 2.0 + sideLen * 2.0 + (3.1415926536 - angle) * safeRadius, pathLen);
+  }
+
+  if (p.y >= straight.y) {
+    return mod(quarter + p.x + straight.x, pathLen);
+  }
+
+  if (p.x >= straight.x) {
+    return mod(quarter * 2.0 + topLen + straight.y - p.y, pathLen);
+  }
+
+  if (p.y <= -straight.y) {
+    return mod(quarter * 3.0 + topLen + sideLen + straight.x - p.x, pathLen);
+  }
+
+  return mod(quarter * 4.0 + topLen * 2.0 + sideLen + p.y + straight.y, pathLen);
+}
+
 void main() {
   vec2 frag = v_uv * u_resolution;
   vec3 finalColor = vec3(0.0);
@@ -224,19 +271,21 @@ void main() {
 
     float interiorDepth = smoothstep(tubeHalf * 1.1, tubeHalf * 3.2, -dist) * insideMask;
     vec3 localRipple = vec3(ripple.xy, ripple.z) * interiorDepth;
-    vec2 halfSize = max(rect.zw * 0.5, vec2(1.0));
+    vec2 boxHalf = rect.zw * 0.5;
+    vec2 halfSize = max(boxHalf, vec2(1.0));
     vec2 q = local / halfSize;
     float qLen = clamp(length(q), 0.0, 1.35);
     float paneLens = pow(clamp(1.0 - qLen * qLen * 0.76, 0.0, 1.0), 0.74) * paneMask * 0.22;
+    float pathCoord = roundedRectPathCoord(local, boxHalf, radius);
 
-    vec2 localUv = local * 0.006 + vec2(u_time * 0.018, -u_time * 0.014);
+    vec2 localUv = vec2(pathCoord * 0.0054 + u_time * 0.034, tubeSigned * 1.2 - u_time * 0.018);
     float liquidA = fbm(localUv + vec2(2.1, -1.3));
     float liquidB = fbm(localUv * 1.42 + vec2(8.1, -4.7));
     float liquidC = fbm(localUv * 0.72 + vec2(-u_time * 0.012, u_time * 0.016));
     float highlightNoise = liquidA * 0.52 + liquidB * 0.32 + liquidC * 0.16;
-    float tangentCoord = dot(local, tangentNormal);
-    float flowPhase = tangentCoord * 0.04 + u_time * 1.42 + highlightNoise * 6.2;
-    float counterFlowPhase = tangentCoord * 0.074 - u_time * 1.05 + local.x * 0.007 - local.y * 0.004;
+    float tangentCoord = pathCoord;
+    float flowPhase = tangentCoord * 0.038 + u_time * 1.42 + highlightNoise * 6.2;
+    float counterFlowPhase = tangentCoord * 0.069 - u_time * 1.05 + tubeSigned * 1.15 + liquidB * 1.4;
     float flowCarrier = pow(clamp(0.5 + 0.5 * sin(flowPhase), 0.0, 1.0), 8.5);
     float counterCarrier = pow(clamp(0.5 + 0.5 * sin(counterFlowPhase + sin(flowPhase * 0.37) * 1.4), 0.0, 1.0), 11.0);
     float movingThreadCenter = sin(flowPhase * 0.41 + counterFlowPhase * 0.18) * 0.38;
@@ -275,43 +324,33 @@ void main() {
     float pressureT = clamp(mouseDist / max(pressureRadius, 1.0), 0.0, 1.0);
     float pressureLip = smoothstep(0.12, 0.42, pressureT) * (1.0 - smoothstep(0.54, 1.0, pressureT)) * hoverPressure;
 
-    float lightSide = clamp(dot(boundaryNormal, normalize(vec2(-0.62, -0.78))) * 0.5 + 0.5, 0.0, 1.0);
+    float lightSide = clamp(dot(boundaryNormal, normalize(vec2(-0.62, 0.78))) * 0.5 + 0.5, 0.0, 1.0);
     float keyLight = pow(lightSide, 1.32);
-    float lowerReflection = pow(clamp(dot(boundaryNormal, normalize(vec2(0.18, 0.98))) * 0.5 + 0.5, 0.0, 1.0), 1.8);
     float sideShade = pow(1.0 - keyLight, 1.28) * opticalThickness;
-    float topRun = exp(-abs(boundaryNormal.y + 1.0) / 0.22) * tubeMask;
+    float topRun = exp(-abs(boundaryNormal.y - 1.0) / 0.22) * tubeMask;
     float backRun = (
       exp(-abs(boundaryNormal.x - 1.0) / 0.32) +
-      exp(-abs(boundaryNormal.y - 1.0) / 0.32)
+      exp(-abs(boundaryNormal.y + 1.0) / 0.32)
     ) * tubeMask;
-    float brokenBackRun = backRun * (0.16 + pow(highlightNoise, 2.35) * 0.42 + shadowValley * 0.28);
+    float brokenBackRun = backRun * pow(highlightNoise, 2.8) * 0.12;
     float keyRun = clamp(topRun * 0.96 + cornerEnergy * 0.34 + shadowCrest * 0.18, 0.0, 1.0);
-    vec2 boxHalf = rect.zw * 0.5;
-    float topDistance = local.y + boxHalf.y - radius * 0.32;
-    float rightDistance = boxHalf.x - local.x - radius * 0.32;
-    float bottomDistance = boxHalf.y - local.y - radius * 0.32;
-    float topSweep = exp(-abs(topDistance - tubeHalf * 0.1) / max(5.2 * u_pixelRatio, 0.001)) * smoothstep(-boxHalf.x + radius * 0.55, boxHalf.x - radius * 0.45, local.x) * tubeMask;
-    float innerGlowRail = exp(-abs(topDistance - tubeHalf * 0.64) / max(7.0 * u_pixelRatio, 0.001)) * topRun * (0.68 + shadowCrest * 0.32);
-    float brokenRailMask = pow(highlightNoise, 2.6) * pow(clamp(0.5 + 0.5 * sin(tangentCoord * 0.038 + u_time * 0.76 + liquidB * 4.8), 0.0, 1.0), 2.9);
-    float lowerRail =
-      (
-        exp(-abs(bottomDistance - tubeHalf * 0.52) / max(7.2 * u_pixelRatio, 0.001)) +
-        exp(-abs(rightDistance - tubeHalf * 0.52) / max(7.2 * u_pixelRatio, 0.001))
-      ) * brokenRailMask * 0.34;
-    float grazingSheet = clamp(topSweep * 0.98 + innerGlowRail * 0.48 + flowCaustic * 0.16, 0.0, 1.0) * (0.28 + keyLight * 0.58);
+    float pathSweep = pow(clamp(0.5 + 0.5 * sin(tangentCoord * 0.034 - u_time * 1.26 + liquidA * 5.6), 0.0, 1.0), 8.0) * tubeFace;
+    float innerGlowRail = pathSweep * (0.32 + shadowCrest * 0.4 + topRun * 0.18);
+    float grazingSheet = clamp(pathSweep * 0.74 + innerGlowRail * 0.32 + flowCaustic * 0.22, 0.0, 1.0) * (0.3 + keyLight * 0.46);
     float cornerBloom = cornerEnergy * pow(clamp(outerLip + innerLip + outerShoulder + centerCaustic * 0.85, 0.0, 1.0), 0.52) * (0.26 + keyLight * 0.56);
-    float backRim = lowerRail * brokenBackRun * opticalThickness * (0.12 + lowerReflection * 0.16);
-    float outerSpec = outerLip * (0.08 + keyLight * 2.35 + keyRun * 1.18);
-    float outerBroadSpec = (outerShoulder + outerPinch * 0.92) * (0.035 + keyLight * 0.86 + keyRun * 0.48);
-    float innerSpec = innerLip * (0.04 + keyLight * 1.1 + keyRun * 0.5);
-    float innerBroadSpec = (innerShoulder + innerPinch * 0.86) * (0.022 + keyLight * 0.36 + keyRun * 0.22);
+    float lensRim = opticalThickness * (0.38 + flowCaustic * 0.32 + centerCaustic * 0.2);
+    float specBreak = clamp(0.16 + flowCarrier * 0.34 + counterCarrier * 0.18 + pow(highlightNoise, 1.8) * 0.24 + cornerEnergy * 0.16, 0.0, 1.0);
+    float outerSpec = outerLip * (0.018 + (keyLight * 1.7 + keyRun * 0.74) * specBreak);
+    float outerBroadSpec = (outerShoulder + outerPinch * 0.92) * (0.012 + (keyLight * 0.58 + keyRun * 0.28) * specBreak);
+    float innerSpec = innerLip * (0.012 + (keyLight * 0.72 + keyRun * 0.28) * specBreak);
+    float innerBroadSpec = (innerShoulder + innerPinch * 0.86) * (0.008 + (keyLight * 0.22 + keyRun * 0.12) * specBreak);
     float rollingSpec = flowCaustic * (0.08 + keyLight * 0.28 + keyRun * 0.22 + cornerEnergy * 0.18);
     float straightSpec = straightEnergy * tubeFace * (0.016 + keyLight * 0.24 + keyRun * 0.16);
     float cornerSpec = cornerEnergy * (outerLip * 0.68 + outerShoulder * 0.36 + centerCaustic * 0.3 + innerLip * 0.32) * (0.08 + keyLight * 0.62 + keyRun * 0.26);
     float faceSheen = tubeFace * (0.008 + keyLight * 0.16 + keyRun * 0.1);
-    float movingUmbra = shadowValley * (0.11 + brokenBackRun * 0.16 + cornerEnergy * 0.14 + straightEnergy * 0.045) * opticalThickness;
+    float movingUmbra = shadowValley * (0.028 + brokenBackRun * 0.04 + cornerEnergy * 0.036 + straightEnergy * 0.012) * opticalThickness;
     float movingCrest = shadowCrest * (0.2 + keyRun * 0.3 + cornerEnergy * 0.2) * opticalThickness;
-    float darkEdge = movingUmbra * 0.44 + backRim * 0.08 + (outerPinch + innerPinch) * shadowValley * 0.018;
+    float darkEdge = movingUmbra * 0.08 + (outerPinch + innerPinch) * shadowValley * 0.002;
 
     vec2 rippleDir = normalize(localRipple.xy + vec2(0.0001));
     float rippleSurface = localRipple.z * interiorDepth;
@@ -368,11 +407,11 @@ void main() {
       vec3(1.0, 0.98, 0.86) * liquidThread * 0.48 +
       vec3(1.0, 0.98, 0.9) * movingCrest * 0.66;
     vec3 sideVolume =
-      vec3(0.56, 0.82, 0.72) * sideShade * (0.025 + lowerReflection * 0.036) +
-      vec3(0.14, 0.27, 0.24) * (darkEdge * 0.038 + outerShoulder * brokenBackRun * 0.006 + innerShoulder * brokenBackRun * 0.005) +
-      vec3(0.08, 0.13, 0.11) * movingUmbra * 0.075;
-    vec3 environmentGlint = vec3(0.42, 0.88, 0.86) * lowerReflection * opticalThickness * 0.036;
-    vec3 absorption = vec3(0.06, 0.09, 0.08) * (darkEdge * 0.24 + sideShade * 0.045 + movingUmbra * 0.28 + (outerPinch + innerPinch) * brokenBackRun * 0.01);
+      vec3(0.86, 1.0, 0.96) * lensRim * sideShade * 0.006 +
+      vec3(0.74, 0.98, 0.95) * flowCaustic * opticalThickness * 0.01 +
+      vec3(0.62, 0.86, 0.82) * darkEdge * 0.01;
+    vec3 environmentGlint = vec3(0.86, 1.0, 0.96) * (flowCaustic + pathSweep * 0.28) * opticalThickness * 0.018;
+    vec3 absorption = vec3(0.06, 0.09, 0.08) * (darkEdge * 0.045 + movingUmbra * 0.035);
     float pressureSun = exp(-pressureT * pressureT * 5.2) * hoverPressure;
     vec3 mouseLight =
       vec3(1.0, 0.98, 0.88) * pressureSun * 0.05 +
@@ -380,17 +419,18 @@ void main() {
     vec3 rippleLight = vec3(1.0, 0.98, 0.9) * max(localRipple.z, 0.0) * tubeFace * 0.06;
     vec3 glassComposite = max(vec3(0.0), backgroundBend + whiteSpec + sideVolume + dispersion + environmentGlint + mouseLight + rippleLight - absorption);
     float sourceAlpha = clamp(
-      opticalThickness * 0.035 +
+      opticalThickness * 0.018 +
       paneLens * 0.00005 +
-      tubeWall * 0.012 +
-      sideShade * 0.018 +
+      tubeWall * 0.005 +
+      lensRim * 0.018 +
+      sideShade * 0.002 +
       outerSpec * 0.78 +
       outerBroadSpec * 0.46 +
       innerSpec * 0.58 +
       innerBroadSpec * 0.32 +
       rollingSpec * 0.42 +
       flowCaustic * 0.36 +
-      movingUmbra * 0.22 +
+      movingUmbra * 0.035 +
       movingCrest * 0.18 +
       cornerSpec * 0.22 +
       grazingSheet * 0.38 +

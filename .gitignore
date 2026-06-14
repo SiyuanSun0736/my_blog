@@ -1,6 +1,7 @@
 frontend/node_modules/
 backend/node_modules/
 frontend/dist/
+frontend/.chrome-test/
 backend/bin/
 backend/.cache/
 backend/uploads/
