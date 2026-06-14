@@ -115,7 +115,7 @@ vec3 rippleWave(vec2 frag) {
     float wave = (ring * 1.34 + outer * 0.34 - inner * 0.54 - shoulder * 0.18) * fade * distanceGate;
 
     offset += dir * wave * 0.018;
-    strength += abs(wave);
+    strength += wave;
   }
 
   return vec3(offset, strength);
@@ -186,10 +186,21 @@ void main() {
       continue;
     }
 
+    float interiorDepth = smoothstep(7.0 * u_pixelRatio, 78.0 * u_pixelRatio, -dist);
+    vec3 localRipple = vec3(ripple.xy, ripple.z) * interiorDepth;
+    float rippleAmount = abs(localRipple.z);
     float edge = 1.0 - smoothstep(-7.0, 1.0, dist);
     float rim = smoothstep(-18.0, 0.0, dist) * mask;
-    vec2 n = normalize(local / max(rect.zw * 0.5, vec2(1.0)));
-    float curve = 1.0 - smoothstep(0.0, 0.95, length(local / max(rect.zw * 0.5, vec2(1.0))));
+    vec2 halfSize = max(rect.zw * 0.5, vec2(1.0));
+    vec2 q = local / halfSize;
+    float qLen = clamp(length(q), 0.0, 1.35);
+    float domeHeight = pow(clamp(1.0 - qLen * qLen * 0.72, 0.0, 1.0), 0.58);
+    float domeSlopeAmount = smoothstep(0.08, 0.92, qLen) * (0.36 + domeHeight * 0.64);
+    vec2 domeSlope = q * domeSlopeAmount;
+    vec2 edgeSlope = normalize(q + vec2(0.0001)) * pow(rim, 1.25) * 1.15;
+    vec2 lensSlope = domeSlope + edgeSlope;
+    vec2 n = normalize(lensSlope + vec2(0.0001, -0.0001));
+    float curve = domeHeight;
 
     vec2 localUv = local * 0.006 + vec2(u_time * 0.018, -u_time * 0.014);
     float liquidA = fbm(localUv + vec2(2.1, -1.3));
@@ -205,18 +216,21 @@ void main() {
     float hoverPressure = exp(-(mouseDist * mouseDist) / max(pressureRadius * pressureRadius, 1.0)) * u_mouseStrength * u_effects.x * mask;
     float pressureWell = (1.0 - smoothstep(0.0, pressureRadius, mouseDist)) * hoverPressure;
     float pressureDimple = pow(pressureWell, 1.45);
-    vec2 lensNormal = normalize(n * (0.5 + rim * 1.2) + mouseDir * pressureDimple * 2.2 + normalize(ripple.xy + vec2(0.0001)) * ripple.z * 1.6);
-    vec2 pressOffset = mouseDir * pressureDimple * (0.034 + curve * 0.032);
-    vec2 refractOffset = n * (0.012 + rim * 0.022) + microFlow + ripple.xy * mask * 1.28 + pressOffset;
+    vec2 pressureSlope = mouseDir * pressureDimple * (1.65 + domeHeight * 0.8);
+    vec2 rippleSlope = normalize(localRipple.xy + vec2(0.0001)) * localRipple.z * 1.45;
+    vec2 lensNormal = normalize(lensSlope * 1.25 + pressureSlope + rippleSlope + vec2(0.0001));
+    vec2 pressOffset = pressureSlope * (0.018 + domeHeight * 0.016);
+    vec2 domeOffset = lensSlope * (0.013 + rim * 0.013 + (1.0 - domeHeight) * 0.01);
+    vec2 refractOffset = domeOffset + microFlow * (0.35 + domeSlopeAmount) + localRipple.xy * mask * 1.18 + pressOffset;
 
     vec2 uv = v_uv + refractOffset;
     vec3 base = sampleWallpaper(v_uv);
-    float distortionEnergy = clamp(length(refractOffset) * 44.0 + hoverPressure * 0.95 + ripple.z * 0.8 + rim * 0.24, 0.0, 1.0);
-    float chroma = 0.0026 + rim * 0.0065 + hoverPressure * 0.006 + ripple.z * 0.0042;
-    float softness = (0.0012 + pressureDimple * 0.0026 + ripple.z * 0.0018) * u_effects.x;
+    float distortionEnergy = clamp(length(refractOffset) * 44.0 + hoverPressure * 0.95 + rippleAmount * 0.8 + rim * 0.24, 0.0, 1.0);
+    float chroma = 0.0026 + rim * 0.0065 + hoverPressure * 0.006 + rippleAmount * 0.0042;
+    float softness = (0.0012 + pressureDimple * 0.0026 + rippleAmount * 0.0018) * u_effects.x;
     vec3 refracted = samplePrism(uv, lensNormal, chroma, softness);
 
-    vec3 shifted = base + (refracted - base) * (3.25 + hoverPressure * 3.4 + ripple.z * 2.4);
+    vec3 shifted = base + (refracted - base) * (3.25 + hoverPressure * 3.4 + rippleAmount * 2.4);
     vec3 tint = mix(shifted, u_tint, 0.004 + rim * 0.018);
     float topLight = smoothstep(0.85, -0.4, local.y / max(rect.w, 1.0)) * smoothstep(0.75, -0.4, local.x / max(rect.z, 1.0));
     float bottomShade = smoothstep(-0.2, 0.95, local.y / max(rect.w, 1.0)) * smoothstep(-0.3, 0.95, local.x / max(rect.z, 1.0));
@@ -229,7 +243,10 @@ void main() {
     float edgeDiffuse = (rim * 0.34 + edge * 0.12) * u_effects.z;
     float pressureSpec = pow(max(1.0 - mouseDist / max(pressureRadius, 1.0), 0.0), 3.0) * hoverPressure;
     float grazing = pow(1.0 - clamp(dot(lensNormal, normalize(vec2(-0.35, -0.94))), 0.0, 1.0), 2.0) * distortionEnergy;
-    float brightRidge = smoothstep(0.16, 0.82, distortionEnergy) * (rim * 0.45 + pressureSpec * 0.65 + ripple.z * 0.18);
+    float rippleCrest = max(localRipple.z, 0.0);
+    float rippleTrough = max(-localRipple.z, 0.0);
+    float rippleSheen = smoothstep(0.025, 0.22, rippleAmount) * interiorDepth;
+    float brightRidge = smoothstep(0.16, 0.82, distortionEnergy) * (rim * 0.45 + pressureSpec * 0.65 + rippleCrest * 0.28);
     float darkRidge = smoothstep(0.18, 0.9, distortionEnergy) * bottomShade * 0.22;
 
     vec3 glass = tint;
@@ -238,6 +255,9 @@ void main() {
     glass += vec3(1.0) * pressureSpec * 0.16;
     glass += vec3(0.92, 0.98, 1.0) * grazing * 0.07;
     glass += vec3(1.0, 0.97, 0.9) * brightRidge * 0.12;
+    glass += vec3(1.0, 0.96, 0.86) * rippleCrest * 0.22;
+    glass -= vec3(0.12, 0.16, 0.2) * rippleTrough * 0.24;
+    glass += mix(u_tint, vec3(1.0), 0.38) * rippleSheen * 0.055;
     glass += u_tint * caustic * curve * 0.014;
     glass += mix(u_tint, vec3(1.0), 0.3) * edgeDiffuse;
     glass -= vec3(0.14, 0.16, 0.18) * (bottomShade * 0.052 + darkRidge);
@@ -246,7 +266,7 @@ void main() {
 
     float centerAlpha = curve * 0.018;
     float edgeAlpha = rim * 0.12 + edge * 0.058 + edgeDiffuse * 0.2;
-    float alpha = mask * (centerAlpha + edgeAlpha + spec * 0.06 + distortionEnergy * 0.18 + hoverPressure * 0.18 + ripple.z * 0.13);
+    float alpha = mask * (centerAlpha + edgeAlpha + spec * 0.06 + distortionEnergy * 0.18 + hoverPressure * 0.18 + rippleAmount * 0.14);
     finalColor = mix(finalColor, glass, alpha);
     finalAlpha = max(finalAlpha, alpha);
   }
