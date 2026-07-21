@@ -14,7 +14,7 @@
   --control-surface-hover: rgba(255, 255, 255, 0.94);
   --glass-border: rgba(36, 24, 15, 0.1);
   --glass-shadow: 0 18px 52px rgba(77, 53, 35, 0.1);
-  --dopamine-hue: 105;
+  --dopamine-hue: 32;
   --dopamine: hsl(var(--dopamine-hue) 78% 50%);
   --dopamine-soft: hsl(var(--dopamine-hue) 88% 88%);
   --dopamine-ink: hsl(var(--dopamine-hue) 56% 24%);
