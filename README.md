@@ -33,7 +33,7 @@
 - 根目录 `.env` 是本地测试默认配置：使用 `localhost` 和本地 `certs/` 证书目录，适合本地并发构建。
 - 根目录 `.env.deploy.example` 是部署模板：保留 `wanderlust0736.top`、Let's Encrypt 路径和 VPS 运行时参数；服务器上请复制为 `.env.deploy` 后再填实际值。实际 `.env.deploy` 已加入 `.gitignore`，避免把云端配置和 token 提交进仓库。
 - `./scripts/up-local.sh` 会按本地环境启动整套 Compose，并保留 Compose 默认并发。
-- `./scripts/update-low-memory.sh` 会在本机 build 生产镜像，传到低内存 VPS 后 `docker load` 并重启服务，避免 VPS 执行前端/Go 构建；目标机运行目录只保留最小运行包，不保留源码。
+- `GitHub Actions + GHCR` 负责构建并推送生产镜像，服务器只负责 `docker compose pull`、重启和源码清理；目标机不再接收整包镜像传输。
 
 ## 本地开发
 
@@ -80,10 +80,12 @@ npm run dev
 cp .env.deploy.example .env.deploy
 ```
 
-低内存 VPS 不在目标机上构建镜像。部署从本机执行：
+把 `BLOG_API_IMAGE` 和 `BLOG_WEB_IMAGE` 改成你自己的 `GHCR` 地址；如果仓库是私有的，再填写 `GHCR_USERNAME` 和 `GHCR_TOKEN`。
+
+低内存 VPS 不在目标机上构建镜像。部署由 `GitHub Actions` 负责构建并推送到 `GHCR`，服务器只负责拉取：
 
 ```bash
-./scripts/update-low-memory.sh
+./scripts/deploy-ghcr.sh
 ```
 
 启动后主站访问地址为 `https://wanderlust0736.top`。
@@ -98,13 +100,13 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 
 当前 `blog-api` 镜像也会打包 Chromium、KaTeX 资源和 CJK 字体，用于服务端渲染 LaTeX / 表格 / SVG 片段；相较纯 gofpdf 方案，镜像体积仍会更高，但同一份 PDF 已改为复用单个浏览器会话，峰值内存低于逐段重复启动 Chromium 的方案。
 
-如果你的 VPS 只有 `1GB` 内存，推荐从本机执行镜像传输部署：
+如果你的 VPS 只有 `1GB` 内存，推荐走 `GitHub Actions + GHCR`：
 
 ```bash
-./scripts/update-low-memory.sh
+./scripts/deploy-ghcr.sh
 ```
 
-这条脚本会在本机 build `blog-api` / `blog-web` 生产镜像，压缩后上传到 `blog-server:/tmp`，同时上传无 `build:` 的最小运行包；服务器只执行 `docker load`、`docker compose up --no-build`、接口验证和源码清理。默认目标平台是 `linux/amd64`，默认服务器运行目录是 `/opt/my_blog`。
+这条脚本会在服务器上拉取 `GHCR` 里的 `blog-api` / `blog-web` 镜像，完成 `docker compose pull`、`up --no-build`、接口验证和源码清理。默认服务器运行目录是 `/opt/my_blog`。
 
 当前仓库保留了服务器运行时的低内存参数：
 
@@ -188,7 +190,7 @@ export BLOG_TLS_KEY_PATH=/etc/nginx/certs/server.key
 docker compose --env-file .env.deploy up -d --no-build blog-web
 ```
 
-低内存机器上建议从本机执行 `./scripts/update-low-memory.sh`，把已经构建好的镜像传到服务器后再启动，避免服务器承担构建压力。
+低内存机器上建议从 `GHCR` 拉镜像，不再走大包传输。
 
 如果挂载目录里缺少证书文件，Nginx 容器会在启动前直接报错退出，避免带着错误配置继续运行。
 
@@ -207,7 +209,7 @@ export BLOG_TLS_RELOAD_INTERVAL_SECONDS=30
 docker compose --env-file .env.deploy up -d --no-build blog-web
 ```
 
-如果是在 `1GB` VPS 上操作，仍然优先从本机执行 `./scripts/update-low-memory.sh`，不要在服务器上构建。
+如果是在 `1GB` VPS 上操作，仍然优先让 `GitHub Actions` 构建镜像，服务器只拉取。
 
 ### Certbot 部署脚本
 

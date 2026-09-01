@@ -38,7 +38,7 @@ services:
       retries: 10
 
   blog-api:
-    image: ${COMPOSE_PROJECT_NAME:-my_blog}-blog-api:latest
+    image: ${BLOG_API_IMAGE:?set BLOG_API_IMAGE in .env.deploy}
     container_name: wanderlust-api
     depends_on:
       mongodb:
@@ -64,7 +64,7 @@ services:
     restart: unless-stopped
 
   blog-web:
-    image: ${COMPOSE_PROJECT_NAME:-my_blog}-blog-web:latest
+    image: ${BLOG_WEB_IMAGE:?set BLOG_WEB_IMAGE in .env.deploy}
     container_name: wanderlust-web
     environment:
       PRIMARY_DOMAIN: ${BLOG_PRIMARY_DOMAIN:-wanderlust0736.top}

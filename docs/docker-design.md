@@ -95,7 +95,7 @@ Compose 中显式声明了启动依赖：
 
 - 通过 `MONGODB_WIREDTIGER_CACHE_GB` 压低 MongoDB cache
 - 通过 `GOMEMLIMIT` 和 `GOGC` 控制 Go 运行时内存
-- 通过 `scripts/update-low-memory.sh` 在本机按 macOS / Linux / Windows shell 环境构建生产镜像，再上传到 VPS 执行 `docker load`
+- 通过 `GitHub Actions + GHCR` 构建并分发生产镜像，再由 VPS 执行 `docker compose pull`
 - 服务器使用 `docker compose up -d --no-build` 启动已加载镜像，不承担 Node/Vite 或 Go 编译压力
 
 这套策略就是为当前 `1CPU/1GB` 的 VPS 目标环境准备的。
@@ -110,17 +110,14 @@ Compose 中显式声明了启动依赖：
 
 ### 线上更新
 
-`scripts/update-low-memory.sh` 会执行一套偏生产化的流程：
+`scripts/deploy-ghcr.sh` 会执行一套偏生产化的流程：
 
-1. 在本机检查 tracked 工作区和 upstream 同步状态
-2. 在本机按目标平台构建 `blog-api` 和 `blog-web`
-3. 将镜像压缩并上传到 VPS
-4. 在目标机按需备份 MongoDB 和媒体文件
-5. 在目标机安装最小运行包，替换为无 `build:` 的运行态 Compose 文件
-6. 在目标机 `docker load` 导入镜像
-7. 在目标机通过 `docker compose up -d --no-build` 启动 `mongodb`、`redis`、`blog-api`、`blog-web`
-8. 校验容器状态和 API 可达性
-9. 删除目标机运行目录里的源码，只保留运行必需文件和数据目录
+1. 由 `GitHub Actions` 构建并推送 `blog-api` 和 `blog-web`
+2. 在目标机按需备份 MongoDB 和媒体文件
+3. 在目标机登录 `GHCR` 并拉取镜像
+4. 在目标机通过 `docker compose up -d --no-build` 启动 `mongodb`、`redis`、`blog-api`、`blog-web`
+5. 校验容器状态和 API 可达性
+6. 删除目标机运行目录里的源码，只保留运行必需文件和数据目录
 
 相比直接在小机器上构建镜像，这套流程更稳，因为目标机不再执行任何镜像构建。
 

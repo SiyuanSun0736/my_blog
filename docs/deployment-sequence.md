@@ -36,39 +36,37 @@
 
 ## 线上更新时序
 
-线上环境默认从本机执行 `scripts/update-low-memory.sh`。脚本在本机完成镜像构建，上传到 VPS 后只执行 `docker load` 和 `docker compose up --no-build`，目标机不承担 Node/Vite 或 Go 构建。
+线上环境默认由 `GitHub Actions` 构建并推送镜像到 `GHCR`，然后由 `scripts/deploy-ghcr.sh` 在目标机执行 `docker compose pull` 和 `docker compose up --no-build`，目标机不承担 Node/Vite 或 Go 构建。
 
 ### 详细步骤
 
-1. 运维在本机执行 `./scripts/update-low-memory.sh`。
-2. 脚本确认本机 `git`、`docker`、`docker buildx`、`scp`、`ssh`、`curl` 和 Compose 能正常使用。
-3. 脚本识别本机 shell 环境：macOS、Linux 或 Windows。
-4. 如果没有显式跳过，脚本会先检查本机 tracked 文件是否干净，并确认本机分支已经推到 upstream。
-5. 脚本在本机按目标平台构建 `blog-api` 和 `blog-web` 镜像，默认目标平台是 `linux/amd64`。
-6. 脚本把两个镜像保存为压缩归档，并上传到目标机 `/tmp`。
-7. 如果没有显式跳过备份，脚本会在目标机调用 `scripts/backup-mongodb.sh`：
+1. 开发者把代码推到 `main`，触发 `GitHub Actions`。
+2. Actions 在云端按 `linux/amd64` 构建 `blog-api` 和 `blog-web` 镜像，并推送到 `GHCR`。
+3. 运维在本机或自动化任务中执行 `./scripts/deploy-ghcr.sh`。
+4. 脚本连接目标机，确认 `.env.deploy` 和 Compose 可用。
+5. 如果没有显式跳过，脚本会在目标机调用 `scripts/backup-mongodb.sh`：
 
    - 从 `mongodb` 导出数据库归档
    - 从 `blog-api` 打包媒体目录
    - 把结果写到 `backups/mongodb/`，并同步到 `backups/latest-mongodb/`
 
-8. 脚本在目标机安装最小运行包，替换为无 `build:` 的运行态 Compose 文件。
-9. 脚本在目标机执行 `docker load` 导入本机传来的镜像。
-10. 脚本执行 `docker compose --env-file .env.deploy up -d --no-build mongodb redis blog-api blog-web`。
-11. Compose 先拉起 MongoDB 和 Redis，并等待健康检查通过。
-12. `blog-api` 在依赖健康后启动，连接 MongoDB 和 Redis。
-13. `blog-web` 启动，接管 `80` 和宿主机 `127.0.0.1:8444`，并加载证书和前端静态资源；宿主机 `443` 留给前置 SNI router。
-14. 脚本执行 `docker compose ps` 检查容器状态。
-15. 脚本通过 `curl -k --resolve 主域名:8444:127.0.0.1 https://主域名:8444/api/posts` 验证 API 可用。
-16. 脚本删除目标机运行目录里的源码，只保留运行必需文件和数据目录。
-17. 如果指定了 `--logs`，脚本最后还会带出最近日志。
+6. 脚本在目标机登录 `GHCR`（如果配置了 `GHCR_USERNAME` 和 `GHCR_TOKEN`）。
+7. 脚本执行 `docker compose --env-file .env.deploy pull mongodb redis blog-api blog-web`。
+8. 脚本执行 `docker compose --env-file .env.deploy up -d --no-build --force-recreate mongodb redis blog-api blog-web`。
+9. Compose 先拉起 MongoDB 和 Redis，并等待健康检查通过。
+10. `blog-api` 在依赖健康后启动，连接 MongoDB 和 Redis。
+11. `blog-web` 启动，接管 `80` 和宿主机 `127.0.0.1:8444`，并加载证书和前端静态资源；宿主机 `443` 留给前置 SNI router。
+12. 脚本执行 `docker compose ps` 检查容器状态。
+13. 脚本通过 `curl -k --resolve 主域名:8444:127.0.0.1 https://主域名:8444/api/posts` 验证 API 可用。
+14. 脚本删除目标机运行目录里的源码，只保留运行必需文件和数据目录。
+15. 如果指定了 `--logs`，脚本最后还会带出最近日志。
 
 ### 为什么线上流程要比本地更长
 
 线上流程额外多了五类动作：
 
-- 本机按目标平台构建镜像
-- 上传并在目标机导入镜像
+- Actions 构建并推送镜像
+- 目标机从 GHCR 拉取镜像
 - 备份
 - 目标机最小运行包安装和源码清理
 - 启动后健康验证
@@ -83,7 +81,7 @@
 | 目标 | 开发验证 | 稳定发布 |
 | 是否默认备份 | 否 | 是 |
 | 是否在目标机构建 | 否 | 否 |
-| 构建方式 | Compose 默认并发 | 本机构建后上传镜像 |
+| 构建方式 | Compose 默认并发 | GitHub Actions 构建后推送 GHCR |
 | 是否要求工作区干净 | 否 | 是 |
 | 是否自动做 API 验证 | 通常不做 | 会做 |
 
@@ -94,4 +92,4 @@
 - 本地启动追求的是方便和完整联调
 - 线上更新追求的是低内存条件下的可控性和可回滚性，目标机只负责运行和加载镜像
 
-这也是当前仓库为什么保留 `up-local.sh` 和 `update-low-memory.sh` 两条路径的原因。
+这也是当前仓库为什么保留 `up-local.sh` 和 `deploy-ghcr.sh` 两条路径的原因。
