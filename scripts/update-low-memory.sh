@@ -9,6 +9,7 @@ remote_dir="${WANDERLUST_DEPLOY_REMOTE_DIR:-/opt/my_blog}"
 remote_env_file="${WANDERLUST_DEPLOY_REMOTE_ENV_FILE:-.env.deploy}"
 target_platform="${WANDERLUST_DEPLOY_PLATFORM:-linux/amd64}"
 compose_project_name="${COMPOSE_PROJECT_NAME:-my_blog}"
+frontend_build_heap_mb="${FRONTEND_BUILD_MAX_OLD_SPACE_SIZE:-2048}"
 skip_backup=0
 skip_pull=0
 show_logs=0
@@ -25,6 +26,7 @@ Options:
   --remote-dir PATH   Repository path on the VPS. Default: /opt/my_blog
   --env-file PATH     Compose env file path on the VPS. Default: .env.deploy
   --platform VALUE    Docker target platform. Default: linux/amd64
+  --frontend-heap MB  Local web build Node heap in MB. Default: 2048
   --skip-backup       Skip the database/media backup step on the VPS.
   --skip-pull         Skip git pull on the VPS before restart.
   --logs              Show recent blog-api/blog-web logs after verification.
@@ -69,6 +71,14 @@ while [ "$#" -gt 0 ]; do
         exit 1
       fi
       target_platform="$2"
+      shift 2
+      ;;
+    --frontend-heap)
+      if [ "$#" -lt 2 ]; then
+        echo "Missing value for --frontend-heap" >&2
+        exit 1
+      fi
+      frontend_build_heap_mb="$2"
       shift 2
       ;;
     --skip-backup)
@@ -164,7 +174,7 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-total_steps=8
+total_steps=9
 if [ "$skip_backup" -eq 1 ]; then
   total_steps=$((total_steps - 1))
 fi
@@ -211,11 +221,18 @@ fi
 docker compose version >/dev/null
 REMOTE_CHECK
 
-announce_step "Building production images locally for $target_platform..."
+announce_step "Building API image locally for $target_platform..."
 COMPOSE_PROJECT_NAME="$compose_project_name" \
 DOCKER_DEFAULT_PLATFORM="$target_platform" \
 DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}" \
-docker compose build blog-api blog-web
+docker compose build blog-api
+
+announce_step "Building web image locally for $target_platform..."
+COMPOSE_PROJECT_NAME="$compose_project_name" \
+DOCKER_DEFAULT_PLATFORM="$target_platform" \
+DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}" \
+FRONTEND_BUILD_MAX_OLD_SPACE_SIZE="$frontend_build_heap_mb" \
+docker compose build blog-web
 
 announce_step "Saving images to compressed archive..."
 docker save \
