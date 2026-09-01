@@ -154,6 +154,11 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "docker buildx is not available locally. Install the Docker buildx CLI plugin first." >&2
+  exit 1
+fi
+
 if ! docker info >/dev/null 2>&1; then
   echo "Local Docker daemon is not available. Start Docker or Colima first." >&2
   exit 1
