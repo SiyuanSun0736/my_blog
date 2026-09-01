@@ -33,7 +33,7 @@
 - 根目录 `.env` 是本地测试默认配置：使用 `localhost` 和本地 `certs/` 证书目录，适合本地并发构建。
 - 根目录 `.env.deploy.example` 是部署模板：保留 `wanderlust0736.top`、Let's Encrypt 路径和 VPS 运行时参数；服务器上请复制为 `.env.deploy` 后再填实际值。实际 `.env.deploy` 已加入 `.gitignore`，避免把云端配置和 token 提交进仓库。
 - `./scripts/up-local.sh` 会按本地环境启动整套 Compose，并保留 Compose 默认并发。
-- `./scripts/update-low-memory.sh` 会在本机 build 生产镜像，传到低内存 VPS 后 `docker load` 并重启服务，避免 VPS 执行前端/Go 构建。
+- `./scripts/update-low-memory.sh` 会在本机 build 生产镜像，传到低内存 VPS 后 `docker load` 并重启服务，避免 VPS 执行前端/Go 构建；目标机运行目录只保留最小运行包，不保留源码。
 
 ## 本地开发
 
@@ -104,7 +104,7 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 ./scripts/update-low-memory.sh
 ```
 
-这条脚本会在本机 build `blog-api` / `blog-web` 生产镜像，压缩后上传到 `blog-server:/tmp`，再在服务器上 `docker load`、启动容器并验证接口。默认目标平台是 `linux/amd64`，默认服务器路径是 `/opt/my_blog`。
+这条脚本会在本机 build `blog-api` / `blog-web` 生产镜像，压缩后上传到 `blog-server:/tmp`，同时上传无 `build:` 的最小运行包；服务器只执行 `docker load`、`docker compose up --no-build`、接口验证和源码清理。默认目标平台是 `linux/amd64`，默认服务器运行目录是 `/opt/my_blog`。
 
 当前仓库保留了服务器运行时的低内存参数：
 

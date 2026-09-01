@@ -10,7 +10,6 @@ remote_env_file="${WANDERLUST_DEPLOY_REMOTE_ENV_FILE:-.env.deploy}"
 target_platform="${WANDERLUST_DEPLOY_PLATFORM:-linux/amd64}"
 compose_project_name="${COMPOSE_PROJECT_NAME:-my_blog}"
 skip_backup=0
-skip_pull=0
 show_logs=0
 
 usage() {
@@ -26,7 +25,6 @@ Options:
   --env-file PATH     Compose env file path on the VPS. Default: .env.deploy
   --platform VALUE    Docker target platform. Default: linux/amd64
   --skip-backup       Skip the database/media backup step on the VPS.
-  --skip-pull         Skip git pull on the VPS before restart.
   --logs              Show recent blog-api/blog-web logs after verification.
   -h, --help          Show this help message.
 
@@ -73,10 +71,6 @@ while [ "$#" -gt 0 ]; do
       ;;
     --skip-backup)
       skip_backup=1
-      shift
-      ;;
-    --skip-pull)
-      skip_pull=1
       shift
       ;;
     --logs)
@@ -174,6 +168,7 @@ cleanup() {
 require_command git
 require_command docker
 require_command gzip
+require_command tar
 require_command scp
 require_command ssh
 require_command curl
@@ -206,11 +201,8 @@ case "$local_os" in
     ;;
 esac
 
-total_steps=10
+total_steps=12
 if [ "$skip_backup" -eq 1 ]; then
-  total_steps=$((total_steps - 1))
-fi
-if [ "$skip_pull" -eq 1 ]; then
   total_steps=$((total_steps - 1))
 fi
 if [ "$show_logs" -eq 1 ]; then
@@ -225,29 +217,24 @@ commit_sha=$(git rev-parse --short=12 HEAD)
 archive_name="wanderlust-images-${commit_sha}.tar.gz"
 archive_path="$archive_dir/$archive_name"
 remote_archive="/tmp/$archive_name"
+bundle_name="wanderlust-deploy-bundle-${commit_sha}.tar.gz"
+bundle_path="$archive_dir/$bundle_name"
+remote_bundle="/tmp/$bundle_name"
 
 announce_step "Checking local git state..."
 ensure_clean_tracked_worktree
 ensure_head_is_pushed
 
 announce_step "Checking remote deploy target..."
-ssh "$remote_host" sh -s -- "$remote_dir" "$remote_env_file" "$skip_pull" <<'REMOTE_CHECK'
+ssh "$remote_host" sh -s -- "$remote_dir" "$remote_env_file" <<'REMOTE_CHECK'
 set -eu
 remote_dir="$1"
 remote_env_file="$2"
-skip_pull="$3"
 
 cd "$remote_dir"
 if [ ! -f "$remote_env_file" ]; then
   echo "Remote compose env file not found: $remote_dir/$remote_env_file" >&2
   exit 1
-fi
-
-if [ "$skip_pull" -eq 0 ]; then
-  if ! git diff --quiet --ignore-submodules -- || ! git diff --cached --quiet --ignore-submodules --; then
-    echo "Remote tracked git changes detected. Commit or stash them first, or rerun with --skip-pull." >&2
-    exit 1
-  fi
 fi
 
 docker compose version >/dev/null
@@ -271,8 +258,43 @@ docker save \
   "${compose_project_name}-blog-web:latest" \
   | gzip -c > "$archive_path"
 
-announce_step "Uploading image archive to $remote_host..."
+announce_step "Preparing minimal deploy bundle..."
+bundle_root="$archive_dir/deploy-bundle"
+mkdir -p "$bundle_root/scripts" "$bundle_root/deploy"
+cp docker-compose.deploy.yml "$bundle_root/docker-compose.yml"
+cp .env.deploy.example "$bundle_root/.env.deploy.example"
+cp scripts/backup-mongodb.sh "$bundle_root/scripts/"
+cp scripts/restore-mongodb.sh "$bundle_root/scripts/"
+cp scripts/check-letsencrypt-dns.sh "$bundle_root/scripts/"
+cp scripts/deploy-letsencrypt.sh "$bundle_root/scripts/"
+cp scripts/renew-letsencrypt.sh "$bundle_root/scripts/"
+cp scripts/install-cert-renew-timer.sh "$bundle_root/scripts/"
+cp -R deploy/systemd "$bundle_root/deploy/"
+cp -R deploy/cron "$bundle_root/deploy/"
+tar -C "$bundle_root" -czf "$bundle_path" .
+
+announce_step "Uploading image archive and deploy bundle to $remote_host..."
 scp "$archive_path" "$remote_host:$remote_archive"
+scp "$bundle_path" "$remote_host:$remote_bundle"
+
+announce_step "Installing minimal deploy bundle on the VPS..."
+ssh "$remote_host" sh -s -- "$remote_dir" "$remote_env_file" "$remote_bundle" <<'REMOTE_BUNDLE'
+set -eu
+remote_dir="$1"
+remote_env_file="$2"
+remote_bundle="$3"
+
+mkdir -p "$remote_dir"
+cd "$remote_dir"
+if [ ! -f "$remote_env_file" ]; then
+  echo "Remote compose env file not found: $remote_dir/$remote_env_file" >&2
+  exit 1
+fi
+
+tar -xzf "$remote_bundle"
+rm -f "$remote_bundle"
+chmod +x scripts/*.sh
+REMOTE_BUNDLE
 
 if [ "$skip_backup" -eq 0 ]; then
   announce_step "Backing up MongoDB on the VPS..."
@@ -289,17 +311,6 @@ else
   echo "Skipping backup because mongodb is not currently running." >&2
 fi
 REMOTE_BACKUP
-fi
-
-if [ "$skip_pull" -eq 0 ]; then
-  announce_step "Pulling latest code on the VPS..."
-  ssh "$remote_host" sh -s -- "$remote_dir" <<'REMOTE_PULL'
-set -eu
-remote_dir="$1"
-
-cd "$remote_dir"
-GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes}" git pull --ff-only
-REMOTE_PULL
 fi
 
 announce_step "Loading images and restarting services on the VPS..."
@@ -335,6 +346,25 @@ curl -fsS -k \
   "https://${primary_domain}:${web_https_loopback_port}/api/posts" >/dev/null
 echo "API check passed for ${primary_domain} via loopback :${web_https_loopback_port}." >&2
 REMOTE_VERIFY
+
+announce_step "Removing source files from the VPS deploy directory..."
+ssh "$remote_host" sh -s -- "$remote_dir" <<'REMOTE_CLEAN'
+set -eu
+remote_dir="$1"
+
+cd "$remote_dir"
+find . -mindepth 1 -maxdepth 1 \
+  ! -name '.env.deploy' \
+  ! -name '.env.deploy.example' \
+  ! -name 'docker-compose.yml' \
+  ! -name 'scripts' \
+  ! -name 'deploy' \
+  ! -name 'letsencrypt' \
+  ! -name 'certbot' \
+  ! -name 'certs' \
+  ! -name 'backups' \
+  -exec rm -rf {} +
+REMOTE_CLEAN
 
 if [ "$show_logs" -eq 1 ]; then
   announce_step "Showing recent application logs..."

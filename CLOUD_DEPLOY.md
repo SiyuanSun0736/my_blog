@@ -1,14 +1,14 @@
 # 云服务器部署命令
 
-这份文档面向刚刚 `git clone` 完仓库、准备首次上线 `wanderlust0736.top` 的场景。
+这份文档面向准备首次上线 `wanderlust0736.top` 的场景。目标机不需要保留源码，运行目录只保留 Compose、环境文件、运维脚本、证书目录和备份目录。
 
 ## 当前环境记录
 
 - 当前这台服务器只用于开发验证，不作为正式生产环境。
 - 当前开发部署主机公网 IP：`47.79.86.69`
 - 当前 VPS 只有 `1GB` 内存，部署和更新默认推荐使用本地镜像传输模式，避免在服务器上构建。
-- 当前部署相关脚本默认读取根目录 `.env.deploy`；建议先由仓库里的 `.env.deploy.example` 复制生成。实际 `.env.deploy` 不再纳入 git 跟踪，本地开发继续使用根目录 `.env`。
-- 当前仓库在这台机器上的更新，默认按“本机构建镜像、上传镜像、服务器备份数据库、更新代码、加载镜像、重启服务、最后验证”的顺序执行。
+- 当前部署相关脚本默认读取目标机运行目录里的 `.env.deploy`。实际 `.env.deploy` 不纳入 git 跟踪，本地开发继续使用根目录 `.env`。
+- 当前仓库在这台机器上的更新，默认按“本机构建镜像、上传镜像和最小运行包、服务器备份数据库、加载镜像、重启服务、验证、清理源码”的顺序执行。
 
 ## 1GB VPS 优化
 
@@ -16,8 +16,6 @@
 
 - MongoDB 使用 `MONGODB_WIREDTIGER_CACHE_GB=0.25`，把 WiredTiger 缓存压到 Mongo 7 允许的最低值 `256MB`
 - Go API 使用 `GIN_MODE=release`、`BLOG_API_GOMEMLIMIT=120MiB` 和 `BLOG_API_GOGC=50`，降低运行时内存峰值
-- 后端 Docker build 复用 Go module/build cache，避免每次部署都从零开始编译同一批依赖
-- Vite 关闭压缩体积统计，减少构建时额外内存开销
 - `update-low-memory.sh` 在本机按 macOS / Linux / Windows shell 环境执行镜像构建，再传到服务器 `docker load`
 - `blog-api` 镜像现已内置 Chromium、KaTeX 资源与 CJK 字体，用于 LaTeX / 表格 / SVG 的局部 PDF 渲染；相较纯 gofpdf 方案仍会多一些体积和内存，但同一份 PDF 已改为复用单个浏览器会话，已避开整页打印和逐段反复启动 Chromium 的峰值开销
 
@@ -28,31 +26,32 @@
 - 域名 `wanderlust0736.top` 和 `www.wanderlust0736.top` 已经解析到这台服务器
 - 服务器已安装 Docker 和 Docker Compose
 - 服务器安全组、防火墙已放行 `80` 和 `443`
-- 当前仓库已经 clone 到服务器某个目录，例如 `/home/ubuntu/my_blog`
+- 目标机已创建运行目录，例如 `/opt/my_blog`
+- 运行目录里已经准备好 `.env.deploy`
 
 ## 首次上线
 
-把下面命令里的目录替换成你服务器上的实际仓库目录。
+先在目标机准备运行目录和 `.env.deploy`，然后从本机执行部署脚本。
 
 ```bash
-cd /你的仓库目录
+ssh blog-server
+mkdir -p /opt/my_blog
+cd /opt/my_blog
 
-git pull
-test -f .env.deploy || cp .env.deploy.example .env.deploy
-chmod +x scripts/deploy-letsencrypt.sh scripts/renew-letsencrypt.sh
+# 编辑 .env.deploy，至少填入 CERTBOT_EMAIL 和 BLOG_WRITE_TOKEN
+vi .env.deploy
+exit
 
-export CERTBOT_EMAIL=你的邮箱
-export BLOG_WRITE_TOKEN=替换成一个长随机字符串
-
-./scripts/deploy-letsencrypt.sh
+cd /你的本地仓库目录
+./scripts/update-low-memory.sh
 ```
 
 这组命令会做几件事：
 
-- 拉取最新代码
-- 给部署脚本执行权限
-- 用 Let's Encrypt 为主域名和 `www` 申请证书
-- 构建并启动 MongoDB、Redis、后端 API 和 Nginx 前端容器
+- 在本机构建 API 和 Web 镜像
+- 上传镜像和最小运行包到目标机
+- 在目标机启动 MongoDB、Redis、后端 API 和 Nginx 前端容器
+- 部署完成后目标机运行目录不保留源码
 - 创建并挂载 MongoDB 数据卷、Redis 数据卷和图片媒体卷，避免容器重建时丢文章、上传图片和去重索引
 
 如果你准备使用 `/admin` 管理端发布文章或上传图片，记得在首次启动前就把 `BLOG_WRITE_TOKEN` 设好；前台访客不会在导航里看到这个入口，但直接访问管理端时仍然需要令牌验证。
@@ -273,9 +272,9 @@ rm -rf "$tmp_dir"
 
 补充：后端现在会按 `BLOG_MEDIA_CLEANUP_INTERVAL` 定时扫描文章正文里的 `/media/...` 引用，自动删除长期未被任何文章引用的媒体文件，并同步清理对应的 Redis 去重键；Compose 默认值是 `24h`。如果你想更快回收 smoke test 产生的测试图，可以临时把这个环境变量调短后重启 `blog-api`。
 
-## git pull 后更新数据库和网页
+## 本机镜像部署后更新数据库和网页
 
-当前项目已经把 MongoDB 数据放进命名卷 `mongodb-data`，上传图片放进命名卷 `blog-media`，Redis 索引放进命名卷 `redis-data`，所以日常 `git pull` 更新时，不需要先删库，也不需要重建这些数据卷。默认推荐下面这套顺序：
+当前项目已经把 MongoDB 数据放进命名卷 `mongodb-data`，上传图片放进命名卷 `blog-media`，Redis 索引放进命名卷 `redis-data`，所以日常镜像部署时，不需要先删库，也不需要重建这些数据卷。默认推荐下面这套顺序：
 
 当前这台 `1GB` VPS 更推荐在本机 build 镜像后传到服务器部署：
 
@@ -286,13 +285,9 @@ chmod +x scripts/update-low-memory.sh
 ./scripts/update-low-memory.sh
 ```
 
-这条脚本会在本机按 `linux/amd64` build `blog-api` / `blog-web` 生产镜像，压缩后上传到 `blog-server:/tmp`，在服务器上备份数据库、`git pull --ff-only`、`docker load`、用 `--no-build` 重启容器，并验证文章接口。这样 VPS 不需要执行 Node/Vite 或 Go build。
+这条脚本会在本机按 `linux/amd64` build `blog-api` / `blog-web` 生产镜像，压缩后上传到 `blog-server:/tmp`，同时上传最小运行包；服务器只负责备份数据库、`docker load`、用 `--no-build` 重启容器、验证文章接口，并清理源码。这样 VPS 不需要执行 Node/Vite 或 Go build，也不需要保留 Git 仓库源码。
 
-默认远端是 SSH 配置里的 `blog-server`，服务器仓库路径是 `/opt/my_blog`，服务器 compose env 文件是 `.env.deploy`。如果服务器上正准备部署本地未提交改动，可以改用：
-
-```bash
-./scripts/update-low-memory.sh --skip-pull
-```
+默认远端是 SSH 配置里的 `blog-server`，服务器运行目录是 `/opt/my_blog`，服务器 compose env 文件是 `.env.deploy`。
 
 如果你想在更新完成后顺手看最近日志，可以加上：
 
@@ -313,7 +308,6 @@ chmod +x scripts/update-low-memory.sh
 cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
-GIT_TERMINAL_PROMPT=0 git pull --ff-only
 docker compose --env-file .env.deploy up -d --no-build mongodb redis blog-api blog-web
 docker compose --env-file .env.deploy ps
 curl -sk --resolve wanderlust0736.top:8444:127.0.0.1 https://wanderlust0736.top:8444/api/posts
@@ -325,14 +319,13 @@ docker logs wanderlust-web --since 10m
 
 - 先备份当前数据库和图片媒体卷，给回滚留出口
 - 备份脚本只会把数据库归档和图片归档写到本机 `backups/`，不会再自动 `git commit` / `git push`，避免定时任务和部署流程卡在 git 认证
-- 非交互拉取最新代码，避免 merge commit 混进服务器更新流程；如果服务器没配好免交互认证，会直接报错退出
 - 用已经加载到 Docker 里的镜像重启 `mongodb`、`redis`、`blog-api` 和 `blog-web`，但保留当前 MongoDB 数据卷、Redis 数据卷和图片媒体卷
 - 用 `docker compose ps`、文章列表接口和最近日志确认网页与 API 都已切到新版本
 
 ### 日常更新原则
 
 - 只改前端、后端接口、页面样式、Nginx 配置时：重建 `blog-api` 和 `blog-web` 就够了；Redis 一般不需要重建。
-- 当前版本没有独立 migration 系统，所以 `git pull` 后不会自动重写 MongoDB 里的内容。
+- 当前版本没有独立 migration 系统，所以镜像更新后不会自动重写 MongoDB 里的内容。
 - 只要你不主动重建或删除 `mongodb-data`、`redis-data` 和 `blog-media` 卷，数据库内容、上传图片与图片去重索引都会继续保留。
 
 ### 如果本次改动涉及数据库结构
@@ -343,7 +336,6 @@ docker logs wanderlust-web --since 10m
 cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
-GIT_TERMINAL_PROMPT=0 git pull --ff-only
 docker compose --env-file .env.deploy up -d --no-build blog-api blog-web
 
 # 按本次改动需要执行数据库脚本或手动修正
@@ -377,7 +369,6 @@ docker compose --env-file .env.deploy up -d blog-api blog-web
 cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
-GIT_TERMINAL_PROMPT=0 git pull --ff-only
 docker compose --env-file .env.deploy up -d --no-build mongodb redis blog-api blog-web
 docker compose --env-file .env.deploy ps
 ```

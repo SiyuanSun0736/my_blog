@@ -1,0 +1,107 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: wanderlust-mongodb
+    restart: unless-stopped
+    command: ["mongod", "--bind_ip_all", "--wiredTigerCacheSizeGB", "${MONGODB_WIREDTIGER_CACHE_GB:-0.25}"]
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "mongodb://localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: wanderlust-redis
+    restart: unless-stopped
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--save",
+        "60",
+        "1000",
+        "--maxmemory",
+        "${REDIS_MAXMEMORY:-64mb}",
+        "--maxmemory-policy",
+        "allkeys-lru"
+      ]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  blog-api:
+    image: ${COMPOSE_PROJECT_NAME:-my_blog}-blog-api:latest
+    container_name: wanderlust-api
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: wanderlust
+      BLOG_WRITE_TOKEN: ${BLOG_WRITE_TOKEN:-}
+      BLOG_MEDIA_DIR: /app/media
+      BLOG_MEDIA_URL_PATH: /media
+      BLOG_IMAGE_UPLOAD_MAX_BYTES: ${BLOG_IMAGE_UPLOAD_MAX_BYTES:-8388608}
+      BLOG_MEDIA_CLEANUP_INTERVAL: ${BLOG_MEDIA_CLEANUP_INTERVAL:-24h}
+      REDIS_ADDR: redis:6379
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      GIN_MODE: ${GIN_MODE:-release}
+      GOMEMLIMIT: ${BLOG_API_GOMEMLIMIT:-120MiB}
+      GOGC: ${BLOG_API_GOGC:-75}
+    volumes:
+      - blog-media:/app/media
+    restart: unless-stopped
+
+  blog-web:
+    image: ${COMPOSE_PROJECT_NAME:-my_blog}-blog-web:latest
+    container_name: wanderlust-web
+    environment:
+      PRIMARY_DOMAIN: ${BLOG_PRIMARY_DOMAIN:-wanderlust0736.top}
+      WWW_DOMAIN: ${BLOG_WWW_DOMAIN:-www.wanderlust0736.top}
+      TLS_CERT_PATH: ${BLOG_TLS_CERT_PATH:-/etc/nginx/certs/fullchain.pem}
+      TLS_KEY_PATH: ${BLOG_TLS_KEY_PATH:-/etc/nginx/certs/privkey.pem}
+      TLS_AUTO_RELOAD: ${BLOG_TLS_AUTO_RELOAD:-1}
+      TLS_RELOAD_INTERVAL_SECONDS: ${BLOG_TLS_RELOAD_INTERVAL_SECONDS:-60}
+      NGINX_ENVSUBST_FILTER: PRIMARY_DOMAIN|WWW_DOMAIN|TLS_CERT_PATH|TLS_KEY_PATH|TLS_AUTO_RELOAD|TLS_RELOAD_INTERVAL_SECONDS
+    depends_on:
+      - blog-api
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "127.0.0.1:8444:443"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --no-check-certificate -O - https://127.0.0.1/nginx-healthz | grep -q '\"status\":\"ok\"'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ${BLOG_TLS_CERTS_DIR:-./certs}:/etc/nginx/certs:ro
+      - ${BLOG_CERTBOT_WEBROOT_DIR:-./certbot/www}:/var/www/certbot:ro
+      - blog-media:/usr/share/nginx/media:ro
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: wanderlust-certbot
+    profiles:
+      - certbot
+    ports:
+      - "80:80"
+    volumes:
+      - ${BLOG_TLS_CERTS_DIR:-./certs}:/etc/letsencrypt
+      - ${BLOG_CERTBOT_WEBROOT_DIR:-./certbot/www}:/var/www/certbot
+
+volumes:
+  mongodb-data:
+  redis-data:
+  blog-media:

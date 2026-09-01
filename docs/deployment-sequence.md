@@ -52,7 +52,7 @@
    - 从 `blog-api` 打包媒体目录
    - 把结果写到 `backups/mongodb/`，并同步到 `backups/latest-mongodb/`
 
-8. 如果没有显式跳过拉取，脚本会在目标机执行非交互式 `git pull --ff-only`。
+8. 脚本在目标机安装最小运行包，替换为无 `build:` 的运行态 Compose 文件。
 9. 脚本在目标机执行 `docker load` 导入本机传来的镜像。
 10. 脚本执行 `docker compose --env-file .env.deploy up -d --no-build mongodb redis blog-api blog-web`。
 11. Compose 先拉起 MongoDB 和 Redis，并等待健康检查通过。
@@ -60,7 +60,8 @@
 13. `blog-web` 启动，接管 `80` 和宿主机 `127.0.0.1:8444`，并加载证书和前端静态资源；宿主机 `443` 留给前置 SNI router。
 14. 脚本执行 `docker compose ps` 检查容器状态。
 15. 脚本通过 `curl -k --resolve 主域名:8444:127.0.0.1 https://主域名:8444/api/posts` 验证 API 可用。
-16. 如果指定了 `--logs`，脚本最后还会带出最近日志。
+16. 脚本删除目标机运行目录里的源码，只保留运行必需文件和数据目录。
+17. 如果指定了 `--logs`，脚本最后还会带出最近日志。
 
 ### 为什么线上流程要比本地更长
 
@@ -69,7 +70,7 @@
 - 本机按目标平台构建镜像
 - 上传并在目标机导入镜像
 - 备份
-- 非交互拉取代码
+- 目标机最小运行包安装和源码清理
 - 启动后健康验证
 
 这是当前仓库针对低内存 VPS 的现实约束做出的运维设计，而不是单纯为了“流程完整”。
