@@ -480,41 +480,11 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
     const svgEl = contentRef.current.querySelector("svg");
     if (!svgEl) return;
 
-    const viewBox = svgEl.viewBox?.baseVal;
-    let width = viewBox && viewBox.width > 0 ? viewBox.width : 0;
-    let height = viewBox && viewBox.height > 0 ? viewBox.height : 0;
-
-    if (!width || !height) {
-      try {
-        const bBox = svgEl.getBBox?.();
-        if (bBox && bBox.width > 0 && bBox.height > 0) {
-          width = bBox.width;
-          height = bBox.height;
-        }
-      } catch {
-        // ignore bBox error if detached
-      }
-    }
-
-    if (!width || !height) {
-      width = svgEl.getBoundingClientRect().width || 800;
-      height = svgEl.getBoundingClientRect().height || 400;
-    }
-
-    // Explicitly set natural pixel dimensions so SVG never collapses
-    svgEl.setAttribute("width", String(width));
-    svgEl.setAttribute("height", String(height));
-    svgEl.style.setProperty("width", `${width}px`, "important");
-    svgEl.style.setProperty("height", `${height}px`, "important");
-    svgEl.style.setProperty("max-width", "none", "important");
-    svgEl.style.setProperty("max-height", "none", "important");
-
-    const availableWidth = Math.max(window.innerWidth * 0.82, 400);
-    const availableHeight = Math.max(window.innerHeight * 0.72, 320);
-
-    const fitScale = Math.min(availableWidth / width, availableHeight / height);
-    const initialScale = Math.min(Math.max(Number(fitScale.toFixed(2)), 1.4), 4.0);
-    setScale(initialScale);
+    svgEl.style.removeProperty("max-width");
+    svgEl.removeAttribute("width");
+    svgEl.removeAttribute("height");
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
   }, [svg]);
 
   useEffect(() => {
@@ -618,22 +588,18 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
   }
 
   function resetZoom() {
-    if (contentRef.current) {
-      const svgEl = contentRef.current.querySelector("svg");
-      const viewBox = svgEl?.viewBox?.baseVal;
-      const w = (viewBox && viewBox.width > 0) ? viewBox.width : 800;
-      const h = (viewBox && viewBox.height > 0) ? viewBox.height : 400;
-      const fit = Math.min((window.innerWidth * 0.82) / w, (window.innerHeight * 0.72) / h);
-      setScale(Math.min(Math.max(Number(fit.toFixed(2)), 1.4), 4.0));
-    } else {
-      setScale(1.5);
-    }
+    setScale(1);
     setPosition({ x: 0, y: 0 });
   }
 
   function handleDoubleClick(e: React.MouseEvent) {
     e.stopPropagation();
-    setScale((prev) => (prev > 2.2 ? 1.4 : Number((prev * 1.5).toFixed(2))));
+    if (scale !== 1 || position.x !== 0 || position.y !== 0) {
+      setScale(1);
+      setPosition({ x: 0, y: 0 });
+    } else {
+      setScale(1.6);
+    }
   }
 
   return createPortal(
