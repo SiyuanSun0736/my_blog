@@ -1251,10 +1251,7 @@ a {
 
 .story-mermaid-modal-content svg {
   display: block;
-  width: auto !important;
-  height: auto !important;
-  max-width: none !important;
-  filter: drop-shadow(0 24px 60px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 24px 60px rgba(0, 0, 0, 0.35));
   background: rgba(255, 251, 245, 0.98);
   border-radius: 1.5rem;
   padding: 2rem 2.5rem;

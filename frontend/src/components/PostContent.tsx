@@ -480,23 +480,41 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
     const svgEl = contentRef.current.querySelector("svg");
     if (!svgEl) return;
 
-    svgEl.style.maxWidth = "none";
-    svgEl.style.width = "auto";
-    svgEl.style.height = "auto";
-
     const viewBox = svgEl.viewBox?.baseVal;
-    const width = viewBox && viewBox.width > 0 ? viewBox.width : svgEl.getBoundingClientRect().width;
-    const height = viewBox && viewBox.height > 0 ? viewBox.height : svgEl.getBoundingClientRect().height;
+    let width = viewBox && viewBox.width > 0 ? viewBox.width : 0;
+    let height = viewBox && viewBox.height > 0 ? viewBox.height : 0;
 
-    const availableWidth = Math.max(window.innerWidth * 0.86, 360);
-    const availableHeight = Math.max(window.innerHeight * 0.78, 280);
-
-    if (width > 0 && height > 0) {
-      const fitScale = Math.min(availableWidth / width, availableHeight / height);
-      // Give a generous, readable scale
-      const initialScale = Math.min(Math.max(Number(fitScale.toFixed(2)), 1.3), 3.5);
-      setScale(initialScale);
+    if (!width || !height) {
+      try {
+        const bBox = svgEl.getBBox?.();
+        if (bBox && bBox.width > 0 && bBox.height > 0) {
+          width = bBox.width;
+          height = bBox.height;
+        }
+      } catch {
+        // ignore bBox error if detached
+      }
     }
+
+    if (!width || !height) {
+      width = svgEl.getBoundingClientRect().width || 800;
+      height = svgEl.getBoundingClientRect().height || 400;
+    }
+
+    // Explicitly set natural pixel dimensions so SVG never collapses
+    svgEl.setAttribute("width", String(width));
+    svgEl.setAttribute("height", String(height));
+    svgEl.style.setProperty("width", `${width}px`, "important");
+    svgEl.style.setProperty("height", `${height}px`, "important");
+    svgEl.style.setProperty("max-width", "none", "important");
+    svgEl.style.setProperty("max-height", "none", "important");
+
+    const availableWidth = Math.max(window.innerWidth * 0.85, 360);
+    const availableHeight = Math.max(window.innerHeight * 0.75, 260);
+
+    const fitScale = Math.min(availableWidth / width, availableHeight / height);
+    const initialScale = Math.min(Math.max(Number(fitScale.toFixed(2)), 0.6), 3.0);
+    setScale(initialScale);
   }, [svg]);
 
   useEffect(() => {
@@ -600,7 +618,16 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
   }
 
   function resetZoom() {
-    setScale(1.4);
+    if (contentRef.current) {
+      const svgEl = contentRef.current.querySelector("svg");
+      const viewBox = svgEl?.viewBox?.baseVal;
+      const w = (viewBox && viewBox.width > 0) ? viewBox.width : 800;
+      const h = (viewBox && viewBox.height > 0) ? viewBox.height : 400;
+      const fit = Math.min((window.innerWidth * 0.85) / w, (window.innerHeight * 0.75) / h);
+      setScale(Math.min(Math.max(Number(fit.toFixed(2)), 0.6), 3.0));
+    } else {
+      setScale(1.0);
+    }
     setPosition({ x: 0, y: 0 });
   }
 
