@@ -460,7 +460,7 @@ interface MermaidModalProps {
 }
 
 function MermaidModal({ svg, onClose }: MermaidModalProps) {
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(1.4);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -476,6 +476,30 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
   }, []);
 
   useEffect(() => {
+    if (!contentRef.current) return;
+    const svgEl = contentRef.current.querySelector("svg");
+    if (!svgEl) return;
+
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = "auto";
+    svgEl.style.height = "auto";
+
+    const viewBox = svgEl.viewBox?.baseVal;
+    const width = viewBox && viewBox.width > 0 ? viewBox.width : svgEl.getBoundingClientRect().width;
+    const height = viewBox && viewBox.height > 0 ? viewBox.height : svgEl.getBoundingClientRect().height;
+
+    const availableWidth = Math.max(window.innerWidth * 0.86, 360);
+    const availableHeight = Math.max(window.innerHeight * 0.78, 280);
+
+    if (width > 0 && height > 0) {
+      const fitScale = Math.min(availableWidth / width, availableHeight / height);
+      // Give a generous, readable scale
+      const initialScale = Math.min(Math.max(Number(fitScale.toFixed(2)), 1.3), 3.5);
+      setScale(initialScale);
+    }
+  }, [svg]);
+
+  useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         onClose();
@@ -489,7 +513,7 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
     e.preventDefault();
     e.stopPropagation();
     const factor = e.deltaY < 0 ? 1.15 : 0.87;
-    setScale((prev) => Math.min(Math.max(Number((prev * factor).toFixed(2)), 0.3), 5));
+    setScale((prev) => Math.min(Math.max(Number((prev * factor).toFixed(2)), 0.3), 6));
   }
 
   function handleMouseDown(e: React.MouseEvent) {
@@ -559,7 +583,7 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
         e.touches[0].clientY - e.touches[1].clientY
       );
       const factor = dist / touchInfoRef.current.initialDistance;
-      setScale(Math.min(Math.max(Number((touchInfoRef.current.initialScale * factor).toFixed(2)), 0.3), 5));
+      setScale(Math.min(Math.max(Number((touchInfoRef.current.initialScale * factor).toFixed(2)), 0.3), 6));
     }
   }
 
@@ -568,7 +592,7 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
   }
 
   function zoomIn() {
-    setScale((prev) => Math.min(Number((prev * 1.25).toFixed(2)), 5));
+    setScale((prev) => Math.min(Number((prev * 1.25).toFixed(2)), 6));
   }
 
   function zoomOut() {
@@ -576,17 +600,13 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
   }
 
   function resetZoom() {
-    setScale(1);
+    setScale(1.4);
     setPosition({ x: 0, y: 0 });
   }
 
   function handleDoubleClick(e: React.MouseEvent) {
     e.stopPropagation();
-    if (scale !== 1 || position.x !== 0 || position.y !== 0) {
-      resetZoom();
-    } else {
-      setScale(1.6);
-    }
+    setScale((prev) => (prev > 2.0 ? 1.3 : Number((prev * 1.5).toFixed(2))));
   }
 
   return createPortal(
@@ -629,7 +649,7 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
         <button type="button" className="story-mermaid-modal-btn" title="缩小" onClick={zoomOut} aria-label="缩小">
           −
         </button>
-        <button type="button" className="story-mermaid-modal-btn" title="重置 (100%)" onClick={resetZoom} aria-label="重置">
+        <button type="button" className="story-mermaid-modal-btn" title="重置" onClick={resetZoom} aria-label="重置">
           ↺
         </button>
         <button type="button" className="story-mermaid-modal-btn" title="放大" onClick={zoomIn} aria-label="放大">
@@ -707,27 +727,14 @@ function MermaidDiagram({ source }: { source: string }) {
         <div
           ref={containerRef}
           className="story-mermaid-diagram"
-          aria-label="Mermaid 图表"
+          aria-label="点击全屏放大 Mermaid 图表"
+          title="点击全屏放大查看"
           onClick={() => {
             if (renderedSvg) {
               setIsModalOpen(true);
             }
           }}
         />
-        {renderedSvg ? (
-          <button
-            type="button"
-            className="story-mermaid-zoom-btn"
-            title="点击全屏放大"
-            aria-label="点击全屏放大"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsModalOpen(true);
-            }}
-          >
-            放大查看
-          </button>
-        ) : null}
         {error ? (
           <div className="story-mermaid-error" role="alert">
             <p>{error}</p>

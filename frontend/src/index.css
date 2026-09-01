@@ -1207,41 +1207,6 @@ a {
   opacity: 0.94;
 }
 
-.story-prose .story-mermaid-zoom-btn {
-  position: absolute;
-  top: 0.85rem;
-  right: 0.85rem;
-  z-index: 2;
-  border: 1px solid rgba(36, 24, 15, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 251, 245, 0.88);
-  color: rgba(36, 24, 15, 0.88);
-  padding: 0.38rem 0.78rem;
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 500;
-  line-height: 1;
-  cursor: pointer;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 18px rgba(36, 24, 15, 0.08);
-  opacity: 0.8;
-  transition: transform 160ms ease, opacity 160ms ease, border-color 160ms ease, background-color 160ms ease, color 160ms ease;
-}
-
-.story-prose .story-mermaid-shell:hover .story-mermaid-zoom-btn,
-.story-prose .story-mermaid-zoom-btn:hover {
-  opacity: 1;
-  transform: translateY(-1px);
-  border-color: rgba(36, 24, 15, 0.22);
-  background: rgba(255, 255, 255, 0.94);
-}
-
-.story-prose .story-mermaid-zoom-btn:focus-visible {
-  outline: 2px solid rgba(15, 118, 110, 0.45);
-  outline-offset: 2px;
-}
-
 .story-mermaid-modal-overlay {
   position: fixed;
   inset: 0;
@@ -1276,24 +1241,38 @@ a {
 }
 
 .story-mermaid-modal-content {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: 3rem;
   will-change: transform;
   transform-origin: center center;
 }
 
 .story-mermaid-modal-content svg {
   display: block;
-  max-width: none;
-  height: auto;
-  filter: drop-shadow(0 20px 48px rgba(0, 0, 0, 0.25));
-  background: rgba(255, 251, 245, 0.96);
-  border-radius: 1.25rem;
-  padding: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  filter: drop-shadow(0 24px 60px rgba(0, 0, 0, 0.3));
+  background: rgba(255, 251, 245, 0.98);
+  border-radius: 1.5rem;
+  padding: 2rem 2.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+}
+
+.story-mermaid-modal-content foreignObject {
+  overflow: visible !important;
+}
+
+.story-mermaid-modal-content text,
+.story-mermaid-modal-content span,
+.story-mermaid-modal-content div {
+  font-family: inherit !important;
+  line-height: 1.4 !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
 .story-mermaid-modal-toolbar {
@@ -2384,16 +2363,6 @@ a {
   color: #eee8d5;
 }
 
-:root[data-theme="solid"][data-solid-palette="dark"] .story-prose .story-mermaid-zoom-btn {
-  border-color: rgba(147, 161, 161, 0.2);
-  background: rgba(7, 54, 66, 0.86);
-  color: #eee8d5;
-}
-
-:root[data-theme="solid"][data-solid-palette="dark"] .story-prose .story-mermaid-zoom-btn:hover {
-  border-color: rgba(181, 137, 0, 0.34);
-  background: rgba(7, 54, 66, 0.96);
-}
 
 :root[data-theme="solid"][data-solid-palette="dark"] .story-mermaid-modal-content svg {
   background: #002b36;
