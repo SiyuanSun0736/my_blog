@@ -280,35 +280,37 @@ rm -rf "$tmp_dir"
 
 当前项目已经把 MongoDB 数据放进命名卷 `mongodb-data`，上传图片放进命名卷 `blog-media`，Redis 索引放进命名卷 `redis-data`，所以日常 `git pull` 更新时，不需要先删库，也不需要重建这些数据卷。默认推荐下面这套顺序：
 
-当前这台 `1GB` VPS 更推荐直接使用仓库里的部署更新脚本：
+当前这台 `1GB` VPS 更推荐在本机 build 镜像后传到服务器部署：
 
 ```bash
-cd /你的仓库目录
+cd /你的本地仓库目录
 
-chmod +x scripts/update-deploy.sh
-./scripts/update-deploy.sh
+chmod +x scripts/update-low-memory.sh
+./scripts/update-low-memory.sh
 ```
 
-这条脚本内部已经固定做了：备份数据库、停止当前 `mongodb`/`redis`/`blog-api`/`blog-web` 容器、`git pull --ff-only`、串行 build `blog-api`、串行 build `blog-web`、重新启动容器、验证文章接口。
+这条脚本会在本机按 `linux/amd64` build `blog-api` / `blog-web` 生产镜像，压缩后上传到 `blog-server:/tmp`，在服务器上备份数据库、`git pull --ff-only`、`docker load`、用 `--no-build` 重启容器，并验证文章接口。这样 VPS 不需要执行 Node/Vite 或 Go build。
 
-默认会读取仓库根目录 `.env.deploy`，并在执行 `git pull --ff-only` 前先检查当前 tracked 文件是否干净；当前脚本里的 `git pull` 已改成非交互模式，如果服务器还没配好免交互拉取，会直接失败而不是卡住。如果你服务器上正准备部署本地未提交改动，可以改用：
+默认远端是 SSH 配置里的 `blog-server`，服务器仓库路径是 `/opt/my_blog`，服务器 compose env 文件是 `.env.deploy`。如果服务器上正准备部署本地未提交改动，可以改用：
 
 ```bash
-./scripts/update-deploy.sh --skip-pull
+./scripts/update-low-memory.sh --skip-pull
 ```
 
 如果你想在更新完成后顺手看最近日志，可以加上：
 
 ```bash
-./scripts/update-deploy.sh --logs
+./scripts/update-low-memory.sh --logs
 ```
 
 如果部署环境文件不在默认位置，或者你想先看完整参数说明：
 
 ```bash
-./scripts/update-deploy.sh --help
-./scripts/update-deploy.sh --env-file /你的部署目录/.env.deploy --logs
+./scripts/update-low-memory.sh --help
+./scripts/update-low-memory.sh --env-file /你的部署目录/.env.deploy --logs
 ```
+
+如果必须直接在服务器上构建，仍可使用 `./scripts/update-deploy.sh` 作为备用流程。
 
 如果你想手动执行，再用下面这套命令：
 

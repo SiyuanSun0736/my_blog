@@ -19,6 +19,7 @@ import sql from "highlight.js/lib/languages/sql";
 import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
+import type { Mermaid } from "mermaid";
 import rehypeKatex from "rehype-katex";
 import {
   isValidElement,
@@ -326,26 +327,12 @@ type CodeBlockChildProps = {
   className?: string;
 };
 
-type MermaidRenderer = {
-  initialize(config: { securityLevel: "strict"; startOnLoad: false; theme: "neutral" }): void;
-  render(
-    id: string,
-    source: string,
-  ): Promise<{
-    svg: string;
-    bindFunctions?: (element: Element) => void;
-  }>;
-};
-
-const mermaidModuleUrl = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs";
 let mermaidRenderCounter = 0;
 let isMermaidInitialized = false;
-let mermaidModulePromise: Promise<MermaidRenderer> | null = null;
+let mermaidModulePromise: Promise<Mermaid> | null = null;
 
 async function loadMermaid() {
-  mermaidModulePromise ??= import(/* @vite-ignore */ mermaidModuleUrl).then(
-    (module) => (module as { default: MermaidRenderer }).default,
-  );
+  mermaidModulePromise ??= import("mermaid").then((module) => module.default);
 
   const mermaid = await mermaidModulePromise;
 

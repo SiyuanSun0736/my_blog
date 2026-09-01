@@ -33,7 +33,8 @@
 - 根目录 `.env` 是本地测试默认配置：使用 `localhost`、本地 `certs/` 证书目录，并给 MongoDB / Go build / 前端 build 更宽松的资源参数，适合本地并发构建。
 - 根目录 `.env.deploy.example` 是部署模板：保留 `wanderlust0736.top`、Let's Encrypt 路径和 `1CPU/1GB` VPS 的低内存参数；服务器上请复制为 `.env.deploy` 后再填实际值。实际 `.env.deploy` 已加入 `.gitignore`，避免把云端配置和 token 提交进仓库。
 - `./scripts/up-local.sh` 会按本地环境启动整套 Compose，并保留 Compose 默认并发。
-- `./scripts/update-deploy.sh` 会按部署环境串行备份、停止当前容器、拉代码、构建和重新启动；`./scripts/update-low-memory.sh` 现在只是它的兼容别名。
+- `./scripts/update-low-memory.sh` 会在本机 build 生产镜像，传到低内存 VPS 后 `docker load` 并重启服务，避免 VPS 执行前端/Go 构建。
+- `./scripts/update-deploy.sh` 仍可在服务器上串行备份、拉代码、构建和重新启动，适合作为服务器本地构建的备用流程。
 
 ## 本地开发
 
@@ -98,13 +99,21 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 
 当前 `blog-api` 镜像也会打包 Chromium、KaTeX 资源和 CJK 字体，用于服务端渲染 LaTeX / 表格 / SVG 片段；相较纯 gofpdf 方案，镜像体积仍会更高，但同一份 PDF 已改为复用单个浏览器会话，峰值内存低于逐段重复启动 Chromium 的方案。
 
-如果你的 VPS 只有 `1GB` 内存，当前仓库也已经提供默认低内存优化：
+如果你的 VPS 只有 `1GB` 内存，推荐从本机执行镜像传输部署：
+
+```bash
+./scripts/update-low-memory.sh
+```
+
+这条脚本会在本机 build `blog-api` / `blog-web` 生产镜像，压缩后上传到 `blog-server:/tmp`，再在服务器上 `docker load`、启动容器并验证接口。默认目标平台是 `linux/amd64`，默认服务器路径是 `/opt/my_blog`。
+
+当前仓库也保留了服务器本地构建的低内存参数：
 
 - MongoDB 默认把 WiredTiger cache 压到 Mongo 7 允许的最低值 `0.25GB`
 - Go API 默认设置 `GIN_MODE=release`、`GOMEMLIMIT=120MiB` 与 `GOGC=50`
 - 前端 Docker build 默认把 Node heap 限制到 `256MB`
 - 首次部署和日常更新都默认按串行 build 处理，避免 `up --build` 并行构建把内存顶满
-- 可直接执行 `./scripts/update-deploy.sh` 按同一套串行方式更新服务
+- 如果必须在服务器上构建，可执行 `./scripts/update-deploy.sh`
 
 当前镜像不再内置自签名证书，而是要求在启动时挂载外部证书文件。`www.wanderlust0736.top` 会被 Nginx 统一 301 跳转到 `wanderlust0736.top`。
 
