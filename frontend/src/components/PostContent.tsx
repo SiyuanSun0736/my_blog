@@ -332,6 +332,90 @@ let mermaidRenderCounter = 0;
 let isMermaidInitialized = false;
 let mermaidModulePromise: Promise<Mermaid> | null = null;
 
+const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v1-";
+const mermaidMemoryCache = new Map<string, string>();
+
+function hashMermaidSource(source: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  const trimmed = source.trim();
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+function getCachedMermaidSvg(source: string): string | null {
+  const hash = hashMermaidSource(source);
+  const inMemory = mermaidMemoryCache.get(hash);
+  if (inMemory) {
+    return inMemory;
+  }
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const stored = window.localStorage.getItem(MERMAID_CACHE_PREFIX + hash);
+      if (stored) {
+        mermaidMemoryCache.set(hash, stored);
+        return stored;
+      }
+    } catch {
+      // Storage error fallback
+    }
+  }
+
+  return null;
+}
+
+function setCachedMermaidSvg(source: string, svg: string): void {
+  const hash = hashMermaidSource(source);
+  mermaidMemoryCache.set(hash, svg);
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      window.localStorage.setItem(MERMAID_CACHE_PREFIX + hash, svg);
+    } catch {
+      // If quota exceeded, clean oldest entries
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (k?.startsWith(MERMAID_CACHE_PREFIX)) {
+            keysToRemove.push(k);
+          }
+        }
+        for (let i = 0; i < Math.min(keysToRemove.length, 10); i++) {
+          window.localStorage.removeItem(keysToRemove[i]);
+        }
+        window.localStorage.setItem(MERMAID_CACHE_PREFIX + hash, svg);
+      } catch {
+        // Ignore quota errors
+      }
+    }
+  }
+}
+
+function preloadMermaid(): void {
+  if (typeof window === "undefined" || mermaidModulePromise !== null) {
+    return;
+  }
+
+  const idleCallback = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
+  if (typeof idleCallback === "function") {
+    idleCallback(() => {
+      void loadMermaid();
+    }, { timeout: 1500 });
+  } else {
+    window.setTimeout(() => {
+      void loadMermaid();
+    }, 150);
+  }
+}
+
 async function loadMermaid() {
   mermaidModulePromise ??= import("mermaid").then((module) => module.default);
 
@@ -563,12 +647,22 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
 function MermaidDiagram({ source }: { source: string }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [renderedSvg, setRenderedSvg] = useState<string | null>(null);
+  const cachedSvg = getCachedMermaidSvg(source);
+  const [renderedSvg, setRenderedSvg] = useState<string | null>(cachedSvg);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
+      return;
+    }
+
+    const existingCached = getCachedMermaidSvg(source);
+    if (existingCached) {
+      setError(null);
+      setRenderedSvg(existingCached);
+      container.removeAttribute("data-state");
+      container.innerHTML = existingCached;
       return;
     }
 
@@ -587,6 +681,7 @@ function MermaidDiagram({ source }: { source: string }) {
           return;
         }
 
+        setCachedMermaidSvg(source, svg);
         setRenderedSvg(svg);
         containerRef.current.innerHTML = svg;
         bindFunctions?.(containerRef.current);
@@ -757,6 +852,12 @@ export function PostContent({ body, bodyFormat = "markdown", className, onHeadin
     headingsSignatureRef.current = signature;
     onHeadingsChange?.(headings);
   });
+
+  useEffect(() => {
+    if (bodyFormat === "markdown" && body.includes("mermaid")) {
+      preloadMermaid();
+    }
+  }, [body, bodyFormat]);
 
   useEffect(() => {
     if (bodyFormat !== "html" || !contentRef.current) {
