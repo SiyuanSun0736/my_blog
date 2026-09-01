@@ -356,12 +356,16 @@ export function Shell() {
             <div className="theme-switch-wrap" ref={themeSwitchRef}>
               <div
                 className="theme-switch liquid-glass-control"
+                style={{ flex: "0 0 8.5rem", minWidth: "8.5rem", width: "8.5rem", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
                 aria-label="主题选项"
                 role="radiogroup"
               >
                 <span
                   className="theme-switch-thumb"
-                  style={{ left: `calc(0.25rem + ${themeSwitchIndex * 25}%)` }}
+                  style={{
+                    width: "calc(50% - 0.5rem)",
+                    left: (themeMode === "solid" ? "0.25rem" : "calc(50% + 0.25rem)"),
+                  }}
                 />
                 <button
                   ref={solidButtonRef}
@@ -379,26 +383,11 @@ export function Shell() {
                   纯色
                 </button>
                 <button
-                  ref={glassButtonRef}
-                  type="button"
-                  role="radio"
-                  aria-checked={themeMode === "liquid-glass"}
-                  aria-expanded={themeMode === "liquid-glass" && glassMenuOpen}
-                  className="theme-switch-option theme-switch-glass-option"
-                  onClick={() => {
-                    setThemeMode("liquid-glass");
-                    positionGlassMenu(glassButtonRef.current);
-                    setGlassMenuOpen((open) => (themeMode === "liquid-glass" ? !open : true));
-                  }}
-                >
-                  玻璃
-                </button>
-                <button
                   ref={frostedButtonRef}
                   type="button"
                   role="radio"
-                  aria-checked={themeMode === "frosted-glass"}
-                  aria-expanded={themeMode === "frosted-glass" && glassMenuOpen}
+                  aria-checked={themeMode === "frosted-glass" || themeMode === "liquid-glass" || themeMode === "thick-glass"}
+                  aria-expanded={(themeMode === "frosted-glass" || themeMode === "liquid-glass" || themeMode === "thick-glass") && glassMenuOpen}
                   className="theme-switch-option theme-switch-glass-option"
                   onClick={() => {
                     setThemeMode("frosted-glass");
@@ -408,21 +397,9 @@ export function Shell() {
                 >
                   毛玻璃
                 </button>
-                <button
-                  ref={thickButtonRef}
-                  type="button"
-                  role="radio"
-                  aria-checked={themeMode === "thick-glass"}
-                  aria-expanded={themeMode === "thick-glass" && glassMenuOpen}
-                  className="theme-switch-option theme-switch-glass-option"
-                  onClick={() => {
-                    setThemeMode("thick-glass");
-                    positionGlassMenu(thickButtonRef.current);
-                    setGlassMenuOpen((open) => (themeMode === "thick-glass" ? !open : true));
-                  }}
-                >
-                  厚玻璃
-                </button>
+                {/* 隐藏保留：玻璃与厚玻璃模式 */}
+                <button ref={glassButtonRef} type="button" style={{ display: "none" }} aria-hidden="true" tabIndex={-1}>玻璃</button>
+                <button ref={thickButtonRef} type="button" style={{ display: "none" }} aria-hidden="true" tabIndex={-1}>厚玻璃</button>
               </div>
             </div>
             <Link
