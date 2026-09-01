@@ -80,7 +80,7 @@ npm run dev
 cp .env.deploy.example .env.deploy
 ```
 
-把 `BLOG_API_IMAGE` 和 `BLOG_WEB_IMAGE` 改成你自己的 `GHCR` 地址；如果仓库是私有的，再填写 `GHCR_USERNAME` 和 `GHCR_TOKEN`。
+把 `BLOG_API_IMAGE` 和 `BLOG_WEB_IMAGE` 改成你自己的 `GHCR` 地址。
 
 低内存 VPS 不在目标机上构建镜像。部署由 `GitHub Actions` 负责构建并推送到 `GHCR`，服务器只负责拉取：
 

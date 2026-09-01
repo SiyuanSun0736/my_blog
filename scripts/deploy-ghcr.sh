@@ -124,10 +124,6 @@ set -a
 . "$remote_env_file"
 set +a
 
-if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
-  printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-fi
-
 docker compose --env-file "$remote_env_file" pull mongodb redis blog-api blog-web
 docker compose --env-file "$remote_env_file" up -d --no-build --force-recreate mongodb redis blog-api blog-web
 docker compose --env-file "$remote_env_file" ps
