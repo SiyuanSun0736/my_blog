@@ -22,10 +22,6 @@ export default defineConfig({
             return "react-vendor";
           }
 
-          if (id.includes("mermaid")) {
-            return "mermaid-vendor";
-          }
-
           if (
             id.includes("react-markdown") ||
             id.includes("remark-") ||

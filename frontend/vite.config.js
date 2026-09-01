@@ -17,9 +17,6 @@ export default defineConfig({
                         id.includes("react-router-dom/")) {
                         return "react-vendor";
                     }
-                    if (id.includes("mermaid")) {
-                        return "mermaid-vendor";
-                    }
                     if (id.includes("react-markdown") ||
                         id.includes("remark-") ||
                         id.includes("rehype-") ||

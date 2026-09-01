@@ -326,11 +326,28 @@ type CodeBlockChildProps = {
   className?: string;
 };
 
+type MermaidRenderer = {
+  initialize(config: { securityLevel: "strict"; startOnLoad: false; theme: "neutral" }): void;
+  render(
+    id: string,
+    source: string,
+  ): Promise<{
+    svg: string;
+    bindFunctions?: (element: Element) => void;
+  }>;
+};
+
+const mermaidModuleUrl = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs";
 let mermaidRenderCounter = 0;
 let isMermaidInitialized = false;
+let mermaidModulePromise: Promise<MermaidRenderer> | null = null;
 
 async function loadMermaid() {
-  const { default: mermaid } = await import("mermaid");
+  mermaidModulePromise ??= import(/* @vite-ignore */ mermaidModuleUrl).then(
+    (module) => (module as { default: MermaidRenderer }).default,
+  );
+
+  const mermaid = await mermaidModulePromise;
 
   if (!isMermaidInitialized) {
     mermaid.initialize({
