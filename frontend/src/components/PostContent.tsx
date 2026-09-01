@@ -219,13 +219,25 @@ function escapeHTML(value: string) {
     .replace(/>/g, "&gt;");
 }
 
-function resolveCodeLanguage(className?: string): HighlightLanguageName | undefined {
+function resolveCodeFenceLanguage(className?: string) {
   const match = className?.match(/language-([\w+-]+)/i);
   if (!match) {
     return undefined;
   }
 
-  const normalizedName = match[1].toLowerCase();
+  return match[1].toLowerCase();
+}
+
+function isMermaidLanguage(className?: string) {
+  return resolveCodeFenceLanguage(className) === "mermaid";
+}
+
+function resolveCodeLanguage(className?: string): HighlightLanguageName | undefined {
+  const normalizedName = resolveCodeFenceLanguage(className);
+  if (!normalizedName) {
+    return undefined;
+  }
+
   if (normalizedName in highlightLanguages) {
     return normalizedName as HighlightLanguageName;
   }
@@ -309,6 +321,94 @@ type MarkdownCodeProps = ComponentPropsWithoutRef<"code"> & {
   node?: unknown;
 };
 
+type CodeBlockChildProps = {
+  children?: ReactNode;
+  className?: string;
+};
+
+let mermaidRenderCounter = 0;
+let isMermaidInitialized = false;
+
+async function loadMermaid() {
+  const { default: mermaid } = await import("mermaid");
+
+  if (!isMermaidInitialized) {
+    mermaid.initialize({
+      securityLevel: "strict",
+      startOnLoad: false,
+      theme: "neutral",
+    });
+    isMermaidInitialized = true;
+  }
+
+  return mermaid;
+}
+
+function formatMermaidError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message.split("\n")[0] || "Mermaid 图表语法无效。";
+  }
+
+  return "Mermaid 图表语法无效。";
+}
+
+function MermaidDiagram({ source }: { source: string }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    let isActive = true;
+    const diagramId = `story-mermaid-${++mermaidRenderCounter}`;
+
+    setError(null);
+    container.removeAttribute("data-state");
+    container.textContent = "图表渲染中...";
+
+    void loadMermaid()
+      .then((mermaid) => mermaid.render(diagramId, source))
+      .then(({ svg, bindFunctions }) => {
+        if (!isActive || !containerRef.current) {
+          return;
+        }
+
+        containerRef.current.innerHTML = svg;
+        bindFunctions?.(containerRef.current);
+      })
+      .catch((renderError: unknown) => {
+        if (!isActive || !containerRef.current) {
+          return;
+        }
+
+        containerRef.current.textContent = "";
+        containerRef.current.dataset.state = "error";
+        setError(formatMermaidError(renderError));
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [source]);
+
+  return (
+    <div className="story-mermaid-shell">
+      <div ref={containerRef} className="story-mermaid-diagram" aria-label="Mermaid 图表" />
+      {error ? (
+        <div className="story-mermaid-error" role="alert">
+          <p>{error}</p>
+          <pre>
+            <code>{source}</code>
+          </pre>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MarkdownCode({ node: _node, children, className, inline, ...props }: MarkdownCodeProps) {
   const language = resolveCodeLanguage(className);
 
@@ -332,6 +432,10 @@ function MarkdownCode({ node: _node, children, className, inline, ...props }: Ma
 }
 
 function MarkdownPre({ node: _node, children, ...props }: MarkdownPreProps) {
+  if (isValidElement<CodeBlockChildProps>(children) && isMermaidLanguage(children.props.className)) {
+    return <MermaidDiagram source={extractReactTextContent(children.props.children).replace(/\n$/, "")} />;
+  }
+
   return (
     <div className="story-code-shell">
       <pre {...props}>{children}</pre>

@@ -12,6 +12,7 @@
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.1",
     "katex": "^0.16.45",
+    "mermaid": "^11.17.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",

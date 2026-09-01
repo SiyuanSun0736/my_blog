@@ -1164,6 +1164,45 @@ a {
   margin: 0;
 }
 
+.story-prose .story-mermaid-shell {
+  min-width: 0;
+  overflow-x: auto;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(36, 24, 15, 0.12);
+  background: rgba(255, 251, 245, 0.72);
+  padding: 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.story-prose .story-mermaid-diagram {
+  display: grid;
+  min-height: 4rem;
+  min-width: max-content;
+  place-items: center;
+  color: rgba(36, 24, 15, 0.74);
+}
+
+.story-prose .story-mermaid-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.story-prose .story-mermaid-error {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.story-prose .story-mermaid-error p {
+  color: #b91c1c;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.story-prose .story-mermaid-error pre {
+  margin: 0;
+}
+
 .story-prose .story-code-copy {
   position: absolute;
   top: 0.85rem;
