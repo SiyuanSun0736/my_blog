@@ -4,28 +4,47 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'nginx/**'
+      - '.github/workflows/build-and-push-images.yml'
   workflow_dispatch:
 
 env:
   IMAGE_PREFIX: ghcr.io/siyuansun0736/my_blog
 
 jobs:
-  build-and-push:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Detect file changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            api:
+              - 'backend/**'
+              - '.github/workflows/build-and-push-images.yml'
+            web:
+              - 'frontend/**'
+              - 'nginx/**'
+              - '.github/workflows/build-and-push-images.yml'
+
+  build-api:
+    needs: changes
+    if: ${{ needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: blog-api
-            context: ./backend
-            dockerfile: ./backend/Dockerfile
-          - name: blog-web
-            context: .
-            dockerfile: ./nginx/Dockerfile
-
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -40,15 +59,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push ${{ matrix.name }}
+      - name: Build and push blog-api
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
+          context: ./backend
+          file: ./backend/Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:${{ github.sha }}
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:latest
+            ${{ env.IMAGE_PREFIX }}/blog-api:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/blog-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  build-web:
+    needs: changes
+    if: ${{ needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push blog-web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./nginx/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/blog-web:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/blog-web:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
