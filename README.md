@@ -31,7 +31,7 @@
 ## 环境拆分
 
 - 根目录 `.env` 是本地测试默认配置：使用 `localhost`、本地 `certs/` 证书目录，并给 MongoDB / Go build / 前端 build 更宽松的资源参数，适合本地并发构建。
-- 根目录 `.env.deploy.example` 是部署模板：保留 `wanderlust0736.top`、Let's Encrypt 路径和 `1CPU/1GB` VPS 的低内存参数；服务器上请复制为 `.env.deploy` 后再填实际值。实际 `.env.deploy` 已加入 `.gitignore`，避免把云端配置和 token 提交进仓库。
+- 根目录 `.env.deploy.example` 是部署模板：保留 `wanderlust0736.top`、Let's Encrypt 路径和 VPS 运行时参数；服务器上请复制为 `.env.deploy` 后再填实际值。实际 `.env.deploy` 已加入 `.gitignore`，避免把云端配置和 token 提交进仓库。
 - `./scripts/up-local.sh` 会按本地环境启动整套 Compose，并保留 Compose 默认并发。
 - `./scripts/update-low-memory.sh` 会在本机 build 生产镜像，传到低内存 VPS 后 `docker load` 并重启服务，避免 VPS 执行前端/Go 构建。
 - `./scripts/update-deploy.sh` 仍可在服务器上串行备份、拉代码、构建和重新启动，适合作为服务器本地构建的备用流程。
@@ -107,13 +107,11 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 
 这条脚本会在本机 build `blog-api` / `blog-web` 生产镜像，压缩后上传到 `blog-server:/tmp`，再在服务器上 `docker load`、启动容器并验证接口。默认目标平台是 `linux/amd64`，默认服务器路径是 `/opt/my_blog`。
 
-当前仓库也保留了服务器本地构建的低内存参数：
+当前仓库也保留了服务器运行时的低内存参数：
 
 - MongoDB 默认把 WiredTiger cache 压到 Mongo 7 允许的最低值 `0.25GB`
 - Go API 默认设置 `GIN_MODE=release`、`GOMEMLIMIT=120MiB` 与 `GOGC=50`
-- 前端 Docker build 默认把 Node heap 限制到 `256MB`
-- 首次部署和日常更新都默认按串行 build 处理，避免 `up --build` 并行构建把内存顶满
-- 如果必须在服务器上构建，可执行 `./scripts/update-deploy.sh`
+- 如果必须在服务器上构建，可执行 `./scripts/update-deploy.sh`，但推荐优先使用本地镜像传输部署
 
 当前镜像不再内置自签名证书，而是要求在启动时挂载外部证书文件。`www.wanderlust0736.top` 会被 Nginx 统一 301 跳转到 `wanderlust0736.top`。
 
@@ -200,7 +198,7 @@ export BLOG_TLS_KEY_PATH=/etc/nginx/certs/server.key
 docker compose --env-file .env.deploy up --build -d
 ```
 
-低内存机器上也建议改成先分别 build `blog-api` 和 `blog-web`，再执行 `docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web`。
+低内存机器上建议从本机执行 `./scripts/update-low-memory.sh`，把已经构建好的镜像传到服务器后再启动，避免服务器承担构建压力。
 
 如果挂载目录里缺少证书文件，Nginx 容器会在启动前直接报错退出，避免带着错误配置继续运行。
 

@@ -6,25 +6,22 @@
 
 - 当前这台服务器只用于开发验证，不作为正式生产环境。
 - 当前开发部署主机公网 IP：`47.79.86.69`
-- 当前 VPS 只有 `1GB` 内存，部署和更新默认按低内存模式处理。
+- 当前 VPS 只有 `1GB` 内存，部署和更新默认推荐使用本地镜像传输模式，避免在服务器上构建。
 - 当前部署相关脚本默认读取根目录 `.env.deploy`；建议先由仓库里的 `.env.deploy.example` 复制生成。实际 `.env.deploy` 不再纳入 git 跟踪，本地开发继续使用根目录 `.env`。
-- 当前仓库在这台机器上的更新，默认按“先备份数据库，再停止当前服务，再更新代码、重建网页和 API，最后验证”的顺序执行。
+- 当前仓库在这台机器上的更新，默认按“本机构建镜像、上传镜像、服务器备份数据库、更新代码、加载镜像、重启服务、最后验证”的顺序执行。
 
 ## 1GB VPS 优化
 
-当前仓库已经针对 `1GB` 内存的 VPS 做了几项默认优化：
+当前仓库已经针对 `1GB` 内存的 VPS 做了几项运行时优化：
 
 - MongoDB 使用 `MONGODB_WIREDTIGER_CACHE_GB=0.25`，把 WiredTiger 缓存压到 Mongo 7 允许的最低值 `256MB`
 - Go API 使用 `GIN_MODE=release`、`BLOG_API_GOMEMLIMIT=120MiB` 和 `BLOG_API_GOGC=50`，降低运行时内存峰值
-- 后端镜像构建使用 `BLOG_API_BUILD_GOMEMLIMIT=120MiB`、`BLOG_API_BUILD_GOGC=50` 和 `BLOG_API_BUILD_P=1`，让 `go build` 在 1GB VPS 上按单并行、低内存模式编译
 - 后端 Docker build 复用 Go module/build cache，避免每次部署都从零开始编译同一批依赖
-- 更新脚本默认用 `WANDERLUST_BUILD_NICE_LEVEL=10` 降低 build 调度优先级，减轻构建阶段对在线容器的 CPU 抢占
-- 前端构建使用 `FRONTEND_BUILD_MAX_OLD_SPACE_SIZE=256`，限制 Node build heap
 - Vite 关闭压缩体积统计，减少构建时额外内存开销
-- 更新脚本改为串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 同时构建把内存顶满
+- `update-low-memory.sh` 在本机按 macOS / Linux / Windows shell 环境执行镜像构建，再传到服务器 `docker load`
 - `blog-api` 镜像现已内置 Chromium、KaTeX 资源与 CJK 字体，用于 LaTeX / 表格 / SVG 的局部 PDF 渲染；相较纯 gofpdf 方案仍会多一些体积和内存，但同一份 PDF 已改为复用单个浏览器会话，已避开整页打印和逐段反复启动 Chromium 的峰值开销
 
-这些默认值已经写进根目录 `.env.deploy.example`。服务器实际部署时，复制成 `.env.deploy` 后再按机器情况覆盖。当前前端构建已经在 `256MB` Node heap 下完成验证；后端镜像构建也已经改成单并行 `go build`。如果后续页面体积再次上升，可以先回到 `320` 做对比，再根据实际构建日志微调。如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
+这些运行时默认值已经写进根目录 `.env.deploy.example`。服务器实际部署时，复制成 `.env.deploy` 后再按机器情况覆盖。如果 Mongo 压力偏大，再把 `MONGODB_WIREDTIGER_CACHE_GB` 上调到 `0.30` 或 `0.35`。
 
 ## 前置条件
 

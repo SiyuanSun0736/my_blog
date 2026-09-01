@@ -82,22 +82,21 @@ Compose 中显式声明了启动依赖：
 当前约定如下：
 
 - `.env`：本地开发默认配置，使用 `localhost`、本地证书、更宽松的内存参数
-- `.env.deploy.example`：线上部署模板，包含公网域名和低内存 VPS 默认参数
+- `.env.deploy.example`：线上部署模板，包含公网域名和低内存 VPS 运行时默认参数
 - `.env.deploy`：实际部署文件，由模板复制而来，且不提交进 git
 
 这样做的原因是：同一套 Compose 拓扑要在两个资源条件明显不同的环境里运行。
 
 ## 低内存部署策略
 
-当前仓库已经把低内存优化直接写进 Docker 化部署里了。
+当前仓库把低内存 VPS 的运行时优化写进 Docker 化部署里，并通过本地镜像传输脚本避免服务器执行构建。
 
 主要做法包括：
 
 - 通过 `MONGODB_WIREDTIGER_CACHE_GB` 压低 MongoDB cache
 - 通过 `GOMEMLIMIT` 和 `GOGC` 控制 Go 运行时内存
-- 通过构建参数限制 Go 编译内存与并发度
-- 通过 `FRONTEND_BUILD_MAX_OLD_SPACE_SIZE` 限制前端构建时 Node heap
-- 部署脚本串行构建 `blog-api` 和 `blog-web`，而不是依赖并行的 `up --build`
+- 通过 `scripts/update-low-memory.sh` 在本机按 macOS / Linux / Windows shell 环境构建生产镜像，再上传到 VPS 执行 `docker load`
+- 服务器使用 `docker compose up -d --no-build` 启动已加载镜像，不承担 Node/Vite 或 Go 编译压力
 
 这套策略就是为当前 `1CPU/1GB` 的 VPS 目标环境准备的。
 

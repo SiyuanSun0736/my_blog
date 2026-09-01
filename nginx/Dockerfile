@@ -1,8 +1,5 @@
 FROM node:20-alpine AS frontend-builder
 
-ARG FRONTEND_BUILD_MAX_OLD_SPACE_SIZE=256
-ENV NODE_OPTIONS=--max-old-space-size=${FRONTEND_BUILD_MAX_OLD_SPACE_SIZE}
-
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
