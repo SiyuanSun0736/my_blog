@@ -338,9 +338,22 @@ async function loadMermaid() {
 
   if (!isMermaidInitialized) {
     mermaid.initialize({
-      securityLevel: "strict",
+      securityLevel: "loose",
       startOnLoad: false,
       theme: "neutral",
+      fontFamily: '"Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei UI", sans-serif',
+      fontSize: 14,
+      flowchart: {
+        htmlLabels: true,
+        useMaxWidth: true,
+        padding: 16,
+        nodeSpacing: 50,
+        rankSpacing: 50,
+      },
+      themeVariables: {
+        fontFamily: '"Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei UI", sans-serif',
+        fontSize: "14px",
+      },
     });
     isMermaidInitialized = true;
   }
@@ -374,7 +387,7 @@ function MermaidDiagram({ source }: { source: string }) {
     container.textContent = "图表渲染中...";
 
     void loadMermaid()
-      .then((mermaid) => mermaid.render(diagramId, source))
+      .then((mermaid) => mermaid.render(diagramId, source, container))
       .then(({ svg, bindFunctions }) => {
         if (!isActive || !containerRef.current) {
           return;

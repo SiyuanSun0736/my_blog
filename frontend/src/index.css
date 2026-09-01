@@ -1170,7 +1170,7 @@ a {
   border-radius: 1.25rem;
   border: 1px solid rgba(36, 24, 15, 0.12);
   background: rgba(255, 251, 245, 0.72);
-  padding: 1rem;
+  padding: 1.25rem;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
@@ -1179,13 +1179,53 @@ a {
   min-height: 4rem;
   min-width: max-content;
   place-items: center;
-  color: rgba(36, 24, 15, 0.74);
+  color: rgba(36, 24, 15, 0.85);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .story-prose .story-mermaid-diagram svg {
   display: block;
   max-width: 100%;
   height: auto;
+  overflow: visible;
+}
+
+.story-prose .story-mermaid-diagram foreignObject {
+  overflow: visible;
+}
+
+.story-prose .story-mermaid-diagram foreignObject div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.story-prose .story-mermaid-diagram p,
+.story-prose .story-mermaid-diagram span,
+.story-prose .story-mermaid-diagram div,
+.story-prose .story-mermaid-diagram text,
+.story-prose .story-mermaid-diagram tspan {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: 1.4 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  letter-spacing: normal !important;
+  white-space: normal;
+}
+
+.story-prose .story-mermaid-diagram .nodeLabel,
+.story-prose .story-mermaid-diagram .edgeLabel,
+.story-prose .story-mermaid-diagram .label {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  color: inherit !important;
 }
 
 .story-prose .story-mermaid-error {
@@ -2159,6 +2199,28 @@ a {
 :root[data-theme="solid"][data-solid-palette="dark"] .story-prose pre code .hljs-deletion {
   color: #dc322f;
 }
+
+:root[data-theme="solid"][data-solid-palette="dark"] .story-prose .story-mermaid-shell {
+  border-color: rgba(147, 161, 161, 0.18);
+  background: rgba(7, 54, 66, 0.75);
+  box-shadow: inset 0 1px 0 rgba(238, 232, 213, 0.08);
+}
+
+:root[data-theme="solid"][data-solid-palette="dark"] .story-prose .story-mermaid-diagram {
+  color: #eee8d5;
+}
+
+:root[data-theme="liquid-glass"] .story-prose .story-mermaid-shell {
+  border-color: var(--glass-border);
+  background:
+    radial-gradient(150% 110% at 10% -8%, rgba(255, 255, 255, 0.18), transparent 28%),
+    radial-gradient(120% 100% at 112% 112%, var(--liquid-shade), transparent 44%),
+    radial-gradient(70% 56% at 28% 18%, var(--liquid-tint), transparent 68%),
+    var(--panel);
+  backdrop-filter: blur(8px) saturate(1.36);
+  box-shadow: var(--glass-shadow);
+}
+
 
 @keyframes liquid-glass-flow {
   0% {
