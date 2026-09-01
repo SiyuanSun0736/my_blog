@@ -81,6 +81,11 @@ require_command() {
 
 require_command ssh
 
+remote_sync_manifests() {
+  echo "Syncing docker-compose.yml, scripts, and deploy manifests to $remote_host:$remote_dir..." >&2
+  tar -cf - docker-compose.yml scripts deploy | ssh "$remote_host" "tar -xf - -C '$remote_dir'"
+}
+
 remote_check() {
   ssh "$remote_host" sh -s -- "$remote_dir" "$remote_env_file" <<'REMOTE_CHECK'
 set -eu
@@ -120,6 +125,10 @@ remote_dir="$1"
 remote_env_file="$2"
 
 cd "$remote_dir"
+case "$remote_env_file" in
+  /*|./*|../*) ;;
+  *) remote_env_file="./$remote_env_file" ;;
+esac
 set -a
 . "$remote_env_file"
 set +a
@@ -137,6 +146,10 @@ remote_dir="$1"
 remote_env_file="$2"
 
 cd "$remote_dir"
+case "$remote_env_file" in
+  /*|./*|../*) ;;
+  *) remote_env_file="./$remote_env_file" ;;
+esac
 set -a
 . "$remote_env_file"
 set +a
@@ -178,6 +191,10 @@ remote_dir="$1"
 remote_env_file="$2"
 
 cd "$remote_dir"
+case "$remote_env_file" in
+  /*|./*|../*) ;;
+  *) remote_env_file="./$remote_env_file" ;;
+esac
 set -a
 . "$remote_env_file"
 set +a
@@ -187,6 +204,7 @@ REMOTE_LOGS
 }
 
 remote_check
+remote_sync_manifests
 
 if [ "$skip_backup" -eq 0 ]; then
   remote_backup

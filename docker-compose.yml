@@ -38,6 +38,7 @@ services:
       retries: 10
 
   blog-api:
+    image: ${BLOG_API_IMAGE:-ghcr.io/siyuansun0736/my_blog/blog-api:latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -66,6 +67,7 @@ services:
     restart: unless-stopped
 
   blog-web:
+    image: ${BLOG_WEB_IMAGE:-ghcr.io/siyuansun0736/my_blog/blog-web:latest}
     build:
       context: .
       dockerfile: nginx/Dockerfile

@@ -70,7 +70,7 @@ check_domain "$primary_domain" || failed=1
 check_domain "$www_domain" || failed=1
 
 if [ "$failed" -ne 0 ]; then
-  log "Let's Encrypt precheck failed. Fix DNS before running deploy-letsencrypt.sh."
+  log "Let's Encrypt precheck failed. Fix DNS before running deployment."
   if [ -n "$server_public_ip" ]; then
     log "Suggested DNS: set A record for $primary_domain to $server_public_ip"
     log "Suggested DNS: set www as CNAME to $primary_domain, or A record to $server_public_ip"

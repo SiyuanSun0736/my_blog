@@ -211,22 +211,21 @@ docker compose --env-file .env.deploy up -d --no-build blog-web
 
 如果是在 `1GB` VPS 上操作，仍然优先让 `GitHub Actions` 构建镜像，服务器只拉取。
 
-### Certbot 部署脚本
+### Certbot 证书管理与续期
 
-仓库里已经补了两条可直接执行的脚本：
-
-- `./scripts/deploy-letsencrypt.sh`：首次申请证书并启动整套 Compose 服务
-- `./scripts/renew-letsencrypt.sh`：执行一次续期检查，续期成功后由 `blog-web` 自动检测证书变化并热重载 Nginx
-
-首次部署示例：
-
+首次申请证书：
 ```bash
-export CERTBOT_EMAIL=you@example.com
-./scripts/deploy-letsencrypt.sh
+docker compose --profile certbot run --rm --service-ports certbot certonly \
+  --standalone \
+  --preferred-challenges http \
+  --agree-tos \
+  --no-eff-email \
+  --email you@example.com \
+  -d wanderlust0736.top \
+  -d www.wanderlust0736.top
 ```
 
-手动续期示例：
-
+手动执行续期检查：
 ```bash
 ./scripts/renew-letsencrypt.sh
 ```

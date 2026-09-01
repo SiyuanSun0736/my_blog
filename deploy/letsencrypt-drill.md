@@ -3,8 +3,7 @@
 1. 确认 DNS 已生效：`wanderlust0736.top` 的 `A` 记录和 `www.wanderlust0736.top` 的 `CNAME/A` 记录都指向当前服务器。
 2. 确认 80 和 443 端口对外开放，防火墙和安全组没有拦截 HTTP-01 challenge。
 3. 检查当前部署环境已经切到 Let’s Encrypt 目录约定：查看根目录下 `.env.deploy` 中的 `BLOG_TLS_CERTS_DIR`、`BLOG_TLS_CERT_PATH`、`BLOG_TLS_KEY_PATH`。
-4. 首次签发前准备邮箱：`export CERTBOT_EMAIL=you@example.com`。
-5. 首次签发并启动服务：在仓库根目录执行 `./scripts/deploy-letsencrypt.sh`。
+5. 首次签发证书：在运行目录下执行 `docker compose --profile certbot run --rm --service-ports certbot certonly --standalone --preferred-challenges http --agree-tos --no-eff-email --email "$CERTBOT_EMAIL" -d wanderlust0736.top -d www.wanderlust0736.top`，然后通过 `./scripts/deploy-ghcr.sh`（或 `docker compose --env-file .env.deploy up -d`）启动服务。
 6. 查看容器状态：执行 `docker compose --env-file .env.deploy ps`，确认 `wanderlust-web` 为 `healthy`。
 7. 检查主域名健康接口：执行 `docker exec wanderlust-web wget -q --no-check-certificate -O - https://127.0.0.1/nginx-healthz`，确认返回里的 `certificate` 路径为 `/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem`。
 8. 验证 `www` 跳转：执行 `curl -I https://wanderlust0736.top` 和 `curl -k --resolve www.wanderlust0736.top:8444:127.0.0.1 -I https://www.wanderlust0736.top:8444`，确认 `www` 返回 301 到主域名。

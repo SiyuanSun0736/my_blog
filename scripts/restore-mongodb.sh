@@ -5,6 +5,10 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
 compose_env_file="${WANDERLUST_COMPOSE_ENV_FILE:-$ROOT_DIR/.env}"
+case "$compose_env_file" in
+  /*|./*|../*) ;;
+  *) compose_env_file="./$compose_env_file" ;;
+esac
 
 if [ -f "$compose_env_file" ]; then
   set -a
