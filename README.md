@@ -30,11 +30,10 @@
 
 ## 环境拆分
 
-- 根目录 `.env` 是本地测试默认配置：使用 `localhost`、本地 `certs/` 证书目录，并给 MongoDB / Go build / 前端 build 更宽松的资源参数，适合本地并发构建。
+- 根目录 `.env` 是本地测试默认配置：使用 `localhost` 和本地 `certs/` 证书目录，适合本地并发构建。
 - 根目录 `.env.deploy.example` 是部署模板：保留 `wanderlust0736.top`、Let's Encrypt 路径和 VPS 运行时参数；服务器上请复制为 `.env.deploy` 后再填实际值。实际 `.env.deploy` 已加入 `.gitignore`，避免把云端配置和 token 提交进仓库。
 - `./scripts/up-local.sh` 会按本地环境启动整套 Compose，并保留 Compose 默认并发。
 - `./scripts/update-low-memory.sh` 会在本机 build 生产镜像，传到低内存 VPS 后 `docker load` 并重启服务，避免 VPS 执行前端/Go 构建。
-- `./scripts/update-deploy.sh` 仍可在服务器上串行备份、拉代码、构建和重新启动，适合作为服务器本地构建的备用流程。
 
 ## 本地开发
 
@@ -81,10 +80,10 @@ npm run dev
 cp .env.deploy.example .env.deploy
 ```
 
+低内存 VPS 不在目标机上构建镜像。部署从本机执行：
+
 ```bash
-docker compose --env-file .env.deploy build blog-api
-docker compose --env-file .env.deploy build blog-web
-docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
+./scripts/update-low-memory.sh
 ```
 
 启动后主站访问地址为 `https://wanderlust0736.top`。
@@ -107,11 +106,10 @@ MongoDB 现在会挂载 Compose 命名卷 `mongodb-data` 到 `/data/db`，容器
 
 这条脚本会在本机 build `blog-api` / `blog-web` 生产镜像，压缩后上传到 `blog-server:/tmp`，再在服务器上 `docker load`、启动容器并验证接口。默认目标平台是 `linux/amd64`，默认服务器路径是 `/opt/my_blog`。
 
-当前仓库也保留了服务器运行时的低内存参数：
+当前仓库保留了服务器运行时的低内存参数：
 
 - MongoDB 默认把 WiredTiger cache 压到 Mongo 7 允许的最低值 `0.25GB`
 - Go API 默认设置 `GIN_MODE=release`、`GOMEMLIMIT=120MiB` 与 `GOGC=50`
-- 如果必须在服务器上构建，可执行 `./scripts/update-deploy.sh`，但推荐优先使用本地镜像传输部署
 
 当前镜像不再内置自签名证书，而是要求在启动时挂载外部证书文件。`www.wanderlust0736.top` 会被 Nginx 统一 301 跳转到 `wanderlust0736.top`。
 
@@ -178,15 +176,7 @@ sudo systemctl enable --now wanderlust-mongodb-backup.timer
 export BLOG_TLS_CERTS_DIR=/etc/letsencrypt
 export BLOG_TLS_CERT_PATH=/etc/nginx/certs/live/wanderlust0736.top/fullchain.pem
 export BLOG_TLS_KEY_PATH=/etc/nginx/certs/live/wanderlust0736.top/privkey.pem
-docker compose --env-file .env.deploy up --build -d
-```
-
-如果当前机器只有 `1GB` 内存，更稳妥的方式仍然是：
-
-```bash
-docker compose --env-file .env.deploy build blog-api
-docker compose --env-file .env.deploy build blog-web
-docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
+docker compose --env-file .env.deploy up -d --no-build blog-web
 ```
 
 如果你使用云证书但文件名不是 `fullchain.pem` 和 `privkey.pem`，可以继续挂载目录，同时指定容器内实际读取的文件名：
@@ -195,7 +185,7 @@ docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
 export BLOG_TLS_CERTS_DIR=./certs
 export BLOG_TLS_CERT_PATH=/etc/nginx/certs/server.crt
 export BLOG_TLS_KEY_PATH=/etc/nginx/certs/server.key
-docker compose --env-file .env.deploy up --build -d
+docker compose --env-file .env.deploy up -d --no-build blog-web
 ```
 
 低内存机器上建议从本机执行 `./scripts/update-low-memory.sh`，把已经构建好的镜像传到服务器后再启动，避免服务器承担构建压力。
@@ -214,10 +204,10 @@ docker compose --env-file .env.deploy up --build -d
 ```bash
 export BLOG_TLS_AUTO_RELOAD=1
 export BLOG_TLS_RELOAD_INTERVAL_SECONDS=30
-docker compose up --build -d
+docker compose --env-file .env.deploy up -d --no-build blog-web
 ```
 
-如果是在 `1GB` VPS 上操作，仍然优先使用串行 build 再 `up -d` 的方式。
+如果是在 `1GB` VPS 上操作，仍然优先从本机执行 `./scripts/update-low-memory.sh`，不要在服务器上构建。
 
 ### Certbot 部署脚本
 

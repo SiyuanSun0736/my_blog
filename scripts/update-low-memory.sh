@@ -157,7 +157,7 @@ detect_local_os() {
 default_tmp_root() {
   case "$local_os" in
     windows)
-      printf '%s\n' "${TMPDIR:-${TEMP:-/tmp}}"
+      printf '%s\n' "${TMPDIR:-/tmp}"
       ;;
     macos|linux|unknown)
       printf '%s\n' "${TMPDIR:-/tmp}"

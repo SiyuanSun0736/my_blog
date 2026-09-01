@@ -76,13 +76,8 @@ if [ ! -f "$live_fullchain" ] || [ ! -f "$live_privkey" ]; then
     -d "$www_domain"
 fi
 
-echo "Building API image with low-memory settings." >&2
-compose build blog-api
-
-echo "Building web image with low-memory settings." >&2
-compose build blog-web
-
-compose up -d mongodb redis blog-api blog-web
+echo "Starting application containers with already loaded images." >&2
+compose up -d --no-build mongodb redis blog-api blog-web
 
 echo "Deployment finished. blog-web will use certificates from $letsencrypt_dir." >&2
 echo "Check container health with: docker compose --env-file $compose_env_file ps" >&2

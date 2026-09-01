@@ -307,19 +307,14 @@ chmod +x scripts/update-low-memory.sh
 ./scripts/update-low-memory.sh --env-file /你的部署目录/.env.deploy --logs
 ```
 
-如果必须直接在服务器上构建，仍可使用 `./scripts/update-deploy.sh` 作为备用流程。
-
-如果你想手动执行，再用下面这套命令：
+如果你想手动执行目标机部分，前提是本机已经把镜像上传并在目标机 `docker load` 完成：
 
 ```bash
 cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
-docker compose --env-file .env.deploy stop mongodb redis blog-api blog-web
 GIT_TERMINAL_PROMPT=0 git pull --ff-only
-docker compose --env-file .env.deploy build blog-api
-docker compose --env-file .env.deploy build blog-web
-docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web
+docker compose --env-file .env.deploy up -d --no-build mongodb redis blog-api blog-web
 docker compose --env-file .env.deploy ps
 curl -sk --resolve wanderlust0736.top:8444:127.0.0.1 https://wanderlust0736.top:8444/api/posts
 docker logs wanderlust-api --since 10m
@@ -330,10 +325,8 @@ docker logs wanderlust-web --since 10m
 
 - 先备份当前数据库和图片媒体卷，给回滚留出口
 - 备份脚本只会把数据库归档和图片归档写到本机 `backups/`，不会再自动 `git commit` / `git push`，避免定时任务和部署流程卡在 git 认证
-- 先停止当前 `mongodb`、`redis`、`blog-api` 和 `blog-web`，再进入部署流程，避免云上构建时继续占用运行时内存
 - 非交互拉取最新代码，避免 merge commit 混进服务器更新流程；如果服务器没配好免交互认证，会直接报错退出
-- 串行 build `blog-api` 和 `blog-web`，避免 1GB VPS 在构建时同时占用过多内存
-- 重启 `mongodb`、`redis`、`blog-api` 和 `blog-web`，但保留当前 MongoDB 数据卷、Redis 数据卷和图片媒体卷
+- 用已经加载到 Docker 里的镜像重启 `mongodb`、`redis`、`blog-api` 和 `blog-web`，但保留当前 MongoDB 数据卷、Redis 数据卷和图片媒体卷
 - 用 `docker compose ps`、文章列表接口和最近日志确认网页与 API 都已切到新版本
 
 ### 日常更新原则
@@ -351,7 +344,7 @@ cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
 GIT_TERMINAL_PROMPT=0 git pull --ff-only
-docker compose --env-file .env.deploy up -d --build blog-api blog-web
+docker compose --env-file .env.deploy up -d --no-build blog-api blog-web
 
 # 按本次改动需要执行数据库脚本或手动修正
 # 例如：docker compose exec -T mongodb mongosh
@@ -385,9 +378,7 @@ cd /你的仓库目录
 
 WANDERLUST_COMPOSE_ENV_FILE=.env.deploy ./scripts/backup-mongodb.sh
 GIT_TERMINAL_PROMPT=0 git pull --ff-only
-docker compose --env-file .env.deploy build blog-api
-docker compose --env-file .env.deploy build blog-web
-docker compose --env-file .env.deploy up -d --build mongodb redis blog-api blog-web
+docker compose --env-file .env.deploy up -d --no-build mongodb redis blog-api blog-web
 docker compose --env-file .env.deploy ps
 ```
 

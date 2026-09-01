@@ -110,17 +110,18 @@ Compose 中显式声明了启动依赖：
 
 ### 线上更新
 
-`scripts/update-deploy.sh` 会执行一套偏生产化的流程：
+`scripts/update-low-memory.sh` 会执行一套偏生产化的流程：
 
-1. 按需备份 MongoDB 和媒体文件
-2. 停掉当前运行中的应用容器
-3. 以非交互方式拉取最新代码
-4. 单独构建 `blog-api`
-5. 单独构建 `blog-web`
-6. 启动 `mongodb`、`redis`、`blog-api`、`blog-web`
-7. 校验容器状态和 API 可达性
+1. 在本机检查 tracked 工作区和 upstream 同步状态
+2. 在本机按目标平台构建 `blog-api` 和 `blog-web`
+3. 将镜像压缩并上传到 VPS
+4. 在目标机按需备份 MongoDB 和媒体文件
+5. 在目标机以非交互方式拉取最新代码
+6. 在目标机 `docker load` 导入镜像
+7. 在目标机通过 `docker compose up -d --no-build` 启动 `mongodb`、`redis`、`blog-api`、`blog-web`
+8. 校验容器状态和 API 可达性
 
-相比直接在小机器上执行一次 `docker compose up --build`，这套流程更稳，因为它避免了不可控的并行构建内存峰值。
+相比直接在小机器上构建镜像，这套流程更稳，因为目标机不再执行任何镜像构建。
 
 ## 设计取舍
 

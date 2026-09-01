@@ -36,41 +36,39 @@
 
 ## 线上更新时序
 
-线上环境默认通过 `scripts/update-deploy.sh` 进行更新。这个脚本不是简单的 `up --build` 包装，而是把低内存 VPS 的部署顺序固定下来。
-
-### 时序图
-
-![线上更新时序图](./assets/deployment-sequence-deploy.svg)
+线上环境默认从本机执行 `scripts/update-low-memory.sh`。脚本在本机完成镜像构建，上传到 VPS 后只执行 `docker load` 和 `docker compose up --no-build`，目标机不承担 Node/Vite 或 Go 构建。
 
 ### 详细步骤
 
-1. 运维执行 `./scripts/update-deploy.sh`。
-2. 脚本确认 `docker`、`curl` 和 Compose 能正常使用。
-3. 如果没有显式跳过，脚本会先检查当前 tracked 文件是否干净，避免把线上更新做成半人工 merge 现场。
-4. 如果没有显式跳过备份，脚本会调用 `scripts/backup-mongodb.sh`：
+1. 运维在本机执行 `./scripts/update-low-memory.sh`。
+2. 脚本确认本机 `git`、`docker`、`docker buildx`、`scp`、`ssh`、`curl` 和 Compose 能正常使用。
+3. 脚本识别本机 shell 环境：macOS、Linux 或 Windows。
+4. 如果没有显式跳过，脚本会先检查本机 tracked 文件是否干净，并确认本机分支已经推到 upstream。
+5. 脚本在本机按目标平台构建 `blog-api` 和 `blog-web` 镜像，默认目标平台是 `linux/amd64`。
+6. 脚本把两个镜像保存为压缩归档，并上传到目标机 `/tmp`。
+7. 如果没有显式跳过备份，脚本会在目标机调用 `scripts/backup-mongodb.sh`：
 
    - 从 `mongodb` 导出数据库归档
    - 从 `blog-api` 打包媒体目录
    - 把结果写到 `backups/mongodb/`，并同步到 `backups/latest-mongodb/`
 
-5. 脚本停止 `blog-web`、`blog-api`、`redis`、`mongodb`，避免构建阶段继续占用运行时内存。
-6. 脚本执行非交互式 `git pull --ff-only`；如果开启强制同步，则按脚本逻辑做 force sync。
-7. 脚本先单独构建 `blog-api` 镜像。
-8. 脚本再单独构建 `blog-web` 镜像。
-9. 脚本执行 `docker compose --env-file .env.deploy up -d mongodb redis blog-api blog-web`。
-10. Compose 先拉起 MongoDB 和 Redis，并等待健康检查通过。
-11. `blog-api` 在依赖健康后启动，连接 MongoDB 和 Redis。
-12. `blog-web` 启动，接管 `80` 和宿主机 `127.0.0.1:8444`，并加载证书和前端静态资源；宿主机 `443` 留给前置 SNI router。
-13. 脚本执行 `docker compose ps` 检查容器状态。
-14. 脚本通过 `curl -k --resolve 主域名:8444:127.0.0.1 https://主域名:8444/api/posts` 验证 API 可用。
-15. 如果指定了 `--logs`，脚本最后还会带出最近日志。
+8. 如果没有显式跳过拉取，脚本会在目标机执行非交互式 `git pull --ff-only`。
+9. 脚本在目标机执行 `docker load` 导入本机传来的镜像。
+10. 脚本执行 `docker compose --env-file .env.deploy up -d --no-build mongodb redis blog-api blog-web`。
+11. Compose 先拉起 MongoDB 和 Redis，并等待健康检查通过。
+12. `blog-api` 在依赖健康后启动，连接 MongoDB 和 Redis。
+13. `blog-web` 启动，接管 `80` 和宿主机 `127.0.0.1:8444`，并加载证书和前端静态资源；宿主机 `443` 留给前置 SNI router。
+14. 脚本执行 `docker compose ps` 检查容器状态。
+15. 脚本通过 `curl -k --resolve 主域名:8444:127.0.0.1 https://主域名:8444/api/posts` 验证 API 可用。
+16. 如果指定了 `--logs`，脚本最后还会带出最近日志。
 
 ### 为什么线上流程要比本地更长
 
-线上流程额外多了四类动作：
+线上流程额外多了五类动作：
 
+- 本机按目标平台构建镜像
+- 上传并在目标机导入镜像
 - 备份
-- 停服务释放内存
 - 非交互拉取代码
 - 启动后健康验证
 
@@ -83,8 +81,8 @@
 | 环境文件 | `.env` | `.env.deploy` |
 | 目标 | 开发验证 | 稳定发布 |
 | 是否默认备份 | 否 | 是 |
-| 是否停机后再构建 | 否 | 是 |
-| 构建方式 | Compose 默认并发 | 串行构建 `blog-api`、`blog-web` |
+| 是否在目标机构建 | 否 | 否 |
+| 构建方式 | Compose 默认并发 | 本机构建后上传镜像 |
 | 是否要求工作区干净 | 否 | 是 |
 | 是否自动做 API 验证 | 通常不做 | 会做 |
 
@@ -93,6 +91,6 @@
 如果只想记住一句话，可以这样理解当前部署设计：
 
 - 本地启动追求的是方便和完整联调
-- 线上更新追求的是低内存条件下的可控性和可回滚性
+- 线上更新追求的是低内存条件下的可控性和可回滚性，目标机只负责运行和加载镜像
 
-这也是当前仓库为什么同时保留 `up-local.sh` 和 `update-deploy.sh` 两条路径的原因。
+这也是当前仓库为什么保留 `up-local.sh` 和 `update-low-memory.sh` 两条路径的原因。
