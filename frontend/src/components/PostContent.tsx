@@ -21,6 +21,7 @@ import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
 import type { Mermaid } from "mermaid";
 import rehypeKatex from "rehype-katex";
+import { createPortal } from "react-dom";
 import {
   isValidElement,
   useEffect,
@@ -369,9 +370,201 @@ function formatMermaidError(error: unknown) {
   return "Mermaid 图表语法无效。";
 }
 
+interface MermaidModalProps {
+  svg: string;
+  onClose: () => void;
+}
+
+function MermaidModal({ svg, onClose }: MermaidModalProps) {
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const posStartRef = useRef({ x: 0, y: 0 });
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  function handleWheel(e: React.WheelEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    setScale((prev) => Math.min(Math.max(Number((prev * factor).toFixed(2)), 0.3), 5));
+  }
+
+  function handleMouseDown(e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    setIsDragging(true);
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    posStartRef.current = { ...position };
+  }
+
+  function handleMouseMove(e: React.MouseEvent) {
+    if (!isDragging) return;
+    setPosition({
+      x: posStartRef.current.x + (e.clientX - dragStartRef.current.x),
+      y: posStartRef.current.y + (e.clientY - dragStartRef.current.y),
+    });
+  }
+
+  function handleMouseUp() {
+    setIsDragging(false);
+  }
+
+  const touchInfoRef = useRef<{
+    startX: number;
+    startY: number;
+    posX: number;
+    posY: number;
+    initialDistance?: number;
+    initialScale?: number;
+  } | null>(null);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      touchInfoRef.current = {
+        startX: t.clientX,
+        startY: t.clientY,
+        posX: position.x,
+        posY: position.y,
+      };
+    } else if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchInfoRef.current = {
+        startX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        startY: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        posX: position.x,
+        posY: position.y,
+        initialDistance: dist,
+        initialScale: scale,
+      };
+    }
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (!touchInfoRef.current) return;
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      setPosition({
+        x: touchInfoRef.current.posX + (t.clientX - touchInfoRef.current.startX),
+        y: touchInfoRef.current.posY + (t.clientY - touchInfoRef.current.startY),
+      });
+    } else if (e.touches.length === 2 && touchInfoRef.current.initialDistance && touchInfoRef.current.initialScale) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = dist / touchInfoRef.current.initialDistance;
+      setScale(Math.min(Math.max(Number((touchInfoRef.current.initialScale * factor).toFixed(2)), 0.3), 5));
+    }
+  }
+
+  function handleTouchEnd() {
+    touchInfoRef.current = null;
+  }
+
+  function zoomIn() {
+    setScale((prev) => Math.min(Number((prev * 1.25).toFixed(2)), 5));
+  }
+
+  function zoomOut() {
+    setScale((prev) => Math.max(Number((prev / 1.25).toFixed(2)), 0.3));
+  }
+
+  function resetZoom() {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  }
+
+  function handleDoubleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (scale !== 1 || position.x !== 0 || position.y !== 0) {
+      resetZoom();
+    } else {
+      setScale(1.6);
+    }
+  }
+
+  return createPortal(
+    <div
+      className="story-mermaid-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="story-mermaid-modal-backdrop" onClick={onClose} />
+
+      <div
+        className="story-mermaid-modal-viewport"
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onDoubleClick={handleDoubleClick}
+        style={{ cursor: isDragging ? "grabbing" : "grab" }}
+      >
+        <div
+          ref={contentRef}
+          className="story-mermaid-modal-content story-prose"
+          style={{
+            transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
+            transition: isDragging ? "none" : "transform 120ms ease-out",
+          }}
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      </div>
+
+      <div className="story-mermaid-modal-toolbar">
+        <span className="story-mermaid-modal-scale">{Math.round(scale * 100)}%</span>
+        <button type="button" className="story-mermaid-modal-btn" title="缩小" onClick={zoomOut} aria-label="缩小">
+          −
+        </button>
+        <button type="button" className="story-mermaid-modal-btn" title="重置 (100%)" onClick={resetZoom} aria-label="重置">
+          ↺
+        </button>
+        <button type="button" className="story-mermaid-modal-btn" title="放大" onClick={zoomIn} aria-label="放大">
+          +
+        </button>
+        <button type="button" className="story-mermaid-modal-btn story-mermaid-modal-close" title="关闭 (ESC)" onClick={onClose} aria-label="关闭">
+          ✕
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function MermaidDiagram({ source }: { source: string }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [renderedSvg, setRenderedSvg] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -383,6 +576,7 @@ function MermaidDiagram({ source }: { source: string }) {
     const diagramId = `story-mermaid-${++mermaidRenderCounter}`;
 
     setError(null);
+    setRenderedSvg(null);
     container.removeAttribute("data-state");
     container.textContent = "图表渲染中...";
 
@@ -393,6 +587,7 @@ function MermaidDiagram({ source }: { source: string }) {
           return;
         }
 
+        setRenderedSvg(svg);
         containerRef.current.innerHTML = svg;
         bindFunctions?.(containerRef.current);
       })
@@ -412,17 +607,45 @@ function MermaidDiagram({ source }: { source: string }) {
   }, [source]);
 
   return (
-    <div className="story-mermaid-shell">
-      <div ref={containerRef} className="story-mermaid-diagram" aria-label="Mermaid 图表" />
-      {error ? (
-        <div className="story-mermaid-error" role="alert">
-          <p>{error}</p>
-          <pre>
-            <code>{source}</code>
-          </pre>
-        </div>
+    <>
+      <div className="story-mermaid-shell">
+        <div
+          ref={containerRef}
+          className="story-mermaid-diagram"
+          aria-label="Mermaid 图表"
+          onClick={() => {
+            if (renderedSvg) {
+              setIsModalOpen(true);
+            }
+          }}
+        />
+        {renderedSvg ? (
+          <button
+            type="button"
+            className="story-mermaid-zoom-btn"
+            title="点击全屏放大"
+            aria-label="点击全屏放大"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsModalOpen(true);
+            }}
+          >
+            放大查看
+          </button>
+        ) : null}
+        {error ? (
+          <div className="story-mermaid-error" role="alert">
+            <p>{error}</p>
+            <pre>
+              <code>{source}</code>
+            </pre>
+          </div>
+        ) : null}
+      </div>
+      {isModalOpen && renderedSvg ? (
+        <MermaidModal svg={renderedSvg} onClose={() => setIsModalOpen(false)} />
       ) : null}
-    </div>
+    </>
   );
 }
 

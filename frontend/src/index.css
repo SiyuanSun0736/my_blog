@@ -1180,6 +1180,7 @@ a {
 }
 
 .story-prose .story-mermaid-shell {
+  position: relative;
   min-width: 0;
   overflow-x: auto;
   border-radius: 1.25rem;
@@ -1198,49 +1199,191 @@ a {
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.4;
+  cursor: zoom-in;
+  transition: opacity 160ms ease;
 }
 
-.story-prose .story-mermaid-diagram svg {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  overflow: visible;
+.story-prose .story-mermaid-diagram:hover {
+  opacity: 0.94;
 }
 
-.story-prose .story-mermaid-diagram foreignObject {
-  overflow: visible;
+.story-prose .story-mermaid-zoom-btn {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 2;
+  border: 1px solid rgba(36, 24, 15, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 251, 245, 0.88);
+  color: rgba(36, 24, 15, 0.88);
+  padding: 0.38rem 0.78rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 18px rgba(36, 24, 15, 0.08);
+  opacity: 0.8;
+  transition: transform 160ms ease, opacity 160ms ease, border-color 160ms ease, background-color 160ms ease, color 160ms ease;
 }
 
-.story-prose .story-mermaid-diagram foreignObject div {
+.story-prose .story-mermaid-shell:hover .story-mermaid-zoom-btn,
+.story-prose .story-mermaid-zoom-btn:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: rgba(36, 24, 15, 0.22);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.story-prose .story-mermaid-zoom-btn:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.45);
+  outline-offset: 2px;
+}
+
+.story-mermaid-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  animation: mermaid-modal-fade-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.story-mermaid-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 11, 8, 0.72);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  cursor: zoom-out;
+}
+
+.story-mermaid-modal-viewport {
+  position: relative;
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+.story-mermaid-modal-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.story-mermaid-modal-content svg {
+  display: block;
+  max-width: none;
+  height: auto;
+  filter: drop-shadow(0 20px 48px rgba(0, 0, 0, 0.25));
+  background: rgba(255, 251, 245, 0.96);
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+}
+
+.story-mermaid-modal-toolbar {
+  position: fixed;
+  bottom: 2.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(30, 24, 18, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+  color: #fff;
+  animation: mermaid-toolbar-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.story-mermaid-modal-scale {
+  padding: 0 0.65rem 0 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  min-width: 3.5rem;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-.story-prose .story-mermaid-diagram p,
-.story-prose .story-mermaid-diagram span,
-.story-prose .story-mermaid-diagram div,
-.story-prose .story-mermaid-diagram text,
-.story-prose .story-mermaid-diagram tspan {
-  font-family: inherit !important;
-  font-size: inherit !important;
-  line-height: 1.4 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow-wrap: normal !important;
-  word-break: normal !important;
-  letter-spacing: normal !important;
-  white-space: normal;
+.story-mermaid-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1;
+  transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 
-.story-prose .story-mermaid-diagram .nodeLabel,
-.story-prose .story-mermaid-diagram .edgeLabel,
-.story-prose .story-mermaid-diagram .label {
-  font-family: inherit !important;
-  font-size: 14px !important;
-  line-height: 1.4 !important;
-  color: inherit !important;
+.story-mermaid-modal-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.story-mermaid-modal-btn:active {
+  transform: translateY(0);
+}
+
+.story-mermaid-modal-close {
+  background: rgba(239, 68, 68, 0.24);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.32);
+  margin-left: 0.25rem;
+}
+
+.story-mermaid-modal-close:hover {
+  background: rgba(239, 68, 68, 0.45);
+  color: #fff;
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+@keyframes mermaid-modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mermaid-toolbar-slide-up {
+  from {
+    opacity: 0;
+    transform: translate3d(-50%, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0);
+  }
 }
 
 .story-prose .story-mermaid-error {
@@ -2241,16 +2384,28 @@ a {
   color: #eee8d5;
 }
 
-:root[data-theme="liquid-glass"] .story-prose .story-mermaid-shell {
-  border-color: var(--glass-border);
-  background:
-    radial-gradient(150% 110% at 10% -8%, rgba(255, 255, 255, 0.18), transparent 28%),
-    radial-gradient(120% 100% at 112% 112%, var(--liquid-shade), transparent 44%),
-    radial-gradient(70% 56% at 28% 18%, var(--liquid-tint), transparent 68%),
-    var(--panel);
-  backdrop-filter: blur(8px) saturate(1.36);
-  box-shadow: var(--glass-shadow);
+:root[data-theme="solid"][data-solid-palette="dark"] .story-prose .story-mermaid-zoom-btn {
+  border-color: rgba(147, 161, 161, 0.2);
+  background: rgba(7, 54, 66, 0.86);
+  color: #eee8d5;
 }
+
+:root[data-theme="solid"][data-solid-palette="dark"] .story-prose .story-mermaid-zoom-btn:hover {
+  border-color: rgba(181, 137, 0, 0.34);
+  background: rgba(7, 54, 66, 0.96);
+}
+
+:root[data-theme="solid"][data-solid-palette="dark"] .story-mermaid-modal-content svg {
+  background: #002b36;
+  border-color: rgba(147, 161, 161, 0.22);
+  box-shadow: 0 16px 44px rgba(0, 18, 24, 0.5);
+}
+
+:root[data-theme="liquid-glass"] .story-mermaid-modal-content svg {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: var(--glass-border);
+}
+
 
 
 @keyframes liquid-glass-flow {
