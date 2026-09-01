@@ -509,11 +509,11 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
     svgEl.style.setProperty("max-width", "none", "important");
     svgEl.style.setProperty("max-height", "none", "important");
 
-    const availableWidth = Math.max(window.innerWidth * 0.85, 360);
-    const availableHeight = Math.max(window.innerHeight * 0.75, 260);
+    const availableWidth = Math.max(window.innerWidth * 0.82, 400);
+    const availableHeight = Math.max(window.innerHeight * 0.72, 320);
 
     const fitScale = Math.min(availableWidth / width, availableHeight / height);
-    const initialScale = Math.min(Math.max(Number(fitScale.toFixed(2)), 0.6), 3.0);
+    const initialScale = Math.min(Math.max(Number(fitScale.toFixed(2)), 1.4), 4.0);
     setScale(initialScale);
   }, [svg]);
 
@@ -623,17 +623,17 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
       const viewBox = svgEl?.viewBox?.baseVal;
       const w = (viewBox && viewBox.width > 0) ? viewBox.width : 800;
       const h = (viewBox && viewBox.height > 0) ? viewBox.height : 400;
-      const fit = Math.min((window.innerWidth * 0.85) / w, (window.innerHeight * 0.75) / h);
-      setScale(Math.min(Math.max(Number(fit.toFixed(2)), 0.6), 3.0));
+      const fit = Math.min((window.innerWidth * 0.82) / w, (window.innerHeight * 0.72) / h);
+      setScale(Math.min(Math.max(Number(fit.toFixed(2)), 1.4), 4.0));
     } else {
-      setScale(1.0);
+      setScale(1.5);
     }
     setPosition({ x: 0, y: 0 });
   }
 
   function handleDoubleClick(e: React.MouseEvent) {
     e.stopPropagation();
-    setScale((prev) => (prev > 2.0 ? 1.3 : Number((prev * 1.5).toFixed(2))));
+    setScale((prev) => (prev > 2.2 ? 1.4 : Number((prev * 1.5).toFixed(2))));
   }
 
   return createPortal(
@@ -664,8 +664,8 @@ function MermaidModal({ svg, onClose }: MermaidModalProps) {
           ref={contentRef}
           className="story-mermaid-modal-content story-prose"
           style={{
-            transform: `translate3d(${position.x}px, ${position.y}px, 0) scale(${scale})`,
-            transition: isDragging ? "none" : "transform 120ms ease-out",
+            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+            transition: isDragging ? "none" : "transform 140ms ease-out",
           }}
           dangerouslySetInnerHTML={{ __html: svg }}
         />
