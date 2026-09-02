@@ -335,7 +335,7 @@ let mermaidRenderCounter = 0;
 let isMermaidInitialized = false;
 let mermaidModulePromise: Promise<Mermaid> | null = null;
 
-const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v1-";
+const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v2-";
 const mermaidMemoryCache = new Map<string, string>();
 
 function hashMermaidSource(source: string): string {
@@ -428,19 +428,38 @@ async function loadMermaid() {
     mermaid.initialize({
       securityLevel: "loose",
       startOnLoad: false,
-      theme: "neutral",
-      fontFamily: '"Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei UI", sans-serif',
+      theme: "default",
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
       fontSize: 14,
       flowchart: {
         htmlLabels: true,
-        useMaxWidth: true,
-        padding: 16,
+        useMaxWidth: false,
+        curve: "linear",
+        padding: 18,
         nodeSpacing: 50,
-        rankSpacing: 50,
+        rankSpacing: 60,
+        diagramPadding: 16,
+      },
+      sequence: {
+        useMaxWidth: false,
+        actorFontSize: 14,
+        noteFontSize: 13,
+        messageFontSize: 13,
       },
       themeVariables: {
-        fontFamily: '"Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei UI", sans-serif',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
         fontSize: "14px",
+        primaryColor: "#f8fafc",
+        primaryTextColor: "#0f172a",
+        primaryBorderColor: "#94a3b8",
+        lineColor: "#475569",
+        secondaryColor: "#f1f5f9",
+        tertiaryColor: "#ffffff",
+        edgeLabelBackground: "#ffffff",
+        clusterBkg: "#f8fafc",
+        clusterBorder: "#cbd5e1",
+        nodeBorder: "#94a3b8",
+        mainBkg: "#ffffff",
       },
     });
     isMermaidInitialized = true;

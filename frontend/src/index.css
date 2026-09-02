@@ -1191,16 +1191,40 @@ a {
 }
 
 .story-prose .story-mermaid-diagram {
-  display: grid;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   min-height: 4rem;
-  min-width: max-content;
-  place-items: center;
+  width: 100%;
   color: rgba(36, 24, 15, 0.85);
-  font-family: var(--font-sans);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.45;
   cursor: zoom-in;
   transition: opacity 160ms ease;
+}
+
+.story-prose .story-mermaid-diagram svg {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+}
+
+.story-prose .story-mermaid-diagram foreignObject {
+  overflow: visible !important;
+}
+
+.story-prose .story-mermaid-diagram text,
+.story-prose .story-mermaid-diagram .actor,
+.story-prose .story-mermaid-diagram .messageText,
+.story-prose .story-mermaid-diagram .labelText,
+.story-prose .story-mermaid-diagram tspan,
+.story-prose .story-mermaid-diagram span,
+.story-prose .story-mermaid-diagram div {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif !important;
+  line-height: 1.45 !important;
+  -webkit-font-smoothing: antialiased;
 }
 
 .story-prose .story-mermaid-diagram:hover {
