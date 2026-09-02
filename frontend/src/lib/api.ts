@@ -68,6 +68,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const hasFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
 
   const response = await fetch(`${API_BASE}${path}`, {
+    cache: "no-cache",
     ...init,
     headers: {
       ...(init?.body && !hasFormDataBody ? { "Content-Type": "application/json" } : {}),

@@ -1724,9 +1724,11 @@ export function WritePage() {
                 {selectedSlug && !form.draft ? (
                   <Link
                     to={`/posts/${selectedSlug}`}
+                    target="_blank"
+                    rel="noreferrer"
                     className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
                   >
-                    打开正文页
+                    查看正文
                   </Link>
                 ) : null}
                 {selectedSlug && !form.draft ? <Chip variant="bordered">PDF 下载在正文页</Chip> : null}
@@ -1778,8 +1780,18 @@ export function WritePage() {
             ) : null}
 
             {successMessage ? (
-              <div className="rounded-[1.25rem] border border-success/30 bg-success-50 px-4 py-3 text-sm text-success-700">
-                {successMessage}
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-success/30 bg-success-50 px-4 py-3 text-sm text-success-700">
+                <span>{successMessage}</span>
+                {selectedSlug && !form.draft ? (
+                  <Link
+                    to={`/posts/${selectedSlug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center rounded-full border border-success/40 bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-success-800 transition hover:bg-white"
+                  >
+                    查看正文 →
+                  </Link>
+                ) : null}
               </div>
             ) : null}
 
@@ -2116,6 +2128,16 @@ export function WritePage() {
                 >
                   {submitting ? (isEditing ? "更新中..." : "发布中...") : isEditing ? "保存修改" : "发布到站点"}
                 </Button>
+                {selectedSlug && !form.draft ? (
+                  <Link
+                    to={`/posts/${selectedSlug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/70"
+                  >
+                    查看正文
+                  </Link>
+                ) : null}
                 {selectedSlug ? (
                   <Button
                     type="button"
@@ -2304,9 +2326,11 @@ export function WritePage() {
                         {!post.draft ? (
                           <Link
                             to={`/posts/${post.slug}`}
+                            target="_blank"
+                            rel="noreferrer"
                             className="inline-flex items-center justify-center rounded-full border border-black/10 px-3 py-1.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90"
                           >
-                            预览
+                            查看正文
                           </Link>
                         ) : null}
                         <Button

@@ -73,6 +73,8 @@ func (h *Handler) RegisterRoutes(router gin.IRoutes) {
 }
 
 func (h *Handler) listPosts(c *gin.Context) {
+	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Header("Pragma", "no-cache")
 	q := strings.TrimSpace(c.Query("q"))
 	posts, err := h.service.SearchPosts(c.Request.Context(), q)
 	if err != nil {
@@ -84,6 +86,8 @@ func (h *Handler) listPosts(c *gin.Context) {
 }
 
 func (h *Handler) getPost(c *gin.Context) {
+	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Header("Pragma", "no-cache")
 	post, found, err := h.service.GetPostBySlug(c.Request.Context(), c.Param("slug"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load post"})
@@ -131,6 +135,8 @@ func (h *Handler) getPostPDF(c *gin.Context) {
 }
 
 func (h *Handler) listAdminPosts(c *gin.Context) {
+	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Header("Pragma", "no-cache")
 	q := strings.TrimSpace(c.Query("q"))
 	listFilter := strings.TrimSpace(c.Query("filter")) // "all", "published", "draft"
 
@@ -144,6 +150,8 @@ func (h *Handler) listAdminPosts(c *gin.Context) {
 }
 
 func (h *Handler) getAdminPost(c *gin.Context) {
+	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Header("Pragma", "no-cache")
 	post, found, err := h.service.GetAdminPostBySlug(c.Request.Context(), c.Param("slug"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load admin post"})
