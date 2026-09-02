@@ -335,7 +335,7 @@ let mermaidRenderCounter = 0;
 let isMermaidInitialized = false;
 let mermaidModulePromise: Promise<Mermaid> | null = null;
 
-const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v2026-";
+const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v2026b-";
 const mermaidMemoryCache = new Map<string, string>();
 
 function hashMermaidSource(source: string): string {
@@ -435,10 +435,10 @@ async function loadMermaid() {
         htmlLabels: true,
         useMaxWidth: false,
         curve: "linear",
-        padding: 24,
-        nodeSpacing: 60,
-        rankSpacing: 70,
-        diagramPadding: 20,
+        padding: 20,
+        nodeSpacing: 45,
+        rankSpacing: 55,
+        diagramPadding: 16,
       },
       sequence: {
         useMaxWidth: false,
@@ -457,9 +457,9 @@ async function loadMermaid() {
         lineColor: "#27272a",
         secondaryColor: "#ffffff",
         tertiaryColor: "transparent",
-        edgeLabelBackground: "transparent",
+        edgeLabelBackground: "#ffffff",
         clusterBkg: "transparent",
-        clusterBorder: "#71717a",
+        clusterBorder: "#a1a1aa",
         nodeBorder: "#27272a",
         mainBkg: "#ffffff",
         nodeTextColor: "#18181b",

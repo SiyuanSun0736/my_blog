@@ -1216,32 +1216,38 @@ a {
 }
 
 .story-prose .story-mermaid-diagram .cluster rect {
-  fill: transparent !important;
-  stroke: #71717a !important;
+  fill: rgba(244, 244, 245, 0.5) !important;
+  stroke: #a1a1aa !important;
   stroke-width: 1.5px !important;
   stroke-dasharray: 4 2 !important;
-  rx: 12px !important;
-  ry: 12px !important;
+  rx: 10px !important;
+  ry: 10px !important;
 }
 
 .story-prose .story-mermaid-diagram .cluster text,
 .story-prose .story-mermaid-diagram .cluster span {
   font-weight: 700 !important;
+  fill: #18181b !important;
   color: #18181b !important;
   font-size: 13px !important;
 }
 
-.story-prose .story-mermaid-diagram .node rect,
+.story-prose .story-mermaid-diagram .node rect {
+  fill: #ffffff !important;
+  stroke: #27272a !important;
+  stroke-width: 1.5px !important;
+  rx: 8px !important;
+  ry: 8px !important;
+}
+
 .story-prose .story-mermaid-diagram .node circle,
 .story-prose .story-mermaid-diagram .node polygon,
 .story-prose .story-mermaid-diagram .node path,
 .story-prose .story-mermaid-diagram .node .basic,
 .story-prose .story-mermaid-diagram .node .label-container {
   fill: #ffffff !important;
-  stroke: #18181b !important;
+  stroke: #27272a !important;
   stroke-width: 1.5px !important;
-  rx: 8px !important;
-  ry: 8px !important;
 }
 
 .story-prose .story-mermaid-diagram .node .label,
@@ -1258,11 +1264,10 @@ a {
 .story-prose .story-mermaid-diagram .edgeLabel span,
 .story-prose .story-mermaid-diagram .edgeLabel div,
 .story-prose .story-mermaid-diagram .edgeLabel text {
-  background: transparent !important;
-  background-color: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
+  background-color: #ffffff !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  border: 1px solid #e4e4e7 !important;
   color: #18181b !important;
   fill: #18181b !important;
   font-size: 12px !important;
@@ -1270,8 +1275,11 @@ a {
 }
 
 .story-prose .story-mermaid-diagram .edgeLabel rect {
-  fill: transparent !important;
-  stroke: none !important;
+  fill: #ffffff !important;
+  stroke: #e4e4e7 !important;
+  stroke-width: 1px !important;
+  rx: 4px !important;
+  ry: 4px !important;
 }
 
 .story-prose .story-mermaid-diagram .edgePath path,
@@ -1339,11 +1347,11 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(94vw, 1500px);
-  height: min(86vh, 900px);
-  padding: 2rem 2.5rem;
+  max-width: 92vw;
+  max-height: 88vh;
+  padding: 1.5rem 2rem;
   background: #ffffff;
-  border-radius: 1.5rem;
+  border-radius: 1.25rem;
   border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
   transform-origin: center center;
@@ -1351,11 +1359,10 @@ a {
 
 .story-mermaid-modal-content svg {
   display: block;
-  width: 100% !important;
-  height: 100% !important;
-  max-width: 100% !important;
-  max-height: 100% !important;
-  object-fit: contain;
+  width: auto !important;
+  height: auto !important;
+  max-width: 86vw !important;
+  max-height: 80vh !important;
   text-rendering: optimizeLegibility;
   shape-rendering: geometricPrecision;
 }
