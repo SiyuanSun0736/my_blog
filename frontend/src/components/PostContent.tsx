@@ -455,7 +455,7 @@ async function loadMermaid() {
         lineColor: "#27272a",
         secondaryColor: "#ffffff",
         tertiaryColor: "transparent",
-        edgeLabelBackground: "#ffffff",
+        edgeLabelBackground: "transparent",
         clusterBkg: "transparent",
         clusterBorder: "#71717a",
         nodeBorder: "#18181b",
