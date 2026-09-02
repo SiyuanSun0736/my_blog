@@ -2,7 +2,7 @@ import { Card, CardBody, Chip, Divider, Spinner } from "../components/ui";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { PostHeading } from "../components/PostContent";
-import { fetchPost, fetchPosts } from "../lib/api";
+import { fetchAdminPost, fetchPost, fetchPosts } from "../lib/api";
 import type { Post, PostSummary } from "../types";
 
 const PostContent = lazy(() =>
@@ -92,22 +92,38 @@ export function PostPage() {
     setError(null);
     setPost(null);
     setContentHeadings([]);
-    fetchPost(slug)
-      .then((value) => {
+
+    const writeToken = window.sessionStorage.getItem("wanderlust:write-token")?.trim();
+
+    const loadPost = async () => {
+      try {
+        const value = await fetchPost(slug);
         if (!cancelled) {
           setPost(value);
         }
-      })
-      .catch((requestError) => {
+      } catch (requestError) {
+        if (writeToken) {
+          try {
+            const adminPost = await fetchAdminPost(slug, writeToken);
+            if (!cancelled) {
+              setPost(adminPost);
+              return;
+            }
+          } catch {
+            // fallback to original error
+          }
+        }
         if (!cancelled) {
           setError(requestError instanceof Error ? requestError.message : "文章加载失败");
         }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
+      }
+    };
+
+    void loadPost().finally(() => {
+      if (!cancelled) {
+        setLoading(false);
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -252,6 +268,11 @@ export function PostPage() {
                 <Chip color="secondary" variant="flat">
                   {post.category}
                 </Chip>
+                {post.draft ? (
+                  <Chip color="warning" variant="flat">
+                    草稿预览（仅管理端可见）
+                  </Chip>
+                ) : null}
                 {post.featured ? (
                   <Chip color="warning" variant="bordered">
                     编辑精选

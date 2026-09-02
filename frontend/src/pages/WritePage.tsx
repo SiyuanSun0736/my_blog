@@ -1721,7 +1721,7 @@ export function WritePage() {
                 >
                   新建文章
                 </Button>
-                {selectedSlug && !form.draft ? (
+                {selectedSlug ? (
                   <Link
                     to={`/posts/${selectedSlug}`}
                     target="_blank"
@@ -1782,7 +1782,7 @@ export function WritePage() {
             {successMessage ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-success/30 bg-success-50 px-4 py-3 text-sm text-success-700">
                 <span>{successMessage}</span>
-                {selectedSlug && !form.draft ? (
+                {selectedSlug ? (
                   <Link
                     to={`/posts/${selectedSlug}`}
                     target="_blank"
@@ -2128,7 +2128,7 @@ export function WritePage() {
                 >
                   {submitting ? (isEditing ? "更新中..." : "发布中...") : isEditing ? "保存修改" : "发布到站点"}
                 </Button>
-                {selectedSlug && !form.draft ? (
+                {selectedSlug ? (
                   <Link
                     to={`/posts/${selectedSlug}`}
                     target="_blank"
@@ -2323,16 +2323,14 @@ export function WritePage() {
                         >
                           {actingSlug === post.slug ? "处理中..." : post.featured ? "取消置顶" : featuredLimitReached ? "已达上限" : "设为置顶"}
                         </Button>
-                        {!post.draft ? (
-                          <Link
-                            to={`/posts/${post.slug}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center justify-center rounded-full border border-black/10 px-3 py-1.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90"
-                          >
-                            查看正文
-                          </Link>
-                        ) : null}
+                        <Link
+                          to={`/posts/${post.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center rounded-full border border-black/10 px-3 py-1.5 text-sm font-medium text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-black/30 hover:bg-white/90"
+                        >
+                          查看正文
+                        </Link>
                         <Button
                           size="sm"
                           radius="full"
