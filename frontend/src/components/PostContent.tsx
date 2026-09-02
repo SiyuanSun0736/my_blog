@@ -21,8 +21,11 @@ import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
 import type { Mermaid } from "mermaid";
 import rehypeKatex from "rehype-katex";
+import rehypeRaw from "rehype-raw";
 import { createPortal } from "react-dom";
 import {
+  Children,
+  cloneElement,
   isValidElement,
   useEffect,
   useLayoutEffect,
@@ -766,6 +769,146 @@ function MarkdownCode({ node: _node, children, className, inline, ...props }: Ma
   );
 }
 
+type AlertType = "NOTE" | "TIP" | "IMPORTANT" | "WARNING" | "CAUTION";
+
+interface AlertConfig {
+  type: AlertType;
+  label: string;
+  icon: string;
+  className: string;
+  badgeClassName: string;
+}
+
+const ALERT_CONFIGS: Record<string, AlertConfig> = {
+  NOTE: {
+    type: "NOTE",
+    label: "Note",
+    icon: "ℹ️",
+    className: "border-sky-500/50 bg-sky-50/80 dark:bg-sky-950/30 text-sky-950 dark:text-sky-100",
+    badgeClassName: "text-sky-700 dark:text-sky-300",
+  },
+  INFO: {
+    type: "NOTE",
+    label: "Info",
+    icon: "ℹ️",
+    className: "border-sky-500/50 bg-sky-50/80 dark:bg-sky-950/30 text-sky-950 dark:text-sky-100",
+    badgeClassName: "text-sky-700 dark:text-sky-300",
+  },
+  TIP: {
+    type: "TIP",
+    label: "Tip",
+    icon: "💡",
+    className: "border-emerald-500/50 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-100",
+    badgeClassName: "text-emerald-700 dark:text-emerald-300",
+  },
+  IMPORTANT: {
+    type: "IMPORTANT",
+    label: "Important",
+    icon: "📌",
+    className: "border-violet-500/50 bg-violet-50/80 dark:bg-violet-950/30 text-violet-950 dark:text-violet-100",
+    badgeClassName: "text-violet-700 dark:text-violet-300",
+  },
+  WARNING: {
+    type: "WARNING",
+    label: "Warning",
+    icon: "⚠️",
+    className: "border-amber-500/50 bg-amber-50/80 dark:bg-amber-950/30 text-amber-950 dark:text-amber-100",
+    badgeClassName: "text-amber-700 dark:text-amber-300",
+  },
+  CAUTION: {
+    type: "CAUTION",
+    label: "Caution",
+    icon: "🛑",
+    className: "border-rose-500/50 bg-rose-50/80 dark:bg-rose-950/30 text-rose-950 dark:text-rose-100",
+    badgeClassName: "text-rose-700 dark:text-rose-300",
+  },
+  DANGER: {
+    type: "CAUTION",
+    label: "Danger",
+    icon: "🛑",
+    className: "border-rose-500/50 bg-rose-50/80 dark:bg-rose-950/30 text-rose-950 dark:text-rose-100",
+    badgeClassName: "text-rose-700 dark:text-rose-300",
+  },
+};
+
+function parseAlertBlockquote(children: ReactNode): { config: AlertConfig; content: ReactNode } | null {
+  const childArray = Children.toArray(children);
+  if (childArray.length === 0) {
+    return null;
+  }
+
+  const firstChild = childArray[0];
+
+  if (typeof firstChild === "string") {
+    const match = firstChild.match(/^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|DANGER)\](?:\s*|\n)(.*)$/is);
+    if (match) {
+      const config = ALERT_CONFIGS[match[1].toUpperCase()];
+      const remainingText = match[2];
+      const newFirstChild = remainingText.trim() ? remainingText : null;
+      const newChildren = [newFirstChild, ...childArray.slice(1)].filter(Boolean);
+      return { config, content: newChildren };
+    }
+    return null;
+  }
+
+  if (isValidElement(firstChild)) {
+    const props = firstChild.props as { children?: ReactNode };
+    const pChildren = Children.toArray(props.children);
+    if (pChildren.length === 0) {
+      return null;
+    }
+
+    const firstPChild = pChildren[0];
+    if (typeof firstPChild === "string") {
+      const match = firstPChild.match(/^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|DANGER)\](?:\s*|\n)(.*)$/is);
+      if (match) {
+        const config = ALERT_CONFIGS[match[1].toUpperCase()];
+        const remainingText = match[2];
+        const newPChildren = [remainingText ? remainingText : null, ...pChildren.slice(1)].filter(
+          (item) => item !== null && item !== ""
+        );
+
+        let newFirstChild: ReactNode = null;
+        if (newPChildren.length > 0) {
+          newFirstChild = cloneElement(firstChild, {}, ...newPChildren);
+        }
+
+        const newChildren = [newFirstChild, ...childArray.slice(1)].filter(Boolean);
+        return { config, content: newChildren };
+      }
+    }
+  }
+
+  return null;
+}
+
+function MarkdownBlockquote({ children, ...props }: ComponentPropsWithoutRef<"blockquote">) {
+  const alert = parseAlertBlockquote(children);
+
+  if (alert) {
+    return (
+      <div
+        className={cn(
+          "story-alert my-5 rounded-2xl border-l-[5px] p-4 sm:p-5 shadow-sm",
+          alert.config.className
+        )}
+      >
+        <div className="flex items-center gap-2 mb-2 select-none">
+          <span className="text-base">{alert.config.icon}</span>
+          <span className={cn("text-xs uppercase tracking-wider font-bold", alert.config.badgeClassName)}>
+            {alert.config.label}
+          </span>
+        </div>
+        <div className="story-alert-content text-sm sm:text-base leading-relaxed [&>p:first-child]:mt-0 [&>p:last-child]:mb-0">
+          {alert.content}
+        </div>
+      </div>
+    );
+  }
+
+  return <blockquote {...props}>{children}</blockquote>;
+}
+
 function MarkdownPre({ node: _node, children, ...props }: MarkdownPreProps) {
   if (isValidElement<CodeBlockChildProps>(children) && isMermaidLanguage(children.props.className)) {
     return <MermaidDiagram source={extractReactTextContent(children.props.children).replace(/\n$/, "")} />;
@@ -874,8 +1017,12 @@ export function PostContent({ body, bodyFormat = "markdown", className, onHeadin
   return (
     <div ref={contentRef} className={cn("story-prose", className)}>
       <ReactMarkdown
-        components={{ code: MarkdownCode, pre: MarkdownPre }}
-        rehypePlugins={[rehypeKatex]}
+        components={{
+          blockquote: MarkdownBlockquote,
+          code: MarkdownCode,
+          pre: MarkdownPre,
+        }}
+        rehypePlugins={[rehypeRaw, rehypeKatex]}
         remarkPlugins={[remarkMath, remarkGfm]}
       >
         {body}
