@@ -792,7 +792,9 @@ export function WritePage() {
   const hasPendingDiff = metadataChanges.length > 0 || bodyDiff.length > 0;
 
   useEffect(() => {
-    const storedToken = window.sessionStorage.getItem(writeTokenStorageKey);
+    const storedToken =
+      window.sessionStorage.getItem(writeTokenStorageKey) ||
+      window.localStorage.getItem(writeTokenStorageKey);
     if (!storedToken) {
       return;
     }
@@ -1251,12 +1253,22 @@ export function WritePage() {
     try {
       const response = await verifyWriteAccess(normalizedToken);
       window.sessionStorage.setItem(writeTokenStorageKey, normalizedToken);
+      try {
+        window.localStorage.setItem(writeTokenStorageKey, normalizedToken);
+      } catch {
+        // Storage error fallback
+      }
       setWriteToken(normalizedToken);
       setAccessVerified(true);
       setAccessMessage(response.message);
       return true;
     } catch (requestError) {
       window.sessionStorage.removeItem(writeTokenStorageKey);
+      try {
+        window.localStorage.removeItem(writeTokenStorageKey);
+      } catch {
+        // Storage error fallback
+      }
       setAccessVerified(false);
       setAccessMessage(requestError instanceof Error ? requestError.message : "写作令牌验证失败。");
       return false;
@@ -1271,6 +1283,11 @@ export function WritePage() {
     }
 
     window.sessionStorage.removeItem(writeTokenStorageKey);
+    try {
+      window.localStorage.removeItem(writeTokenStorageKey);
+    } catch {
+      // Storage error fallback
+    }
     setWriteToken("");
     setAccessVerified(false);
     setAccessMessage("已清除当前浏览器会话里的写作令牌。");

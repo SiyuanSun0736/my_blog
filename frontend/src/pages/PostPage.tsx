@@ -93,7 +93,9 @@ export function PostPage() {
     setPost(null);
     setContentHeadings([]);
 
-    const writeToken = window.sessionStorage.getItem("wanderlust:write-token")?.trim();
+    const writeToken =
+      window.sessionStorage.getItem("wanderlust:write-token")?.trim() ||
+      window.localStorage.getItem("wanderlust:write-token")?.trim();
 
     const loadPost = async () => {
       try {
