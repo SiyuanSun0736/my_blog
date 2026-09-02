@@ -1184,10 +1184,10 @@ a {
   min-width: 0;
   overflow-x: auto;
   border-radius: 1.25rem;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #f1f5f9;
-  padding: 1.5rem 1.25rem;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: transparent;
+  padding: 1.25rem 0.5rem;
+  box-shadow: none;
 }
 
 .story-prose .story-mermaid-diagram {
@@ -1196,7 +1196,7 @@ a {
   align-items: center;
   min-height: 4rem;
   width: 100%;
-  color: #0f172a;
+  color: #18181b;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 13px;
   line-height: 1.45;
@@ -1216,8 +1216,8 @@ a {
 }
 
 .story-prose .story-mermaid-diagram .cluster rect {
-  fill: #ffffff !important;
-  stroke: #94a3b8 !important;
+  fill: transparent !important;
+  stroke: #71717a !important;
   stroke-width: 1.5px !important;
   stroke-dasharray: 4 2 !important;
   rx: 12px !important;
@@ -1227,7 +1227,7 @@ a {
 .story-prose .story-mermaid-diagram .cluster text,
 .story-prose .story-mermaid-diagram .cluster span {
   font-weight: 700 !important;
-  color: #1e293b !important;
+  color: #18181b !important;
   font-size: 13px !important;
 }
 
@@ -1236,14 +1236,16 @@ a {
 .story-prose .story-mermaid-diagram .node polygon,
 .story-prose .story-mermaid-diagram .node path {
   fill: #ffffff !important;
-  stroke: #334155 !important;
+  stroke: #18181b !important;
   stroke-width: 1.5px !important;
   rx: 8px !important;
   ry: 8px !important;
 }
 
-.story-prose .story-mermaid-diagram .node .label {
-  color: #0f172a !important;
+.story-prose .story-mermaid-diagram .node .label,
+.story-prose .story-mermaid-diagram .node text {
+  color: #18181b !important;
+  fill: #18181b !important;
   font-weight: 600 !important;
   font-size: 13px !important;
 }
@@ -1252,21 +1254,21 @@ a {
   background-color: #ffffff !important;
   padding: 3px 8px !important;
   border-radius: 6px !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #1e293b !important;
+  border: 1px solid #d4d4d8 !important;
+  color: #18181b !important;
   font-size: 12px !important;
   font-weight: 500 !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .story-prose .story-mermaid-diagram .edgePath path.path {
-  stroke: #334155 !important;
+  stroke: #27272a !important;
   stroke-width: 1.75px !important;
 }
 
 .story-prose .story-mermaid-diagram .marker {
-  fill: #334155 !important;
-  stroke: #334155 !important;
+  fill: #27272a !important;
+  stroke: #27272a !important;
 }
 
 .story-prose .story-mermaid-diagram text,
@@ -2440,9 +2442,9 @@ a {
 }
 
 :root[data-theme="solid"][data-solid-palette="dark"] .story-prose .story-mermaid-shell {
-  border-color: rgba(147, 161, 161, 0.18);
-  background: rgba(7, 54, 66, 0.75);
-  box-shadow: inset 0 1px 0 rgba(238, 232, 213, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: transparent;
+  box-shadow: none;
 }
 
 :root[data-theme="solid"][data-solid-palette="dark"] .story-prose .story-mermaid-diagram {
