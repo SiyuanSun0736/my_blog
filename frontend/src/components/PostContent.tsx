@@ -335,7 +335,7 @@ let mermaidRenderCounter = 0;
 let isMermaidInitialized = false;
 let mermaidModulePromise: Promise<Mermaid> | null = null;
 
-const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v2-";
+const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v3-";
 const mermaidMemoryCache = new Map<string, string>();
 
 function hashMermaidSource(source: string): string {
@@ -428,38 +428,41 @@ async function loadMermaid() {
     mermaid.initialize({
       securityLevel: "loose",
       startOnLoad: false,
-      theme: "default",
+      theme: "base",
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
-      fontSize: 14,
+      fontSize: 13,
       flowchart: {
         htmlLabels: true,
         useMaxWidth: false,
         curve: "linear",
-        padding: 18,
-        nodeSpacing: 50,
-        rankSpacing: 60,
-        diagramPadding: 16,
+        padding: 24,
+        nodeSpacing: 60,
+        rankSpacing: 70,
+        diagramPadding: 20,
       },
       sequence: {
         useMaxWidth: false,
-        actorFontSize: 14,
-        noteFontSize: 13,
-        messageFontSize: 13,
+        actorFontSize: 13,
+        noteFontSize: 12,
+        messageFontSize: 12,
       },
       themeVariables: {
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
-        fontSize: "14px",
-        primaryColor: "#f8fafc",
+        fontSize: "13px",
+        primaryColor: "#ffffff",
         primaryTextColor: "#0f172a",
-        primaryBorderColor: "#94a3b8",
-        lineColor: "#475569",
-        secondaryColor: "#f1f5f9",
-        tertiaryColor: "#ffffff",
+        primaryBorderColor: "#334155",
+        lineColor: "#334155",
+        secondaryColor: "#ffffff",
+        tertiaryColor: "#f8fafc",
         edgeLabelBackground: "#ffffff",
-        clusterBkg: "#f8fafc",
-        clusterBorder: "#cbd5e1",
-        nodeBorder: "#94a3b8",
-        mainBkg: "#ffffff",
+        clusterBkg: "#ffffff",
+        clusterBorder: "#94a3b8",
+        nodeBorder: "#334155",
+        mainBkg: "#f8fafc",
+        nodeTextColor: "#0f172a",
+        textColor: "#0f172a",
+        labelTextColor: "#1e293b",
       },
     });
     isMermaidInitialized = true;
