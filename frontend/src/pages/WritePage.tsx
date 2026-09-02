@@ -1294,39 +1294,56 @@ export function WritePage() {
           ? frontmatter.title.trim()
           : inferMarkdownTitle(resolvedBody);
 
-      setForm((current) => ({
-        ...current,
-        title: inferredTitle || current.title,
-        slug:
-          typeof frontmatter.slug === "string" && frontmatter.slug.trim().length > 0
+      setForm((current) => {
+        const title = current.title.trim()
+          ? current.title
+          : typeof frontmatter.title === "string" && frontmatter.title.trim().length > 0
+            ? frontmatter.title.trim()
+            : inferMarkdownTitle(resolvedBody);
+
+        const slug = current.slug.trim()
+          ? current.slug
+          : typeof frontmatter.slug === "string" && frontmatter.slug.trim().length > 0
             ? frontmatter.slug.trim()
-            : current.slug || stripMarkdownExtension(file.name),
-        summary:
-          typeof frontmatter.summary === "string" && frontmatter.summary.trim().length > 0
+            : stripMarkdownExtension(file.name);
+
+        const summary = current.summary.trim()
+          ? current.summary
+          : typeof frontmatter.summary === "string" && frontmatter.summary.trim().length > 0
             ? frontmatter.summary.trim()
-            : summarizeMarkdown(resolvedBody),
-        category:
-          typeof frontmatter.category === "string" && frontmatter.category.trim().length > 0
-            ? frontmatter.category.trim()
-            : current.category,
-        tags: Array.isArray(frontmatter.tags) ? frontmatter.tags.join(", ") : current.tags,
-        author:
-          typeof frontmatter.author === "string" && frontmatter.author.trim().length > 0
-            ? frontmatter.author.trim()
-            : current.author,
-        publishedAt:
-          typeof frontmatter.publishedAt === "string" && frontmatter.publishedAt.trim().length > 0
-            ? frontmatter.publishedAt.trim()
-            : current.publishedAt,
-        accent:
-          typeof frontmatter.accent === "string" && frontmatter.accent.trim().length > 0
-            ? frontmatter.accent.trim()
-            : current.accent,
-        draft: typeof frontmatter.draft === "boolean" ? frontmatter.draft : current.draft,
-        featured: typeof frontmatter.featured === "boolean" ? frontmatter.featured : current.featured,
-        bodyFormat: "markdown",
-        body: resolvedBody || current.body,
-      }));
+            : summarizeMarkdown(resolvedBody);
+
+        return {
+          ...current,
+          title,
+          slug,
+          summary,
+          category:
+            typeof frontmatter.category === "string" && frontmatter.category.trim().length > 0 && !current.category.trim()
+              ? frontmatter.category.trim()
+              : current.category,
+          tags:
+            Array.isArray(frontmatter.tags) && frontmatter.tags.length > 0 && !current.tags.trim()
+              ? frontmatter.tags.join(", ")
+              : current.tags,
+          author:
+            typeof frontmatter.author === "string" && frontmatter.author.trim().length > 0 && !current.author.trim()
+              ? frontmatter.author.trim()
+              : current.author,
+          publishedAt:
+            typeof frontmatter.publishedAt === "string" && frontmatter.publishedAt.trim().length > 0 && !current.publishedAt.trim()
+              ? frontmatter.publishedAt.trim()
+              : current.publishedAt,
+          accent:
+            typeof frontmatter.accent === "string" && frontmatter.accent.trim().length > 0 && !current.accent.trim()
+              ? frontmatter.accent.trim()
+              : current.accent,
+          draft: typeof frontmatter.draft === "boolean" ? frontmatter.draft : current.draft,
+          featured: typeof frontmatter.featured === "boolean" ? frontmatter.featured : current.featured,
+          bodyFormat: "markdown",
+          body: resolvedBody || current.body,
+        };
+      });
       setImportedFileName(file.name);
       setError(null);
       setSuccessMessage(null);
@@ -1356,12 +1373,12 @@ export function WritePage() {
   function applyImportedHTML(imported: HTMLImportResponse, sourceLabel: string, fallbackSlug?: string) {
     setForm((current) => ({
       ...current,
-      title: imported.title || current.title,
-      slug: imported.slug || current.slug || fallbackSlug || "",
-      summary: imported.summary || current.summary,
-      tags: imported.tags.length > 0 ? imported.tags.join(", ") : current.tags,
-      author: imported.author || current.author,
-      publishedAt: imported.publishedAt || current.publishedAt,
+      title: current.title.trim() || imported.title || "",
+      slug: current.slug.trim() || imported.slug || fallbackSlug || "",
+      summary: current.summary.trim() || imported.summary || "",
+      tags: current.tags.trim() || (imported.tags.length > 0 ? imported.tags.join(", ") : ""),
+      author: current.author.trim() || imported.author || "",
+      publishedAt: current.publishedAt.trim() || imported.publishedAt || "",
       bodyFormat: normalizeBodyFormat(imported.bodyFormat),
       body: imported.body || current.body,
     }));
