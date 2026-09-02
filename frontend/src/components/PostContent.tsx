@@ -335,7 +335,7 @@ let mermaidRenderCounter = 0;
 let isMermaidInitialized = false;
 let mermaidModulePromise: Promise<Mermaid> | null = null;
 
-const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v1-";
+const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v2026-";
 const mermaidMemoryCache = new Map<string, string>();
 
 function hashMermaidSource(source: string): string {
@@ -428,7 +428,7 @@ async function loadMermaid() {
     mermaid.initialize({
       securityLevel: "loose",
       startOnLoad: false,
-      theme: "base",
+      theme: "neutral",
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
       fontSize: 13,
       flowchart: {
@@ -449,20 +449,22 @@ async function loadMermaid() {
       themeVariables: {
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
         fontSize: "13px",
+        darkMode: false,
+        background: "transparent",
         primaryColor: "#ffffff",
         primaryTextColor: "#18181b",
-        primaryBorderColor: "#18181b",
+        primaryBorderColor: "#27272a",
         lineColor: "#27272a",
         secondaryColor: "#ffffff",
         tertiaryColor: "transparent",
         edgeLabelBackground: "transparent",
         clusterBkg: "transparent",
         clusterBorder: "#71717a",
-        nodeBorder: "#18181b",
+        nodeBorder: "#27272a",
         mainBkg: "#ffffff",
         nodeTextColor: "#18181b",
         textColor: "#18181b",
-        labelTextColor: "#27272a",
+        labelTextColor: "#18181b",
       },
     });
     isMermaidInitialized = true;

@@ -1234,7 +1234,9 @@ a {
 .story-prose .story-mermaid-diagram .node rect,
 .story-prose .story-mermaid-diagram .node circle,
 .story-prose .story-mermaid-diagram .node polygon,
-.story-prose .story-mermaid-diagram .node path {
+.story-prose .story-mermaid-diagram .node path,
+.story-prose .story-mermaid-diagram .node .basic,
+.story-prose .story-mermaid-diagram .node .label-container {
   fill: #ffffff !important;
   stroke: #18181b !important;
   stroke-width: 1.5px !important;
@@ -1243,20 +1245,26 @@ a {
 }
 
 .story-prose .story-mermaid-diagram .node .label,
-.story-prose .story-mermaid-diagram .node text {
+.story-prose .story-mermaid-diagram .node text,
+.story-prose .story-mermaid-diagram .node span,
+.story-prose .story-mermaid-diagram .node div {
   color: #18181b !important;
   fill: #18181b !important;
   font-weight: 600 !important;
   font-size: 13px !important;
 }
 
-.story-prose .story-mermaid-diagram .edgeLabel {
+.story-prose .story-mermaid-diagram .edgeLabel,
+.story-prose .story-mermaid-diagram .edgeLabel span,
+.story-prose .story-mermaid-diagram .edgeLabel div,
+.story-prose .story-mermaid-diagram .edgeLabel text {
   background: transparent !important;
   background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
   color: #18181b !important;
+  fill: #18181b !important;
   font-size: 12px !important;
   font-weight: 500 !important;
 }
@@ -1266,12 +1274,14 @@ a {
   stroke: none !important;
 }
 
-.story-prose .story-mermaid-diagram .edgePath path.path {
+.story-prose .story-mermaid-diagram .edgePath path,
+.story-prose .story-mermaid-diagram path.flowchart-link {
   stroke: #27272a !important;
-  stroke-width: 1.75px !important;
+  stroke-width: 1.5px !important;
 }
 
-.story-prose .story-mermaid-diagram .marker {
+.story-prose .story-mermaid-diagram .marker,
+.story-prose .story-mermaid-diagram marker path {
   fill: #27272a !important;
   stroke: #27272a !important;
 }
