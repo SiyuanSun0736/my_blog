@@ -1250,14 +1250,32 @@ a {
   stroke-width: 1.5px !important;
 }
 
+.story-prose .story-mermaid-diagram p,
+.story-mermaid-modal-content p {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+  color: #18181b !important;
+}
+
 .story-prose .story-mermaid-diagram .node .label,
 .story-prose .story-mermaid-diagram .node text,
 .story-prose .story-mermaid-diagram .node span,
-.story-prose .story-mermaid-diagram .node div {
+.story-prose .story-mermaid-diagram .node div,
+.story-prose .story-mermaid-diagram .node p,
+.story-mermaid-modal-content .node .label,
+.story-mermaid-modal-content .node text,
+.story-mermaid-modal-content .node span,
+.story-mermaid-modal-content .node div,
+.story-mermaid-modal-content .node p {
   color: #18181b !important;
   fill: #18181b !important;
   font-weight: 600 !important;
   font-size: 13px !important;
+  line-height: 1.45 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .story-prose .story-mermaid-diagram .edgeLabel,
@@ -1283,7 +1301,10 @@ a {
 .story-mermaid-modal-content .edgeLabel p {
   margin: 0 !important;
   padding: 0 !important;
-  line-height: 1.4 !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  white-space: nowrap !important;
+  color: #18181b !important;
 }
 
 .story-prose .story-mermaid-diagram .edgeLabel span.edgeLabel,
@@ -1296,6 +1317,7 @@ a {
   font-size: 11px !important;
   font-weight: 500 !important;
   display: inline-block !important;
+  white-space: nowrap !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
 }
 
