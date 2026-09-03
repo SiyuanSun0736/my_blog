@@ -1261,25 +1261,51 @@ a {
 }
 
 .story-prose .story-mermaid-diagram .edgeLabel,
-.story-prose .story-mermaid-diagram .edgeLabel span,
+.story-prose .story-mermaid-diagram .edgeLabel .labelBkg,
 .story-prose .story-mermaid-diagram .edgeLabel div,
-.story-prose .story-mermaid-diagram .edgeLabel text {
-  background-color: #ffffff !important;
-  padding: 2px 6px !important;
-  border-radius: 4px !important;
-  border: 1px solid #e4e4e7 !important;
-  color: #18181b !important;
-  fill: #18181b !important;
-  font-size: 12px !important;
-  font-weight: 500 !important;
+.story-mermaid-modal-content .edgeLabel,
+.story-mermaid-modal-content .edgeLabel .labelBkg,
+.story-mermaid-modal-content .edgeLabel div {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 
-.story-prose .story-mermaid-diagram .edgeLabel rect {
-  fill: #ffffff !important;
-  stroke: #e4e4e7 !important;
-  stroke-width: 1px !important;
-  rx: 4px !important;
-  ry: 4px !important;
+.story-prose .story-mermaid-diagram .edgeLabel rect,
+.story-mermaid-modal-content .edgeLabel rect {
+  fill: transparent !important;
+  stroke: none !important;
+}
+
+.story-prose .story-mermaid-diagram .edgeLabel p,
+.story-mermaid-modal-content .edgeLabel p {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.story-prose .story-mermaid-diagram .edgeLabel span.edgeLabel,
+.story-mermaid-modal-content .edgeLabel span.edgeLabel {
+  background-color: #ffffff !important;
+  padding: 2px 7px !important;
+  border-radius: 4px !important;
+  border: 1px solid #d4d4d8 !important;
+  color: #18181b !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  display: inline-block !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+.story-prose .story-mermaid-diagram .edgeLabel span.edgeLabel:empty,
+.story-prose .story-mermaid-diagram .edgeLabel .labelBkg:empty,
+.story-mermaid-modal-content .edgeLabel span.edgeLabel:empty,
+.story-mermaid-modal-content .edgeLabel .labelBkg:empty {
+  display: none !important;
+  border: none !important;
+  background: transparent !important;
 }
 
 .story-prose .story-mermaid-diagram .edgePath path,

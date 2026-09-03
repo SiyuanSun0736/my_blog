@@ -335,7 +335,7 @@ let mermaidRenderCounter = 0;
 let isMermaidInitialized = false;
 let mermaidModulePromise: Promise<Mermaid> | null = null;
 
-const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v2026b-";
+const MERMAID_CACHE_PREFIX = "wanderlust-mermaid-v2026c-";
 const mermaidMemoryCache = new Map<string, string>();
 
 function hashMermaidSource(source: string): string {
@@ -457,7 +457,7 @@ async function loadMermaid() {
         lineColor: "#27272a",
         secondaryColor: "#ffffff",
         tertiaryColor: "transparent",
-        edgeLabelBackground: "#ffffff",
+        edgeLabelBackground: "transparent",
         clusterBkg: "transparent",
         clusterBorder: "#a1a1aa",
         nodeBorder: "#27272a",
@@ -692,17 +692,10 @@ function MermaidDiagram({ source }: { source: string }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return;
-    }
-
     const existingCached = getCachedMermaidSvg(source);
     if (existingCached) {
       setError(null);
       setRenderedSvg(existingCached);
-      container.removeAttribute("data-state");
-      container.innerHTML = existingCached;
       return;
     }
 
@@ -711,28 +704,26 @@ function MermaidDiagram({ source }: { source: string }) {
 
     setError(null);
     setRenderedSvg(null);
-    container.removeAttribute("data-state");
-    container.textContent = "图表渲染中...";
 
     void loadMermaid()
-      .then((mermaid) => mermaid.render(diagramId, source, container))
+      .then((mermaid) => mermaid.render(diagramId, source))
       .then(({ svg, bindFunctions }) => {
-        if (!isActive || !containerRef.current) {
+        if (!isActive) {
           return;
         }
 
         setCachedMermaidSvg(source, svg);
         setRenderedSvg(svg);
-        containerRef.current.innerHTML = svg;
-        bindFunctions?.(containerRef.current);
+        if (containerRef.current) {
+          bindFunctions?.(containerRef.current);
+        }
       })
       .catch((renderError: unknown) => {
-        if (!isActive || !containerRef.current) {
+        if (!isActive) {
           return;
         }
 
-        containerRef.current.textContent = "";
-        containerRef.current.dataset.state = "error";
+        setRenderedSvg(null);
         setError(formatMermaidError(renderError));
       });
 
@@ -754,7 +745,12 @@ function MermaidDiagram({ source }: { source: string }) {
               setIsModalOpen(true);
             }
           }}
-        />
+          dangerouslySetInnerHTML={renderedSvg ? { __html: renderedSvg } : undefined}
+        >
+          {!renderedSvg && !error ? (
+            <span className="text-xs text-[var(--muted)] opacity-60">图表渲染中...</span>
+          ) : null}
+        </div>
         {error ? (
           <div className="story-mermaid-error" role="alert">
             <p>{error}</p>
