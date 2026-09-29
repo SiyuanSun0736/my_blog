@@ -64,31 +64,61 @@ export interface CreatePostPayload {
   body: string;
 }
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const isIdempotent = method === "GET" || method === "HEAD";
+  const maxRetries = isIdempotent ? 2 : 0;
+  const retryDelays = [350, 900];
+
   const hasFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  const headers = {
+    ...(init?.body && !hasFormDataBody ? { "Content-Type": "application/json" } : {}),
+    ...init?.headers,
+  };
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    cache: "no-cache",
-    ...init,
-    headers: {
-      ...(init?.body && !hasFormDataBody ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
+  let lastError: unknown;
 
-  const contentType = response.headers.get("content-type") ?? "";
-  const payload = contentType.includes("application/json") ? await response.json() : null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        cache: "no-cache",
+        ...init,
+        headers,
+      });
 
-  if (!response.ok) {
-    const message =
-      payload && typeof payload === "object" && "message" in payload
-        ? String(payload.message)
-        : `请求失败: ${response.status}`;
+      const contentType = response.headers.get("content-type") ?? "";
+      const payload = contentType.includes("application/json") ? await response.json() : null;
 
-    throw new Error(message);
+      if (!response.ok) {
+        const isServerTemporaryError = response.status >= 502 && response.status <= 504;
+        const message =
+          payload && typeof payload === "object" && "message" in payload
+            ? String(payload.message)
+            : `请求失败: ${response.status}`;
+
+        if (isIdempotent && isServerTemporaryError && attempt < maxRetries) {
+          lastError = new Error(message);
+          await delay(retryDelays[attempt] ?? 500);
+          continue;
+        }
+
+        throw new Error(message);
+      }
+
+      return payload as T;
+    } catch (err) {
+      lastError = err;
+      if (isIdempotent && attempt < maxRetries) {
+        await delay(retryDelays[attempt] ?? 500);
+        continue;
+      }
+      throw err;
+    }
   }
 
-  return payload as T;
+  throw lastError instanceof Error ? lastError : new Error("请求重试失败");
 }
 
 function writeAccessHeaders(writeToken: string) {
