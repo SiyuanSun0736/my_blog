@@ -79,7 +79,9 @@ services:
       TLS_KEY_PATH: ${BLOG_TLS_KEY_PATH:-/etc/nginx/certs/privkey.pem}
       TLS_AUTO_RELOAD: ${BLOG_TLS_AUTO_RELOAD:-1}
       TLS_RELOAD_INTERVAL_SECONDS: ${BLOG_TLS_RELOAD_INTERVAL_SECONDS:-60}
-      NGINX_ENVSUBST_FILTER: PRIMARY_DOMAIN|WWW_DOMAIN|TLS_CERT_PATH|TLS_KEY_PATH|TLS_AUTO_RELOAD|TLS_RELOAD_INTERVAL_SECONDS
+      WRITE_BACKEND_HOST: ${WRITE_BACKEND_HOST:-127.0.0.1:8080}
+      WRITE_API_UPSTREAM: ${WRITE_API_UPSTREAM:-http://blog-api:8080}
+      NGINX_ENVSUBST_FILTER: PRIMARY_DOMAIN|WWW_DOMAIN|TLS_CERT_PATH|TLS_KEY_PATH|TLS_AUTO_RELOAD|TLS_RELOAD_INTERVAL_SECONDS|WRITE_BACKEND_HOST|WRITE_API_UPSTREAM
     depends_on:
       - blog-api
     restart: unless-stopped
@@ -95,6 +97,7 @@ services:
     volumes:
       - ${BLOG_TLS_CERTS_DIR:-./certs}:/etc/nginx/certs:ro
       - ${BLOG_CERTBOT_WEBROOT_DIR:-./certbot/www}:/var/www/certbot:ro
+      - ./nginx/default.conf:/etc/nginx/templates/default.conf.template:ro
       - blog-media:/usr/share/nginx/media:ro
 
   certbot:

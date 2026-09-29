@@ -902,6 +902,38 @@ function parseAlertBlockquote(children: ReactNode): { config: AlertConfig; conte
   return null;
 }
 
+function MarkdownImage({ src, alt, ...props }: ComponentPropsWithoutRef<"img">) {
+  const [retryCount, setRetryCount] = useState(0);
+  const [currentSrc, setCurrentSrc] = useState(src);
+
+  useEffect(() => {
+    setCurrentSrc(src);
+    setRetryCount(0);
+  }, [src]);
+
+  const handleError = () => {
+    if (retryCount < 2 && src) {
+      const nextAttempt = retryCount + 1;
+      setTimeout(() => {
+        setRetryCount(nextAttempt);
+        const separator = src.includes("?") ? "&" : "?";
+        setCurrentSrc(`${src}${separator}_retry=${Date.now()}`);
+      }, 600 * nextAttempt);
+    }
+  };
+
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      onError={handleError}
+      {...props}
+    />
+  );
+}
+
 function MarkdownBlockquote({ children, ...props }: ComponentPropsWithoutRef<"blockquote">) {
   const alert = parseAlertBlockquote(children);
 
@@ -1030,6 +1062,38 @@ export function PostContent({ body, bodyFormat = "markdown", className, onHeadin
     return enhanceCodeBlocks(contentRef.current);
   }, [body, bodyFormat]);
 
+  useEffect(() => {
+    if (!contentRef.current) return;
+    const images = contentRef.current.querySelectorAll("img");
+    const cleanupFns: Array<() => void> = [];
+
+    images.forEach((img) => {
+      let retryCount = 0;
+      const originalSrc = img.src;
+      let timer: number | null = null;
+
+      const handleError = () => {
+        if (retryCount < 2 && originalSrc) {
+          retryCount++;
+          timer = window.setTimeout(() => {
+            const separator = originalSrc.includes("?") ? "&" : "?";
+            img.src = `${originalSrc}${separator}_retry=${Date.now()}`;
+          }, 600 * retryCount);
+        }
+      };
+
+      img.addEventListener("error", handleError);
+      cleanupFns.push(() => {
+        img.removeEventListener("error", handleError);
+        if (timer) window.clearTimeout(timer);
+      });
+    });
+
+    return () => {
+      cleanupFns.forEach((fn) => fn());
+    };
+  }, [body, bodyFormat]);
+
   if (bodyFormat === "html") {
     return <div ref={contentRef} className={cn("story-prose", className)} dangerouslySetInnerHTML={{ __html: body }} />;
   }
@@ -1041,6 +1105,7 @@ export function PostContent({ body, bodyFormat = "markdown", className, onHeadin
           blockquote: MarkdownBlockquote,
           code: MarkdownCode,
           pre: MarkdownPre,
+          img: MarkdownImage,
         }}
         rehypePlugins={[rehypeRaw, rehypeKatex]}
         remarkPlugins={[remarkMath, remarkGfm]}
