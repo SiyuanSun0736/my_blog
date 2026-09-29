@@ -276,17 +276,16 @@ crontab deploy/cron/wanderlust-cert-renew.cron
 - `blog-web` 已配置 Compose `healthcheck`，会直接探测这个接口。
 - 证书监听脚本现在会输出带时间戳的启动日志、证书指纹变化日志，以及 `nginx reload` 成功或失败日志，方便直接用 `docker logs wanderlust-web` 排查。
 
-### Let’s Encrypt 实战演练清单
+### 证书管理与 Cloudflare 15 年 Origin CA
 
-完整步骤已经单独整理在 `deploy/letsencrypt-drill.md`，适合首次切换、dry-run 续期检查和任务安装后复核时逐项执行。
+- **生产环境**：集群全面采用 Cloudflare 官方颁发的 Origin CA 证书（有效期至 2041-09-25），配合 Cloudflare Anycast CDN 开启 **`Full (strict)`** 强加密模式，消除了 90 天证书续期维护。
+- **历史归档**：历史 Let's Encrypt 签发与续期演练已归档至 `deploy/letsencrypt-drill.md` 供离线环境参考。
+- **本地开发**：本机通过 `https://localhost:8444` 联调时继续使用 `./certs` 下包含 `localhost` 的自签名证书。
 
-### 域名上线说明
+### 域名接入与跨洋双活
 
-- 域名 `wanderlust0736.top` 还需要在 DNS 解析里把 `A` 记录指向你的服务器公网 IP。
-- 如果要同时支持 `www.wanderlust0736.top`，再加一条 `CNAME` 或 `A` 记录。
-- 当前仓库里的 Nginx 会把 `www.wanderlust0736.top` 永久重定向到 `wanderlust0736.top`。
-- 如果你希望 `https://www.wanderlust0736.top` 也能顺利跳转，证书里需要同时包含主域名和 `www` 子域名。
-- 如果需要在本机继续通过 `https://localhost:8444` 联调，必须使用包含 `localhost` 的本地证书；正式云证书通常只覆盖真实域名。
+- **Cloudflare Anycast CDN**：主域名 `wanderlust0736.top` 开启 Proxied 代理，后端绑定日本东京主源站（`216.23.120.223`）与美国洛杉矶热备源站（`113.20.0.79`）。
+- **动态读写分离**：美国备用节点就近响应 GET 读请求，写入请求透明代理回日本主站；两端通过 `scripts/sync-blog-jp-to-us.sh` 定时自动保持增量同步。
 
 ## 后续可扩展方向
 
