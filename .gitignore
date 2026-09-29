@@ -5,6 +5,7 @@ frontend/.chrome-test/
 backend/bin/
 backend/.cache/
 backend/uploads/
+backend/seed-engineering-posts
 .env.deploy
 certs/*
 !certs/README.md
@@ -16,3 +17,6 @@ backups/*
 backups/latest-mongodb/*
 !backups/latest-mongodb/README.md
 *.log
+*.tsbuildinfo
+*.bak
+*.bak.*
